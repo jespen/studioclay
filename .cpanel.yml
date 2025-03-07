@@ -3,50 +3,68 @@ deployment:
   tasks:
     - export DEPLOYPATH=/home/gyckh2yxxvf4/public_html
     - export BACKUPPATH=/home/gyckh2yxxvf4/site_backups
+    - export LOGPATH=/home/gyckh2yxxvf4/deployment_logs
     
-    # Log the current directory for debugging
-    - pwd > $DEPLOYPATH/deploy_start_dir.txt
+    # Skapa loggkatalog om den inte finns
+    - /bin/mkdir -p $LOGPATH
+    - echo "=== Deployment påbörjad: $(date) ===" > $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - echo "Nuvarande katalog: $(pwd)" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - echo "Git commit: $(git rev-parse HEAD)" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     
-    # Create backup directory if it doesn't exist
+    # Skapa backup-katalog om den inte finns
     - /bin/mkdir -p $BACKUPPATH
     
-    # Backup current public_html before making changes
-    - /bin/mkdir -p $BACKUPPATH/backup_$(date +%Y%m%d_%H%M%S)
-    - /bin/cp -R $DEPLOYPATH/* $BACKUPPATH/backup_$(date +%Y%m%d_%H%M%S)/ 2>/dev/null || true
+    # Säkerhetskopiera aktuell webbplats före ändringar
+    - echo "Skapar säkerhetskopia..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - BACKUP_DIR=$BACKUPPATH/backup_$(date +%Y%m%d_%H%M%S)
+    - /bin/mkdir -p $BACKUP_DIR
+    - /bin/cp -R $DEPLOYPATH/* $BACKUP_DIR/ 2>> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log || true
     
-    # Build directly in the repository directory
-    - npm install
-    - npm run export
+    # Bygg projektet direkt i Git-katalogen
+    - echo "Installerar beroenden..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - npm install --no-audit --loglevel=error >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
-    # Check if the out directory was created
-    - /bin/ls -la out > $DEPLOYPATH/build_output_listing.txt
+    - echo "Bygger projektet..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - NODE_ENV=production npm run build >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - NODE_ENV=production npm run export >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
-    # Clean the destination directory (preserve the logs and htaccess)
-    - /bin/find $DEPLOYPATH -mindepth 1 -not -name "*.txt" -not -name ".htaccess" -delete
+    # Kontrollera att out-katalogen skapades korrekt
+    - echo "Kontrollerar byggresultat..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - /bin/ls -la out >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - if [ ! -d "out" ]; then echo "KRITISKT FEL: out-katalogen skapades inte!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log; exit 1; fi
     
-    # Copy the built files directly to the public_html directory
-    - /bin/cp -R out/. $DEPLOYPATH/
+    # Lås deploymentkatalogen temporärt för att förhindra åtkomst under uppdatering
+    - echo "<?php header('HTTP/1.1 503 Service Temporarily Unavailable'); header('Status: 503 Service Temporarily Unavailable'); header('Retry-After: 300'); ?><html><head><title>Underhåll pågår</title></head><body><h1>Underhåll pågår</h1><p>Webbplatsen uppdateras för tillfället. Försök igen om några minuter.</p></body></html>" > $DEPLOYPATH/maintenance.php
+    - echo "ErrorDocument 503 /maintenance.php" > $DEPLOYPATH/.htaccess.maintenance
+    - /bin/cat $DEPLOYPATH/.htaccess >> $DEPLOYPATH/.htaccess.maintenance || true
+    - /bin/mv $DEPLOYPATH/.htaccess.maintenance $DEPLOYPATH/.htaccess
     
-    # Create a default index.php that points to index.html for backward compatibility
-    - echo '<?php header("Location: index.html"); ?>' > $DEPLOYPATH/index.php
+    # Kopiera bara filerna från out-katalogen, utan att radera allt först (säkrare metod)
+    - echo "Kopierar byggda filer till webbplatsen..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - for file in $(find out -type f); do target_file="${file#out/}"; target_dir=$(dirname "$DEPLOYPATH/$target_file"); mkdir -p "$target_dir"; cp "$file" "$DEPLOYPATH/$target_file"; done >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
-    # Set correct file permissions
-    - /bin/chmod 644 $DEPLOYPATH/*.html
-    - /bin/chmod 644 $DEPLOYPATH/*.js
-    - /bin/chmod 644 $DEPLOYPATH/*.css
-    - /bin/chmod 644 $DEPLOYPATH/*.txt
-    - /bin/chmod 644 $DEPLOYPATH/*.php
+    # Skapa standardindex.php som pekar till index.html för bakåtkompatibilitet
+    - echo "<?php header('Location: index.html'); ?>" > $DEPLOYPATH/index.php
     
-    # Make directories readable and executable
-    - /bin/find $DEPLOYPATH -type d -exec chmod 755 {} \;
+    # Sätt korrekta filrättigheter
+    - echo "Sätter filrättigheter..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - find $DEPLOYPATH -type f -exec chmod 644 {} \; >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - find $DEPLOYPATH -type d -exec chmod 755 {} \; >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
-    # Copy any backup files to the backup directory
+    # Återställ .htaccess utan underhållsläge
+    - if [ -f "$DEPLOYPATH/.htaccess.bak" ]; then /bin/mv $DEPLOYPATH/.htaccess.bak $DEPLOYPATH/.htaccess; fi
+    
+    # Kopiera säkerhetskopior till säkerhetskopieringskatalogen
     - /bin/mkdir -p backups
-    - /bin/cp -R backups/*.zip $BACKUPPATH/ 2>/dev/null || true
+    - /bin/cp -R backups/*.zip $BACKUPPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || true
     
-    # Keep only the 10 most recent backups in the backup directory
-    - cd $BACKUPPATH && ls -t | tail -n +11 | xargs rm -rf 2>/dev/null || true
+    # Behåll endast de 10 senaste säkerhetskopiorna i säkerhetskopieringskatalogen
+    - cd $BACKUPPATH && ls -t | tail -n +11 | xargs rm -rf >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || true
     
-    # List directory after deployment to verify
-    - /bin/ls -la $DEPLOYPATH > $DEPLOYPATH/post_deploy_listing.txt
-    - echo "Deployment completed successfully at $(date)" > $DEPLOYPATH/deploy_info.txt
+    # Verifiera resultatet
+    - echo "Listar filer efter deployment..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - /bin/ls -la $DEPLOYPATH >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    
+    # Avslutande meddelande
+    - echo "=== Deployment slutförd: $(date) ===" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - echo "Deployment slutförd: $(date)" > $DEPLOYPATH/deploy_info.txt
