@@ -9,10 +9,14 @@
     "export": "next build && node scripts/flatten-build.js && node scripts/backup-site.js",
     "backup": "node scripts/backup-site.js",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "deploy": "node scripts/direct-deploy.js",
+    "simple-deploy": "node scripts/simple-deploy.js"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.16",
+    "ftp": "^0.3.10",
+    "ftp-deploy": "^2.4.7",
     "next": "15.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
