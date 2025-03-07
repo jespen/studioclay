@@ -10,9 +10,9 @@ interface HeroProps {
 }
 
 const Hero = ({
-  title = 'Clay Studio for Creative Minds',
-  highlightedText = 'Professional',
-  description = 'A dedicated clay studio offering pottery classes, workshops, and studio space for both private individuals and companies. Experience the art of clay in a creative, supportive environment.'
+  title = 'Clay Studio för kreativa sinnen',
+  highlightedText = 'Professionell',
+  description = 'En dedikerad keramikstudio som erbjuder kurser, workshops och studiotid för både privatpersoner och företag. Upplev konsten av lera i en kreativ och stödjande miljö.'
 }: HeroProps) => {
   return (
     <section id="home" className={styles.hero}>
@@ -25,10 +25,10 @@ const Hero = ({
             <p className={styles.description}>{description}</p>
             <div className={styles.buttonContainer}>
               <Link href="/book-course" className={styles.primaryButton}>
-                Book a Course
+                Boka en kurs
               </Link>
               <Link href="/portfolio" className={styles.secondaryButton}>
-                View Our Work
+                Se vårt arbete
               </Link>
             </div>
             <div className={styles.clientTypes}>
@@ -37,13 +37,13 @@ const Hero = ({
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                   <circle cx="12" cy="7" r="4"></circle>
                 </svg>
-                <span>Individuals</span>
+                <span>Privatpersoner</span>
               </div>
               <div className={styles.clientType}>
                 <svg className={styles.clientIcon} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
                   <path d="M3 3h18v18H3zM8 12h8M12 8v8"></path>
                 </svg>
-                <span>Companies</span>
+                <span>Företag</span>
               </div>
               <div className={styles.clientType}>
                 <svg className={styles.clientIcon} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
@@ -52,7 +52,7 @@ const Hero = ({
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                   <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                 </svg>
-                <span>Groups</span>
+                <span>Grupper</span>
               </div>
             </div>
           </div>
