@@ -2,27 +2,11 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/gyckh2yxxvf4/public_html
+    # Clean the destination directory first
     - /bin/rm -rf $DEPLOYPATH/*
-    - /bin/cp -R .next $DEPLOYPATH
-    - /bin/cp -R public $DEPLOYPATH
-    - /bin/cp package.json $DEPLOYPATH
-    - /bin/cp package-lock.json $DEPLOYPATH
-    - /bin/cp next.config.js $DEPLOYPATH
-    - /bin/cp .env.production $DEPLOYPATH
-    - /bin/cp tsconfig.json $DEPLOYPATH
-    - /bin/cp postcss.config.mjs $DEPLOYPATH
-    - /bin/cp tailwind.config.js $DEPLOYPATH
-    - /bin/cp eslint.config.mjs $DEPLOYPATH
-    - /bin/cp next-env.d.ts $DEPLOYPATH
-    - /bin/cp start.js $DEPLOYPATH
     
-    # Create a service script file that can be used to start the application
-    - echo '#!/bin/bash\ncd $DEPLOYPATH\nnode start.js' > $DEPLOYPATH/run-server.sh
-    - chmod +x $DEPLOYPATH/run-server.sh
+    # Copy the static files from the 'out' directory - this is what's missing!
+    - /bin/cp -R out/* $DEPLOYPATH/
     
-    # Install only production dependencies
-    - cd $DEPLOYPATH
-    - npm install --production
-    
-    # Create a Node.js Passenger configuration file
-    - echo 'PassengerNodejs /home/gyckh2yxxvf4/nodevenv/public_html/18/bin/node\nPassengerAppType node\nPassengerStartupFile start.js' > $DEPLOYPATH/.htaccess
+    # Copy the .htaccess file to ensure proper URL handling
+    - /bin/cp out/.htaccess $DEPLOYPATH/.htaccess
