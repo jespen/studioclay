@@ -2,10 +2,19 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/gyckh2yxxvf4/public_html
-    - /bin/cp -R .next $DEPLOYPATH
     - /bin/cp -R public $DEPLOYPATH
-    - /bin/cp -R node_modules $DEPLOYPATH
+    - /bin/cp -R src $DEPLOYPATH
     - /bin/cp package.json $DEPLOYPATH
     - /bin/cp package-lock.json $DEPLOYPATH
     - /bin/cp next.config.js $DEPLOYPATH
     - /bin/cp .env.local $DEPLOYPATH
+    - /bin/cp tsconfig.json $DEPLOYPATH
+    - /bin/cp postcss.config.mjs $DEPLOYPATH
+    - /bin/cp tailwind.config.js $DEPLOYPATH
+    - /bin/cp eslint.config.mjs $DEPLOYPATH
+    - /bin/cp next-env.d.ts $DEPLOYPATH
+    
+    # Install dependencies and build the application on the server
+    - cd $DEPLOYPATH
+    - npm install --production
+    - npm run build
