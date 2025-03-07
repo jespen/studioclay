@@ -1,5 +1,6 @@
 import GiftCard from '@/components/GiftCard';
 import Navbar from '@/components/Navbar';
+import ConstructionBanner from '@/components/ConstructionBanner';
 import Footer from '@/components/Footer';
 
 export const metadata = {
@@ -11,6 +12,7 @@ export default function GiftCardPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
+      <ConstructionBanner />
       <main className="flex-grow">
         <GiftCard />
       </main>

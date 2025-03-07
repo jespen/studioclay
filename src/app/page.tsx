@@ -1,4 +1,5 @@
 import Navbar from '@/components/Navbar';
+import ConstructionBanner from '@/components/ConstructionBanner';
 import Hero from '@/components/Hero';
 import Services from '@/components/Services';
 import Portfolio from '@/components/Portfolio';
@@ -9,6 +10,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
+      <ConstructionBanner />
       <main className="flex-grow">
         <section id="home">
           <Hero />

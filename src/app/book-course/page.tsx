@@ -1,5 +1,6 @@
 import BookCourse from '@/components/BookCourse';
 import Navbar from '@/components/Navbar';
+import ConstructionBanner from '@/components/ConstructionBanner';
 import Footer from '@/components/Footer';
 
 export const metadata = {
@@ -11,6 +12,7 @@ export default function BookCoursePage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
+      <ConstructionBanner />
       <main className="flex-grow">
         <BookCourse />
       </main>

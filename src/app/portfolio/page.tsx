@@ -1,4 +1,5 @@
 import Navbar from '@/components/Navbar';
+import ConstructionBanner from '@/components/ConstructionBanner';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
 
@@ -78,6 +79,7 @@ export default function PortfolioPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
+      <ConstructionBanner />
       <main className="flex-grow pt-24 pb-16 md:pt-32 md:pb-24">
         <div className="container-custom">
           <div className="text-center mb-16">
