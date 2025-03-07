@@ -113,10 +113,10 @@ const Portfolio = () => {
 
   // Filter categories
   const filters = [
-    { id: 'all', label: 'All Works' },
-    { id: 'pottery', label: 'Pottery' },
-    { id: 'artistic', label: 'Art Pieces' },
-    { id: 'decorative', label: 'Decorative' },
+    { id: 'all', label: 'Alla verk' },
+    { id: 'pottery', label: 'Keramik' },
+    { id: 'artistic', label: 'Konstverk' },
+    { id: 'decorative', label: 'Dekorativt' },
     { id: 'workshops', label: 'Workshops' },
     { id: 'process', label: 'Process' },
     { id: 'studio', label: 'Studio' },
@@ -169,9 +169,9 @@ const Portfolio = () => {
     <section id="works" className={styles.section}>
       <div className={styles.container}>
         <div className={styles.titleSection}>
-          <h2 className={styles.title}>Our Work</h2>
+          <h2 className={styles.title}>Vårt arbete</h2>
           <p className={styles.description}>
-            A collection of beautiful creations from our studio, directly from our Instagram feed.
+            En samling av vackra skapelser från vår studio, direkt från vårt Instagram-flöde.
           </p>
           {error && <p className={styles.errorMessage}>{error}</p>}
         </div>
@@ -218,11 +218,11 @@ const Portfolio = () => {
                         {formatDate(item.timestamp)}
                       </span>
                       <h3 className={styles.cardTitle}>
-                        {item.caption?.split('\n')[0]?.substring(0, 30) || 'Studio Clay Creation'}
+                        {item.caption?.split('\n')[0]?.substring(0, 30) || 'Studio Clay Skapelse'}
                         {(item.caption?.split('\n')[0]?.length || 0) > 30 ? '...' : ''}
                       </h3>
                       <span className={styles.viewButton}>
-                        View Larger
+                        Visa större
                         <svg className={styles.viewIcon} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -235,7 +235,7 @@ const Portfolio = () => {
             ))
           ) : (
             <div className={styles.noResults}>
-              <p>No items found in this category. Please try another filter.</p>
+              <p>Inga objekt hittades i denna kategori. Vänligen prova ett annat filter.</p>
             </div>
           )}
         </div>
@@ -243,7 +243,7 @@ const Portfolio = () => {
         {/* View All Button */}
         <div className={styles.buttonContainer}>
           <Link href="/portfolio" className={styles.viewAllButton}>
-            View All Work
+            Visa allt arbete
           </Link>
         </div>
 
@@ -270,10 +270,10 @@ const Portfolio = () => {
               
               <div className={styles.galleryInfo}>
                 <h3 className={styles.galleryTitle}>
-                  {filteredImages[currentImage].caption?.split('\n')[0] || 'Studio Clay Creation'}
+                  {filteredImages[currentImage].caption?.split('\n')[0] || 'Studio Clay Skapelse'}
                 </h3>
                 <p className={styles.galleryCategory}>
-                  Posted on {formatDate(filteredImages[currentImage].timestamp)}
+                  Publicerad den {formatDate(filteredImages[currentImage].timestamp)}
                 </p>
                 <a 
                   href={filteredImages[currentImage].permalink} 
@@ -282,7 +282,7 @@ const Portfolio = () => {
                   className={styles.instagramLink}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  View on Instagram
+                  Visa på Instagram
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="16" height="16">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
