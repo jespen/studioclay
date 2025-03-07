@@ -2,11 +2,45 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/gyckh2yxxvf4/public_html
-    # Clean the destination directory first
-    - /bin/rm -rf $DEPLOYPATH/*
+    # List directory content before starting to debug
+    - /bin/ls -la $DEPLOYPATH > $DEPLOYPATH/pre_deploy_listing.txt
     
-    # Copy the static files from the 'out' directory - this is what's missing!
-    - /bin/cp -R out/* $DEPLOYPATH/
+    # Create a temporary build directory if it doesn't exist
+    - /bin/mkdir -p /home/gyckh2yxxvf4/tmp_build
     
-    # Copy the .htaccess file to ensure proper URL handling
-    - /bin/cp out/.htaccess $DEPLOYPATH/.htaccess
+    # Copy all necessary files to the tmp build directory
+    - /bin/cp -R public /home/gyckh2yxxvf4/tmp_build/
+    - /bin/cp -R src /home/gyckh2yxxvf4/tmp_build/
+    - /bin/cp package.json /home/gyckh2yxxvf4/tmp_build/
+    - /bin/cp package-lock.json /home/gyckh2yxxvf4/tmp_build/
+    - /bin/cp next.config.js /home/gyckh2yxxvf4/tmp_build/
+    - /bin/cp .env.production /home/gyckh2yxxvf4/tmp_build/
+    - /bin/cp tsconfig.json /home/gyckh2yxxvf4/tmp_build/
+    - /bin/cp postcss.config.mjs /home/gyckh2yxxvf4/tmp_build/
+    - /bin/cp tailwind.config.js /home/gyckh2yxxvf4/tmp_build/
+    - /bin/cp eslint.config.mjs /home/gyckh2yxxvf4/tmp_build/
+    - /bin/cp next-env.d.ts /home/gyckh2yxxvf4/tmp_build/
+    
+    # Build the project in the tmp directory
+    - cd /home/gyckh2yxxvf4/tmp_build && npm install && npm run export
+    
+    # Check if the out directory was created and list its contents
+    - /bin/ls -la /home/gyckh2yxxvf4/tmp_build/out > $DEPLOYPATH/build_output_listing.txt
+    
+    # Clean the destination directory (preserve the logs)
+    - /bin/find $DEPLOYPATH -mindepth 1 -not -name "*.txt" -delete
+    
+    # Copy the built files to the public_html directory
+    - /bin/cp -R /home/gyckh2yxxvf4/tmp_build/out/. $DEPLOYPATH/
+    
+    # Create a default index.php that points to index.html for backward compatibility
+    - echo '<?php header("Location: index.html"); ?>' > $DEPLOYPATH/index.php
+    
+    # Set correct file permissions
+    - /bin/chmod 644 $DEPLOYPATH/*.html
+    - /bin/chmod 644 $DEPLOYPATH/*.js
+    - /bin/chmod 644 $DEPLOYPATH/*.css
+    - /bin/chmod 644 $DEPLOYPATH/*.txt
+    
+    # List directory after deployment to verify
+    - /bin/ls -la $DEPLOYPATH > $DEPLOYPATH/post_deploy_listing.txt
