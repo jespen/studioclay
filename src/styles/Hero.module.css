@@ -86,8 +86,18 @@
 }
 
 .imageContainer {
-  display: block;
   position: relative;
+  margin-top: 2rem;
+  height: 300px;
+}
+
+.heroImage {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s;
+}
+
+.heroImage:hover {
+  transform: translateY(-5px);
 }
 
 .imageWrapper {
@@ -208,6 +218,10 @@
   .logoText {
     font-size: 1.875rem;
   }
+  
+  .imageContainer {
+    height: 400px;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -221,6 +235,8 @@
   
   .imageContainer {
     order: 2;
+    margin-top: 0;
+    height: 450px;
   }
   
   .heading {

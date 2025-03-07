@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import styles from '@/styles/Navbar.module.css';
 
 const Navbar = () => {
@@ -73,6 +74,13 @@ const Navbar = () => {
             className={styles.logo} 
             onClick={(e) => scrollToSection('home', e)}
           >
+            <Image 
+              src="/gallery/logo.tiff"
+              alt="Studio Clay Logo"
+              width={40}
+              height={40}
+              className={styles.logoImage}
+            />
             <span className={styles.logoText}>Studio Clay</span>
           </a>
 

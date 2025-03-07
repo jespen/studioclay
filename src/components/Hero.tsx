@@ -57,13 +57,23 @@ const Hero = ({
             </div>
           </div>
           <div className={styles.imageContainer}>
-            <div className={styles.imageWrapper}>
-              <div className={styles.image}></div>
-              <div className={styles.logo}>
+            <div 
+              className={styles.heroImage}
+              style={{
+                backgroundImage: 'url(/gallery/2.jpg)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                borderRadius: '1rem',
+                height: '100%',
+                width: '100%',
+                position: 'relative'
+              }}
+            >
+              {/* <div className={styles.logo}>
                 <div className={styles.logoCircle}>
                   <span className={styles.logoText}>Studio Clay</span>
                 </div>
-              </div>
+              </div> */}
             </div>
           </div>
         </div>

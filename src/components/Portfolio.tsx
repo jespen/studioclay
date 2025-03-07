@@ -1,158 +1,115 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import styles from '@/styles/Portfolio.module.css';
+import { fetchInstagramPosts, categorizeInstagramPosts, InstagramPost } from '@/utils/instagramApi';
 
 const Portfolio = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [instagramPosts, setInstagramPosts] = useState<InstagramPost[]>([]);
+  const [categorizedPosts, setCategorizedPosts] = useState<Record<string, InstagramPost[]>>({
+    all: [],
+    pottery: [],
+    artistic: [],
+    decorative: [],
+    workshops: [],
+    process: [],
+    studio: [],
+  });
 
-  // Gallery images from the studio
-  const portfolioImages = [
+  // Fallback images to use when Instagram API fails or is not yet set up
+  const fallbackImages = [
     {
-      id: 1,
-      title: 'Ceramic Bowls',
-      category: 'Functional Pottery',
-      imageSrc: '/gallery/ceramic-bowls.svg',
-      filter: 'pottery'
+      id: '1',
+      caption: 'Ceramic Bowls - Beautiful handcrafted pottery for your home',
+      media_type: 'IMAGE' as const,
+      media_url: '/gallery/ceramic-bowls.svg',
+      permalink: '#',
+      timestamp: new Date().toISOString(),
+      username: 'studioclay',
     },
     {
-      id: 2,
-      title: 'Clay Vases',
-      category: 'Decorative Items',
-      imageSrc: '/gallery/clay-vases.svg',
-      filter: 'decorative'
+      id: '2',
+      caption: 'Clay Vases - Decorative items for any space',
+      media_type: 'IMAGE' as const,
+      media_url: '/gallery/clay-vases.svg',
+      permalink: '#',
+      timestamp: new Date().toISOString(),
+      username: 'studioclay',
     },
     {
-      id: 3,
-      title: 'Pottery Workshop',
-      category: 'Events',
-      imageSrc: '/gallery/pottery-workshop.svg',
-      filter: 'workshops'
+      id: '3',
+      caption: 'Pottery Workshop - Learn the art of clay with our experienced instructors',
+      media_type: 'IMAGE' as const,
+      media_url: '/gallery/pottery-workshop.svg',
+      permalink: '#',
+      timestamp: new Date().toISOString(),
+      username: 'studioclay',
     },
     {
-      id: 4,
-      title: 'Hand Sculpting',
-      category: 'Artistic Process',
-      imageSrc: '/gallery/hand-sculpting.svg',
-      filter: 'process'
+      id: '4',
+      caption: 'Hand Sculpting - The process of creating unique art pieces',
+      media_type: 'IMAGE' as const,
+      media_url: '/gallery/hand-sculpting.svg',
+      permalink: '#',
+      timestamp: new Date().toISOString(),
+      username: 'studioclay',
     },
     {
-      id: 5,
-      title: 'Glazed Mugs',
-      category: 'Functional Pottery',
-      imageSrc: '/gallery/glazed-mugs.svg',
-      filter: 'pottery'
+      id: '5',
+      caption: 'Glazed Mugs - Functional pottery for your morning coffee',
+      media_type: 'IMAGE' as const,
+      media_url: '/gallery/glazed-mugs.svg',
+      permalink: '#',
+      timestamp: new Date().toISOString(),
+      username: 'studioclay',
     },
     {
-      id: 6,
-      title: 'Clay Sculptures',
-      category: 'Art Pieces',
-      imageSrc: '/gallery/clay-sculptures.svg',
-      filter: 'artistic'
-    },
-    {
-      id: 7,
-      title: 'Studio Space',
-      category: 'Facilities',
-      imageSrc: '/gallery/studio-space.svg',
-      filter: 'studio'
-    },
-    {
-      id: 8,
-      title: 'Children\'s Class',
-      category: 'Youth Programs',
-      imageSrc: '/gallery/children-class.svg',
-      filter: 'workshops'
-    },
-    {
-      id: 9,
-      title: 'Handmade Plates',
-      category: 'Functional Pottery',
-      imageSrc: '/gallery/handmade-plates.svg',
-      filter: 'pottery'
-    },
-    {
-      id: 10,
-      title: 'Artistic Sculptures',
-      category: 'Art Pieces',
-      imageSrc: '/gallery/artistic-sculptures.svg',
-      filter: 'artistic'
-    },
-    {
-      id: 11,
-      title: 'Pottery Wheel Session',
-      category: 'Artistic Process',
-      imageSrc: '/gallery/pottery-wheel-session.svg',
-      filter: 'process'
-    },
-    {
-      id: 12,
-      title: 'Corporate Workshop',
-      category: 'Events',
-      imageSrc: '/gallery/corporate-workshop.svg',
-      filter: 'workshops'
-    },
-    {
-      id: 13,
-      title: 'Ceramic Teapots',
-      category: 'Functional Pottery',
-      imageSrc: '/gallery/ceramic-teapots.svg',
-      filter: 'pottery'
-    },
-    {
-      id: 14,
-      title: 'Studio Equipment',
-      category: 'Facilities',
-      imageSrc: '/gallery/studio-equipment.svg',
-      filter: 'studio'
-    },
-    {
-      id: 15,
-      title: 'Glaze Application',
-      category: 'Artistic Process',
-      imageSrc: '/gallery/glaze-application.svg',
-      filter: 'process'
-    },
-    {
-      id: 16,
-      title: 'Decorative Piece',
-      category: 'Decorative Items',
-      imageSrc: '/gallery/decorative-piece.svg',
-      filter: 'decorative'
-    },
-    {
-      id: 17,
-      title: 'Group Class',
-      category: 'Events',
-      imageSrc: '/gallery/group-class.svg',
-      filter: 'workshops'
-    },
-    {
-      id: 18,
-      title: 'Clay Preparation',
-      category: 'Artistic Process',
-      imageSrc: '/gallery/clay-preparation.svg',
-      filter: 'process'
-    },
-    {
-      id: 19,
-      title: 'Finished Pieces',
-      category: 'Art Pieces',
-      imageSrc: '/gallery/finished-pieces.svg',
-      filter: 'artistic'
-    },
-    {
-      id: 20,
-      title: 'Kiln Room',
-      category: 'Facilities',
-      imageSrc: '/gallery/kiln-room.svg',
-      filter: 'studio'
+      id: '6',
+      caption: 'Clay Sculptures - Artistic creations that inspire',
+      media_type: 'IMAGE' as const,
+      media_url: '/gallery/clay-sculptures.svg',
+      permalink: '#',
+      timestamp: new Date().toISOString(),
+      username: 'studioclay',
     },
   ];
+
+  // Fetch Instagram posts on component mount
+  useEffect(() => {
+    const getInstagramPosts = async () => {
+      setLoading(true);
+      try {
+        const posts = await fetchInstagramPosts();
+        
+        if (posts.length > 0) {
+          setInstagramPosts(posts);
+          const categories = categorizeInstagramPosts(posts);
+          setCategorizedPosts(categories);
+        } else {
+          // Use fallback images if no Instagram posts are available
+          setInstagramPosts(fallbackImages);
+          setCategorizedPosts(categorizeInstagramPosts(fallbackImages));
+          setError('Using fallback images. Connect your Instagram account for live content.');
+        }
+      } catch (err) {
+        console.error('Failed to fetch Instagram posts:', err);
+        setError('Failed to load images from Instagram. Using fallback images.');
+        setInstagramPosts(fallbackImages);
+        setCategorizedPosts(categorizeInstagramPosts(fallbackImages));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getInstagramPosts();
+  }, []);
 
   // Filter categories
   const filters = [
@@ -166,9 +123,7 @@ const Portfolio = () => {
   ];
 
   // Filtered images based on active filter
-  const filteredImages = activeFilter === 'all' 
-    ? portfolioImages 
-    : portfolioImages.filter(img => img.filter === activeFilter);
+  const filteredImages = categorizedPosts[activeFilter] || [];
 
   // Show only 6 images on homepage
   const displayedImages = filteredImages.slice(0, 6);
@@ -200,14 +155,25 @@ const Portfolio = () => {
     );
   };
 
+  // Format date from Instagram timestamp
+  const formatDate = (timestamp: string) => {
+    const date = new Date(timestamp);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
   return (
     <section id="works" className={styles.section}>
       <div className={styles.container}>
         <div className={styles.titleSection}>
           <h2 className={styles.title}>Our Work</h2>
           <p className={styles.description}>
-            A collection of beautiful creations made at our studio by our instructors and students.
+            A collection of beautiful creations from our studio, directly from our Instagram feed.
           </p>
+          {error && <p className={styles.errorMessage}>{error}</p>}
         </div>
 
         {/* Filter Buttons */}
@@ -225,35 +191,53 @@ const Portfolio = () => {
 
         {/* Portfolio Grid */}
         <div className={styles.portfolioGrid}>
-          {displayedImages.map((item, index) => (
-            <div key={item.id} className={styles.portfolioCard} onClick={() => openGallery(index)}>
-              <div className={styles.imageContainer}>
-                <Image 
-                  src={item.imageSrc} 
-                  alt={item.title}
-                  className={styles.portfolioImage}
-                  width={400}
-                  height={300}
-                  style={{ objectFit: 'cover' }}
-                />
+          {loading ? (
+            // Display loading skeletons
+            Array(6).fill(0).map((_, index) => (
+              <div key={index} className={`${styles.portfolioCard} ${styles.skeleton}`}>
+                <div className={styles.skeletonImage}></div>
               </div>
-              <div className={styles.cardOverlay}>
-                <div className={styles.cardContent}>
-                  <div className={styles.cardInfo}>
-                    <span className={styles.category}>{item.category}</span>
-                    <h3 className={styles.cardTitle}>{item.title}</h3>
-                    <span className={styles.viewButton}>
-                      View Larger
-                      <svg className={styles.viewIcon} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    </span>
+            ))
+          ) : displayedImages.length > 0 ? (
+            displayedImages.map((item, index) => (
+              <div key={item.id} className={styles.portfolioCard} onClick={() => openGallery(index)}>
+                <div className={styles.imageContainer}>
+                  <Image 
+                    src={item.media_url} 
+                    alt={item.caption || 'Studio Clay Instagram Post'}
+                    className={styles.portfolioImage}
+                    width={400}
+                    height={300}
+                    style={{ objectFit: 'cover' }}
+                  />
+                </div>
+                <div className={styles.cardOverlay}>
+                  <div className={styles.cardContent}>
+                    <div className={styles.cardInfo}>
+                      <span className={styles.category}>
+                        {formatDate(item.timestamp)}
+                      </span>
+                      <h3 className={styles.cardTitle}>
+                        {item.caption?.split('\n')[0]?.substring(0, 30) || 'Studio Clay Creation'}
+                        {(item.caption?.split('\n')[0]?.length || 0) > 30 ? '...' : ''}
+                      </h3>
+                      <span className={styles.viewButton}>
+                        View Larger
+                        <svg className={styles.viewIcon} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className={styles.noResults}>
+              <p>No items found in this category. Please try another filter.</p>
             </div>
-          ))}
+          )}
         </div>
 
         {/* View All Button */}
@@ -264,7 +248,7 @@ const Portfolio = () => {
         </div>
 
         {/* Image Gallery Modal */}
-        {galleryOpen && (
+        {galleryOpen && filteredImages.length > 0 && (
           <div className={styles.galleryModal} onClick={closeGallery}>
             <div className={styles.galleryContent} onClick={(e) => e.stopPropagation()}>
               <button className={styles.closeButton} onClick={closeGallery}>
@@ -275,8 +259,8 @@ const Portfolio = () => {
               
               <div className={styles.galleryImageContainer}>
                 <Image 
-                  src={filteredImages[currentImage].imageSrc}
-                  alt={filteredImages[currentImage].title}
+                  src={filteredImages[currentImage].media_url}
+                  alt={filteredImages[currentImage].caption || 'Studio Clay Instagram Post'}
                   className={styles.galleryImage}
                   width={800}
                   height={600}
@@ -285,8 +269,24 @@ const Portfolio = () => {
               </div>
               
               <div className={styles.galleryInfo}>
-                <h3 className={styles.galleryTitle}>{filteredImages[currentImage].title}</h3>
-                <p className={styles.galleryCategory}>{filteredImages[currentImage].category}</p>
+                <h3 className={styles.galleryTitle}>
+                  {filteredImages[currentImage].caption?.split('\n')[0] || 'Studio Clay Creation'}
+                </h3>
+                <p className={styles.galleryCategory}>
+                  Posted on {formatDate(filteredImages[currentImage].timestamp)}
+                </p>
+                <a 
+                  href={filteredImages[currentImage].permalink} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className={styles.instagramLink}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  View on Instagram
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="16" height="16">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
               </div>
               
               <button className={`${styles.navButton} ${styles.prevButton}`} onClick={(e) => { e.stopPropagation(); prevImage(); }}>
