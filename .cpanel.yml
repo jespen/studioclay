@@ -14,7 +14,15 @@ deployment:
     - /bin/cp tailwind.config.js $DEPLOYPATH
     - /bin/cp eslint.config.mjs $DEPLOYPATH
     - /bin/cp next-env.d.ts $DEPLOYPATH
-    - echo '#!/bin/bash\ncd $DEPLOYPATH\nnode_modules/.bin/next start -p 8080' > $DEPLOYPATH/start.sh
-    - chmod +x $DEPLOYPATH/start.sh
+    - /bin/cp start.js $DEPLOYPATH
+    
+    # Create a service script file that can be used to start the application
+    - echo '#!/bin/bash\ncd $DEPLOYPATH\nnode start.js' > $DEPLOYPATH/run-server.sh
+    - chmod +x $DEPLOYPATH/run-server.sh
+    
+    # Install only production dependencies
     - cd $DEPLOYPATH
     - npm install --production
+    
+    # Create a Node.js Passenger configuration file
+    - echo 'PassengerNodejs /home/gyckh2yxxvf4/nodevenv/public_html/18/bin/node\nPassengerAppType node\nPassengerStartupFile start.js' > $DEPLOYPATH/.htaccess
