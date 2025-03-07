@@ -1,6 +1,6 @@
 # Studio Clay
 
-A modern website for Studio Clay, a creative design studio specializing in branding, web design, and digital experiences. Built with Next.js and Tailwind CSS.
+En modern webbplats för Studio Clay, en kreativ designstudio som specialiserar sig på branding, webbdesign och digitala upplevelser. Byggd med Next.js och Tailwind CSS. 
 
 ## Features
 
