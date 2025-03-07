@@ -24,8 +24,17 @@ deployment:
     - echo "DEBUG: Current working directory is $(pwd)" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     - echo "DEBUG: Listing files in current directory:" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     - ls -la >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
-    - echo "DEBUG: Listing files in out directory (if it exists):" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
-    - if [ -d "out" ]; then ls -la out >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1; fi
+    
+    # Build project with flattened structure
+    - echo "Building project with flattened structure..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - npm install --no-audit --loglevel=error >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - NODE_ENV=production npm run export >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    
+    # Check that out directory was created correctly
+    - echo "Checking build result..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - ls -la out >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - if [ ! -d "out" ]; then echo "CRITICAL ERROR: out directory was not created!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log; exit 1; fi
+    - if [ ! -f "out/index.html" ]; then echo "CRITICAL ERROR: index.html was not created!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log; exit 1; fi
     
     # Temporarily lock deployment directory to prevent access during update
     - echo "<?php header('HTTP/1.1 503 Service Temporarily Unavailable'); header('Status: 503 Service Temporarily Unavailable'); header('Retry-After: 300'); ?><html><head><title>Maintenance in progress</title></head><body><h1>Maintenance in progress</h1><p>The website is currently being updated. Please try again in a few minutes.</p></body></html>" > $DEPLOYPATH/maintenance.php
@@ -37,34 +46,10 @@ deployment:
     - echo "Cleaning target directory..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     - find $DEPLOYPATH -mindepth 1 -maxdepth 1 -not -name ".well-known" -not -name "cgi-bin" -not -name ".htaccess" -not -name "maintenance.php" -exec rm -rf {} \; >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
-    # FORCE DIRECT COPY TO PUBLIC_HTML REGARDLESS OF CURRENT DIRECTORY STRUCTURE
+    # DIRECTLY COPY FILES FROM FLATTENED BUILD TO ROOT LEVEL
     - echo "Copying built files directly to website root..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
-    
-    # Try multiple possible locations for the build output, in order of preference:
-    
-    # 1. If there's an out directory in current path
-    - if [ -d "out" ] && [ -f "out/index.html" ]; then
-        echo "Found out directory with index.html, copying contents..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log;
-        /bin/cp -R out/* $DEPLOYPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1;
-      fi
-    
-    # 2. If we're already in the repositories/studioclay directory with out dir
-    - if [ -d "repositories/studioclay/out" ] && [ -f "repositories/studioclay/out/index.html" ]; then
-        echo "Found repositories/studioclay/out directory with index.html, copying contents..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log;
-        /bin/cp -R repositories/studioclay/out/* $DEPLOYPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1;
-      fi
-    
-    # 3. If the index.html is in the current directory
-    - if [ -f "index.html" ]; then
-        echo "Found index.html in current directory, copying all files..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log;
-        /bin/cp -R ./* $DEPLOYPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1;
-      fi
-    
-    # 4. If index.html is in repositories/studioclay
-    - if [ -f "repositories/studioclay/index.html" ]; then
-        echo "Found index.html in repositories/studioclay, copying all files..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log;
-        /bin/cp -R repositories/studioclay/* $DEPLOYPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1;
-      fi
+    - /bin/cp -R out/* $DEPLOYPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - /bin/cp -R out/.htaccess $DEPLOYPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || true
     
     # Create standard index.php that points to index.html for backward compatibility
     - echo "<?php header('Location: index.html'); ?>" > $DEPLOYPATH/index.php

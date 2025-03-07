@@ -9,8 +9,14 @@ const nextConfig = {
     // Disable ESLint during production builds
     ignoreDuringBuilds: true,
   },
-  // Enable static exports
+  // Enable static exports with specific config
   output: 'export',
+  // Disable default basePath
+  basePath: '',
+  // Make sure assets have proper paths
+  assetPrefix: '',
+  // Disable subfolders for routing
+  trailingSlash: true,
 };
 
 module.exports = nextConfig; 
