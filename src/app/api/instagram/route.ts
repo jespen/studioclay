@@ -103,75 +103,89 @@ const fetchInstagramPosts = cache(async (accessToken: string) => {
       cachedData = mediaData.data;
       lastFetchTime = now;
       return mediaData.data;
-    } else {
-      console.log('No media found, trying Graph API approach...');
-      
-      // If above approach fails, try the Graph API
-      // First, get the user's Instagram Business Account ID
-      const accountsUrl = `https://graph.facebook.com/v18.0/me/accounts?access_token=${accessToken}`;
-      console.log(`Fetching Facebook Pages:`, accountsUrl);
-      
-      const accountsResponse = await fetch(accountsUrl);
-      
-      if (!accountsResponse.ok) {
-        const accountsErrorText = await accountsResponse.text();
-        console.error('Facebook Pages API error:', accountsErrorText);
-        throw new Error(`Failed to fetch Facebook Pages: ${accountsResponse.statusText}`);
-      }
-      
-      const accountsData = await accountsResponse.json();
-      console.log('Facebook Pages response:', JSON.stringify(accountsData, null, 2));
-      
-      if (!accountsData.data || accountsData.data.length === 0) {
-        throw new Error('No Facebook Pages found');
-      }
-      
-      const pageId = accountsData.data[0].id;
-      console.log(`Found Facebook Page ID: ${pageId}`);
-      
-      // Get the Instagram Business Account ID connected to the Facebook Page
-      const instagramAccountUrl = `https://graph.facebook.com/v18.0/${pageId}?fields=instagram_business_account&access_token=${accessToken}`;
-      console.log(`Fetching Instagram Business Account:`, instagramAccountUrl);
-      
-      const instagramAccountResponse = await fetch(instagramAccountUrl);
-      
-      if (!instagramAccountResponse.ok) {
-        const instagramAccountErrorText = await instagramAccountResponse.text();
-        console.error('Instagram Business Account API error:', instagramAccountErrorText);
-        throw new Error(`Failed to fetch Instagram Business Account: ${instagramAccountResponse.statusText}`);
-      }
-      
-      const instagramAccountData = await instagramAccountResponse.json();
-      console.log('Instagram Business Account response:', JSON.stringify(instagramAccountData, null, 2));
-      
-      if (!instagramAccountData.instagram_business_account) {
-        throw new Error('No Instagram Business Account found');
-      }
-      
-      const instagramAccountId = instagramAccountData.instagram_business_account.id;
-      console.log(`Found Instagram Business Account ID: ${instagramAccountId}`);
-      
-      // Now get the media from the Instagram Business Account
-      const graphMediaUrl = `https://graph.facebook.com/v18.0/${instagramAccountId}/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp,username&limit=20&access_token=${accessToken}`;
-      console.log(`Fetching Instagram media:`, graphMediaUrl);
-      
-      const graphMediaResponse = await fetch(graphMediaUrl);
-      
-      if (!graphMediaResponse.ok) {
-        const mediaErrorText = await graphMediaResponse.text();
-        console.error('Instagram Media API error:', mediaErrorText);
-        throw new Error(`Failed to fetch Instagram media: ${graphMediaResponse.statusText}`);
-      }
-      
-      const graphMediaData = await graphMediaResponse.json();
-      console.log(`Retrieved ${graphMediaData.data?.length || 0} Instagram posts`);
-      
-      // Update cache
-      cachedData = graphMediaData.data;
-      lastFetchTime = now;
-      
-      return graphMediaData.data;
+    } 
+    
+    console.log('No media found in direct approach, trying Graph API approach...');
+    
+    // Debug token information
+    const tokenDebugUrl = `https://graph.facebook.com/debug_token?input_token=${accessToken}&access_token=${accessToken}`;
+    console.log(`Checking token information:`, tokenDebugUrl);
+    
+    try {
+      const tokenResponse = await fetch(tokenDebugUrl);
+      const tokenData = await tokenResponse.json();
+      console.log('Token debug info:', JSON.stringify(tokenData, null, 2));
+    } catch (tokenError) {
+      console.error('Error debugging token:', tokenError);
     }
+    
+    // If above approach fails, try the Graph API
+    // First, get the user's Instagram Business Account ID
+    const accountsUrl = `https://graph.facebook.com/v18.0/me/accounts?access_token=${accessToken}`;
+    console.log(`Fetching Facebook Pages:`, accountsUrl);
+    
+    const accountsResponse = await fetch(accountsUrl);
+    
+    if (!accountsResponse.ok) {
+      const accountsErrorText = await accountsResponse.text();
+      console.error('Facebook Pages API error:', accountsErrorText);
+      throw new Error(`Failed to fetch Facebook Pages: ${accountsResponse.statusText}`);
+    }
+    
+    const accountsData = await accountsResponse.json();
+    console.log('Facebook Pages response:', JSON.stringify(accountsData, null, 2));
+    
+    if (!accountsData.data || accountsData.data.length === 0) {
+      console.log('No Facebook Pages found. Make sure to link a Facebook Page to your account.');
+      console.log('Falling back to mock data');
+      return mockInstagramPosts;
+    }
+    
+    const pageId = accountsData.data[0].id;
+    console.log(`Found Facebook Page ID: ${pageId}`);
+    
+    // Get the Instagram Business Account ID connected to the Facebook Page
+    const instagramAccountUrl = `https://graph.facebook.com/v18.0/${pageId}?fields=instagram_business_account&access_token=${accessToken}`;
+    console.log(`Fetching Instagram Business Account:`, instagramAccountUrl);
+    
+    const instagramAccountResponse = await fetch(instagramAccountUrl);
+    
+    if (!instagramAccountResponse.ok) {
+      const instagramAccountErrorText = await instagramAccountResponse.text();
+      console.error('Instagram Business Account API error:', instagramAccountErrorText);
+      throw new Error(`Failed to fetch Instagram Business Account: ${instagramAccountResponse.statusText}`);
+    }
+    
+    const instagramAccountData = await instagramAccountResponse.json();
+    console.log('Instagram Business Account response:', JSON.stringify(instagramAccountData, null, 2));
+    
+    if (!instagramAccountData.instagram_business_account) {
+      throw new Error('No Instagram Business Account found');
+    }
+    
+    const instagramAccountId = instagramAccountData.instagram_business_account.id;
+    console.log(`Found Instagram Business Account ID: ${instagramAccountId}`);
+    
+    // Now get the media from the Instagram Business Account
+    const graphMediaUrl = `https://graph.facebook.com/v18.0/${instagramAccountId}/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp,username&limit=20&access_token=${accessToken}`;
+    console.log(`Fetching Instagram media:`, graphMediaUrl);
+    
+    const graphMediaResponse = await fetch(graphMediaUrl);
+    
+    if (!graphMediaResponse.ok) {
+      const mediaErrorText = await graphMediaResponse.text();
+      console.error('Instagram Media API error:', mediaErrorText);
+      throw new Error(`Failed to fetch Instagram media: ${graphMediaResponse.statusText}`);
+    }
+    
+    const graphMediaData = await graphMediaResponse.json();
+    console.log(`Retrieved ${graphMediaData.data?.length || 0} Instagram posts`);
+    
+    // Update cache
+    cachedData = graphMediaData.data;
+    lastFetchTime = now;
+    
+    return graphMediaData.data;
   } catch (error) {
     console.error('Instagram API Error:', error);
     // If there's an error, return mock data as fallback
