@@ -58,10 +58,10 @@ const Navbar = () => {
   }, []);
 
   const navigationLinks = [
-    { id: 'home', label: 'Home' },
-    { id: 'services', label: 'Services' },
-    { id: 'works', label: 'Works' },
-    { id: 'pricing', label: 'Pricing' },
+    { id: 'home', label: 'Hem' },
+    { id: 'services', label: 'Tjänster' },
+    { id: 'works', label: 'Arbeten' },
+    { id: 'pricing', label: 'Priser' },
   ];
 
   return (
@@ -98,7 +98,7 @@ const Navbar = () => {
                 </a>
               ))}
               <Link href="/contact" className={styles.contactButton}>
-                Contact
+                Kontakt
               </Link>
             </div>
           </div>
@@ -142,7 +142,7 @@ const Navbar = () => {
                 className={styles.mobileContactButton}
                 onClick={closeMenu}
               >
-                Contact
+                Kontakt
               </Link>
             </div>
           </div>
