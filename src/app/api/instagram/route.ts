@@ -81,9 +81,27 @@ const fetchInstagramPosts = cache(async (accessToken: string) => {
   }
   
   try {
-    console.log('Attempting to connect to Instagram API...');
-    
-    // Try a different approach - fetching user's own media directly
+    console.log('Attempting to get user information first...');
+    try {
+      const userInfoUrl = `https://graph.instagram.com/me?fields=id,username,name,account_type&access_token=${accessToken}`;
+      console.log('Requesting user info from:', userInfoUrl);
+      
+      const userResponse = await fetch(userInfoUrl);
+      const userText = await userResponse.text();
+      
+      try {
+        // Try to parse the response as JSON
+        const userData = JSON.parse(userText);
+        console.log('User info response:', JSON.stringify(userData, null, 2));
+      } catch (e) {
+        // If it's not valid JSON, just log the text
+        console.log('User info response (not JSON):', userText);
+      }
+    } catch (userError) {
+      console.error('Error fetching user info:', userError);
+    }
+
+    console.log('Now trying to fetch media...');
     const userMediaUrl = `https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp,username&access_token=${accessToken}`;
     console.log('Requesting user media from:', userMediaUrl);
     
@@ -109,18 +127,40 @@ const fetchInstagramPosts = cache(async (accessToken: string) => {
     
     // Debug token information
     const tokenDebugUrl = `https://graph.facebook.com/debug_token?input_token=${accessToken}&access_token=${accessToken}`;
+    console.log(`\n=== TOKEN DEBUG INFORMATION ===`);
     console.log(`Checking token information:`, tokenDebugUrl);
     
     try {
       const tokenResponse = await fetch(tokenDebugUrl);
       const tokenData = await tokenResponse.json();
       console.log('Token debug info:', JSON.stringify(tokenData, null, 2));
+      
+      if (tokenData.data) {
+        console.log(`\n=== USER INFORMATION ===`);
+        console.log(`User ID: ${tokenData.data.user_id}`);
+        console.log(`App ID: ${tokenData.data.app_id}`);
+        console.log(`Permissions: ${tokenData.data.scopes?.join(', ') || 'None'}`);
+        console.log(`Token expires: ${new Date(tokenData.data.expires_at * 1000).toLocaleString()}`);
+        
+        // Get user information
+        console.log(`\n=== FETCHING USER DETAILS ===`);
+        const userUrl = `https://graph.facebook.com/v18.0/${tokenData.data.user_id}?fields=id,name,email&access_token=${accessToken}`;
+        console.log(`User details URL: ${userUrl}`);
+        
+        try {
+          const userResponse = await fetch(userUrl);
+          const userData = await userResponse.json();
+          console.log('User details:', JSON.stringify(userData, null, 2));
+        } catch (userError) {
+          console.error('Error fetching user details:', userError);
+        }
+      }
     } catch (tokenError) {
       console.error('Error debugging token:', tokenError);
     }
     
-    // If above approach fails, try the Graph API
-    // First, get the user's Instagram Business Account ID
+    // Check Facebook pages
+    console.log(`\n=== FACEBOOK PAGES CHECK ===`);
     const accountsUrl = `https://graph.facebook.com/v18.0/me/accounts?access_token=${accessToken}`;
     console.log(`Fetching Facebook Pages:`, accountsUrl);
     
@@ -136,7 +176,45 @@ const fetchInstagramPosts = cache(async (accessToken: string) => {
     console.log('Facebook Pages response:', JSON.stringify(accountsData, null, 2));
     
     if (!accountsData.data || accountsData.data.length === 0) {
+      console.log('\n=== NO FACEBOOK PAGES FOUND ===');
       console.log('No Facebook Pages found. Make sure to link a Facebook Page to your account.');
+      
+      // Try to check Instagram business accounts directly
+      console.log('\n=== TRYING ALTERNATIVE INSTAGRAM APPROACH ===');
+      
+      try {
+        // Check if this is a personal Instagram access token
+        console.log('Checking if this is a personal Instagram token...');
+        const igUserUrl = `https://graph.instagram.com/me?fields=id,username,account_type&access_token=${accessToken}`;
+        console.log(`Instagram user URL: ${igUserUrl}`);
+        
+        const igUserResponse = await fetch(igUserUrl);
+        
+        if (igUserResponse.ok) {
+          const igUserData = await igUserResponse.json();
+          console.log('Instagram user details:', JSON.stringify(igUserData, null, 2));
+          
+          if (igUserData.id) {
+            console.log(`Found Instagram user ID: ${igUserData.id}`);
+            console.log(`Username: ${igUserData.username || 'Not available'}`);
+            console.log(`Account type: ${igUserData.account_type || 'Not available'}`);
+            
+            // Try to get media via Instagram Graph API directly
+            const mediaUrl = `https://graph.instagram.com/${igUserData.id}/media?access_token=${accessToken}`;
+            console.log(`Trying direct media URL: ${mediaUrl}`);
+            
+            const mediaResponse = await fetch(mediaUrl);
+            const mediaData = await mediaResponse.json();
+            console.log('Direct media response:', JSON.stringify(mediaData, null, 2));
+          }
+        } else {
+          const errorText = await igUserResponse.text();
+          console.log('Instagram user check failed:', errorText);
+        }
+      } catch (igError) {
+        console.error('Error in alternative Instagram approach:', igError);
+      }
+      
       console.log('Falling back to mock data');
       return mockInstagramPosts;
     }
@@ -169,22 +247,22 @@ const fetchInstagramPosts = cache(async (accessToken: string) => {
     // Now get the media from the Instagram Business Account
     const graphMediaUrl = `https://graph.facebook.com/v18.0/${instagramAccountId}/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp,username&limit=20&access_token=${accessToken}`;
     console.log(`Fetching Instagram media:`, graphMediaUrl);
-    
+
     const graphMediaResponse = await fetch(graphMediaUrl);
-    
+
     if (!graphMediaResponse.ok) {
       const mediaErrorText = await graphMediaResponse.text();
       console.error('Instagram Media API error:', mediaErrorText);
       throw new Error(`Failed to fetch Instagram media: ${graphMediaResponse.statusText}`);
     }
-    
+
     const graphMediaData = await graphMediaResponse.json();
     console.log(`Retrieved ${graphMediaData.data?.length || 0} Instagram posts`);
-    
+
     // Update cache
     cachedData = graphMediaData.data;
     lastFetchTime = now;
-    
+
     return graphMediaData.data;
   } catch (error) {
     console.error('Instagram API Error:', error);
@@ -207,6 +285,20 @@ export async function GET() {
   console.log('Instagram access token found, length:', accessToken.length);
   
   try {
+    // Get Facebook user information to understand the context
+    console.log('\n=== STARTING INSTAGRAM API REQUEST ===');
+    console.log('First, getting Facebook user information...');
+    const meUrl = `https://graph.facebook.com/v18.0/me?fields=id,name,email&access_token=${accessToken}`;
+    
+    try {
+      const meResponse = await fetch(meUrl);
+      const meData = await meResponse.json();
+      console.log('Facebook user information:', JSON.stringify(meData, null, 2));
+    } catch (meError) {
+      console.error('Error fetching Facebook user information:', meError);
+    }
+    
+    console.log('\nAttempting to connect to Instagram API...');
     const instagramPosts = await fetchInstagramPosts(accessToken);
     console.log(`Returning ${instagramPosts.length} Instagram posts`);
     return NextResponse.json({ posts: instagramPosts });
@@ -215,4 +307,4 @@ export async function GET() {
     // Return mock data on error
     return NextResponse.json({ posts: mockInstagramPosts });
   }
-} 
+}
