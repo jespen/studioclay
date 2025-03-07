@@ -2,8 +2,14 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/gyckh2yxxvf4/public_html
-    # List directory content before starting to debug
-    - /bin/ls -la $DEPLOYPATH > $DEPLOYPATH/pre_deploy_listing.txt
+    - export BACKUPPATH=/home/gyckh2yxxvf4/site_backups
+    
+    # Create backup directory if it doesn't exist
+    - /bin/mkdir -p $BACKUPPATH
+    
+    # Backup current public_html before making changes
+    - /bin/mkdir -p $BACKUPPATH/backup_$(date +%Y%m%d_%H%M%S)
+    - /bin/cp -R $DEPLOYPATH/* $BACKUPPATH/backup_$(date +%Y%m%d_%H%M%S)/ 2>/dev/null || true
     
     # Create a temporary build directory if it doesn't exist
     - /bin/mkdir -p /home/gyckh2yxxvf4/tmp_build
@@ -20,6 +26,8 @@ deployment:
     - /bin/cp tailwind.config.js /home/gyckh2yxxvf4/tmp_build/
     - /bin/cp eslint.config.mjs /home/gyckh2yxxvf4/tmp_build/
     - /bin/cp next-env.d.ts /home/gyckh2yxxvf4/tmp_build/
+    - /bin/mkdir -p /home/gyckh2yxxvf4/tmp_build/scripts
+    - /bin/cp -R scripts/backup-site.js /home/gyckh2yxxvf4/tmp_build/scripts/
     
     # Build the project in the tmp directory
     - cd /home/gyckh2yxxvf4/tmp_build && npm install && npm run export
@@ -28,7 +36,7 @@ deployment:
     - /bin/ls -la /home/gyckh2yxxvf4/tmp_build/out > $DEPLOYPATH/build_output_listing.txt
     
     # Clean the destination directory (preserve the logs)
-    - /bin/find $DEPLOYPATH -mindepth 1 -not -name "*.txt" -delete
+    - /bin/find $DEPLOYPATH -mindepth 1 -not -name "*.txt" -not -name ".htaccess" -delete
     
     # Copy the built files to the public_html directory
     - /bin/cp -R /home/gyckh2yxxvf4/tmp_build/out/. $DEPLOYPATH/
@@ -41,6 +49,17 @@ deployment:
     - /bin/chmod 644 $DEPLOYPATH/*.js
     - /bin/chmod 644 $DEPLOYPATH/*.css
     - /bin/chmod 644 $DEPLOYPATH/*.txt
+    - /bin/chmod 644 $DEPLOYPATH/*.php
+    
+    # Make directories readable and executable
+    - /bin/find $DEPLOYPATH -type d -exec chmod 755 {} \;
+    
+    # Copy the backup file to the backup directory
+    - /bin/cp -R /home/gyckh2yxxvf4/tmp_build/backups/*.zip $BACKUPPATH/ 2>/dev/null || true
+    
+    # Keep only the 10 most recent backups in the backup directory
+    - cd $BACKUPPATH && ls -t | tail -n +11 | xargs rm -rf
     
     # List directory after deployment to verify
     - /bin/ls -la $DEPLOYPATH > $DEPLOYPATH/post_deploy_listing.txt
+    - echo "Deployment completed successfully at $(date)" > $DEPLOYPATH/deploy_info.txt
