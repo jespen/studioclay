@@ -11,6 +11,14 @@ deployment:
     - echo "=== Deployment started: $(date) ===" > $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     - echo "Current directory: $(pwd)" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     
+    # Fix parent directory permissions first - CRITICAL for access
+    - echo "Setting parent directory permissions..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - chmod 755 /home/gyckh2yxxvf4 >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - chmod 755 /home >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - chmod 755 $DEPLOYPATH >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - chmod 755 $BACKUPPATH >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - chmod 755 $LOGPATH >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    
     # Create backup directory if it doesn't exist
     - /bin/mkdir -p $BACKUPPATH
     
@@ -19,6 +27,7 @@ deployment:
     - BACKUP_DIR=$BACKUPPATH/backup_$(date +%Y%m%d_%H%M%S)
     - /bin/mkdir -p $BACKUP_DIR
     - /bin/cp -R $DEPLOYPATH/* $BACKUP_DIR/ 2>> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log || true
+    - chmod -R 755 $BACKUP_DIR >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
     # CRITICAL: Show current directory and files to diagnose structure
     - echo "DEBUG: Current working directory is $(pwd)" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
@@ -35,6 +44,11 @@ deployment:
     - ls -la out >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     - if [ ! -d "out" ]; then echo "CRITICAL ERROR: out directory was not created!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log; exit 1; fi
     - if [ ! -f "out/index.html" ]; then echo "CRITICAL ERROR: index.html was not created!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log; exit 1; fi
+    
+    # Set permissions for output files BEFORE copying
+    - echo "Setting output directory permissions..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - find out -type f -exec chmod 644 {} \; >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - find out -type d -exec chmod 755 {} \; >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
     # Temporarily lock deployment directory to prevent access during update
     - echo "<?php header('HTTP/1.1 503 Service Temporarily Unavailable'); header('Status: 503 Service Temporarily Unavailable'); header('Retry-After: 300'); ?><html><head><title>Maintenance in progress</title></head><body><h1>Maintenance in progress</h1><p>The website is currently being updated. Please try again in a few minutes.</p></body></html>" > $DEPLOYPATH/maintenance.php
@@ -54,10 +68,22 @@ deployment:
     # Create standard index.php that points to index.html for backward compatibility
     - echo "<?php header('Location: index.html'); ?>" > $DEPLOYPATH/index.php
     
-    # Set correct file permissions
+    # Set correct file permissions - thorough permission setting
     - echo "Setting file permissions..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     - find $DEPLOYPATH -type f -exec chmod 644 {} \; >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     - find $DEPLOYPATH -type d -exec chmod 755 {} \; >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    
+    # Set specific permissions for critical files
+    - echo "Setting permissions for critical files..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - chmod 644 $DEPLOYPATH/.htaccess >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - chmod 644 $DEPLOYPATH/index.html >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - chmod 644 $DEPLOYPATH/index.php >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - chmod 644 $DEPLOYPATH/test.html >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || true
+    
+    # Final parent directory permissions check
+    - echo "Final parent directory permissions check..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - ls -la /home/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - ls -la /home/gyckh2yxxvf4/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
     # Verify result
     - echo "Listing files after deployment..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
