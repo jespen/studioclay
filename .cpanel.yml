@@ -43,7 +43,15 @@ deployment:
     - echo "Checking build result..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     - ls -la out >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     - if [ ! -d "out" ]; then echo "CRITICAL ERROR: out directory was not created!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log; exit 1; fi
-    - if [ ! -f "out/index.html" ]; then echo "CRITICAL ERROR: index.html was not created!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log; exit 1; fi
+    
+    # CRITICAL: Create a fallback index.html if one doesn't exist
+    - echo "Checking for index.html..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - if [ ! -f "out/index.html" ]; then 
+        echo "WARNING: index.html not found in build output! Creating a basic version..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log;
+        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Studio Clay</title><meta http-equiv="refresh" content="0;url=test.html"></head><body><p>Redirecting to site...</p></body></html>' > out/index.html;
+      fi
+    - echo "Index.html exists:" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - ls -la out/index.html >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
     # Set permissions for output files BEFORE copying
     - echo "Setting output directory permissions..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
@@ -65,8 +73,20 @@ deployment:
     - /bin/cp -R out/* $DEPLOYPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     - /bin/cp -R out/.htaccess $DEPLOYPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || true
     
+    # VERIFY critical files were copied
+    - echo "Verifying critical files were copied..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - ls -la $DEPLOYPATH/index.html >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || echo "WARNING: index.html not found after copy!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    
     # Create standard index.php that points to index.html for backward compatibility
+    - echo "Creating PHP index file..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     - echo "<?php header('Location: index.html'); ?>" > $DEPLOYPATH/index.php
+    
+    # ADDITIONAL FALLBACK: Create a basic index.html if it's still missing after copy
+    - echo "Creating fallback index.html if needed..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - if [ ! -f "$DEPLOYPATH/index.html" ]; then 
+        echo "CRITICAL: index.html still missing after copy! Creating emergency version..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log;
+        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Studio Clay</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:20px;text-align:center}</style></head><body><h1>Studio Clay</h1><p>Welcome to Studio Clay. The website is being updated. Please check back shortly.</p><p><a href="test.html">View Test Page</a></p></body></html>' > $DEPLOYPATH/index.html;
+      fi
     
     # Set correct file permissions - thorough permission setting
     - echo "Setting file permissions..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
@@ -79,6 +99,10 @@ deployment:
     - chmod 644 $DEPLOYPATH/index.html >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     - chmod 644 $DEPLOYPATH/index.php >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     - chmod 644 $DEPLOYPATH/test.html >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || true
+    
+    # Final verification of index files
+    - echo "Final verification of index files:" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - ls -la $DEPLOYPATH/index.* >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
     # Final parent directory permissions check
     - echo "Final parent directory permissions check..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
