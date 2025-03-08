@@ -74,7 +74,13 @@
   color: #6B7280;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
+  line-height: 1.2;
+}
+
+.contactLine {
+  margin: 0;
+  padding: 0;
 }
 
 .dark .contactInfo {
