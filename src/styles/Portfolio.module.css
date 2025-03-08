@@ -36,22 +36,60 @@
   color: #9CA3AF;
 }
 
-.portfolioGrid {
+/* Masonry Grid Styles */
+.masonryGrid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(1, 1fr);
   gap: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 @media (min-width: 640px) {
-  .portfolioGrid {
+  .masonryGrid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (min-width: 1024px) {
-  .portfolioGrid {
+  .masonryGrid {
     grid-template-columns: repeat(3, 1fr);
   }
+}
+
+/* Item Size Classes */
+.smallItem {
+  grid-row: span 1;
+  aspect-ratio: 1/1;
+}
+
+.mediumItem {
+  grid-row: span 1;
+  aspect-ratio: 1/1;
+}
+
+.largeItem {
+  grid-row: span 1;
+  aspect-ratio: 1/1;
+}
+
+/* Make larger items span 2 rows on larger screens */
+@media (min-width: 768px) {
+  .largeItem {
+    grid-row: span 2;
+    aspect-ratio: 1/2;
+  }
+}
+
+/* Frame styling */
+.withFrame {
+  padding: 1rem;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.withFrame .imageContainer {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 /* Filter Styles */
@@ -90,7 +128,6 @@
   position: relative;
   overflow: hidden;
   border-radius: 0.5rem;
-  aspect-ratio: 1/1;
   cursor: pointer;
   transition: transform 0.3s;
 }
@@ -114,6 +151,30 @@
 
 .portfolioCard:hover .portfolioImage {
   transform: scale(1.05);
+}
+
+/* Show More Button */
+.showMoreButton {
+  background-color: var(--primary);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.375rem;
+  border: none;
+  transition: background-color 0.2s, transform 0.2s;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.showMoreButton:hover {
+  background-color: var(--primary-dark, #3f5a4c);
+  transform: translateY(-2px);
+}
+
+.showMoreButton:active {
+  transform: translateY(0);
 }
 
 /* Gallery Modal Styles */
@@ -223,6 +284,14 @@
   right: 1rem;
 }
 
+/* Button Container */
+.buttonContainer {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+
 /* Media Queries */
 @media (max-width: 768px) {
   .galleryContent {
@@ -251,138 +320,132 @@
 
 .cardOverlay {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, rgba(84, 114, 100, 0.1), rgba(84, 114, 100, 0.5));
-}
-
-.cardContent {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 1.5rem;
-  text-align: center;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 60%);
   opacity: 0;
   transition: opacity 0.3s;
 }
 
+.cardContent {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 1.5rem;
+  transform: translateY(20px);
+  transition: transform 0.3s;
+  opacity: 0;
+}
+
 .portfolioCard:hover .cardContent {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.portfolioCard:hover .cardOverlay {
   opacity: 1;
 }
 
 .cardInfo {
-  background-color: rgba(255, 255, 255, 0.9);
-  padding: 1rem;
-  border-radius: 0.5rem;
-  backdrop-filter: blur(4px);
-  max-width: 90%;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .dark .cardInfo {
-  background-color: rgba(17, 17, 17, 0.9);
+  color: white;
 }
 
 .category {
+  display: inline-block;
   font-size: 0.75rem;
-  color: var(--primary);
   font-weight: 500;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .cardTitle {
   font-size: 1.125rem;
   font-weight: 600;
-  margin-bottom: 0.25rem;
-  color: var(--foreground);
+  margin-bottom: 0.75rem;
 }
 
 .viewButton {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--accent);
+  font-size: 0.875rem;
   font-weight: 500;
-}
-
-.viewIcon {
-  width: 16px;
-  height: 16px;
-}
-
-.viewAllButton {
-  display: inline-block;
-  margin-top: 2rem;
-  padding: 0.75rem 1.5rem;
-  background-color: transparent;
-  border: 2px solid var(--primary);
-  color: var(--primary);
-  border-radius: 0.375rem;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.viewAllButton:hover {
-  background-color: var(--primary);
   color: white;
 }
 
-.buttonContainer {
-  text-align: center;
-  margin-top: 2.5rem;
+.viewIcon {
+  width: 1rem;
+  height: 1rem;
+  margin-left: 0.25rem;
 }
 
-/* Error Message */
+.viewAllButton {
+  background-color: var(--primary);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.375rem;
+  transition: background-color 0.2s, transform 0.2s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.viewAllButton:hover {
+  background-color: var(--primary-dark, #3f5a4c);
+  transform: translateY(-2px);
+}
+
 .errorMessage {
-  text-align: center;
   margin-top: 1rem;
-  padding: 0.5rem 1rem;
-  background-color: rgba(255, 229, 229, 0.5);
-  border-radius: 0.25rem;
-  color: #e53e3e;
+  padding: 0.75rem;
+  background-color: rgba(254, 226, 226, 0.5);
+  color: rgb(185, 28, 28);
+  border-radius: 0.375rem;
   font-size: 0.875rem;
+  text-align: center;
 }
 
-/* Loading Skeleton */
+/* Loading Animation */
 .skeleton {
-  background-color: #f1f5f9;
-  overflow: hidden;
   position: relative;
+  overflow: hidden;
 }
 
 .skeleton::after {
   content: '';
+  display: block;
   position: absolute;
   top: 0;
+  left: 0;
   right: 0;
   bottom: 0;
-  left: 0;
-  transform: translateX(-100%);
-  background-image: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0,
-    rgba(255, 255, 255, 0.2) 20%,
-    rgba(255, 255, 255, 0.5) 60%,
-    rgba(255, 255, 255, 0)
+  background: linear-gradient(90deg, 
+    rgba(0, 0, 0, 0.06) 25%, 
+    rgba(0, 0, 0, 0.1) 37%, 
+    rgba(0, 0, 0, 0.06) 63%
   );
-  animation: shimmer 2s infinite;
+  animation: shimmer 1.5s infinite;
+  background-size: 400% 100%;
 }
 
 @keyframes shimmer {
-  100% {
-    transform: translateX(100%);
-  }
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
 }
 
 .skeletonImage {
   width: 100%;
   height: 100%;
-  background-color: #e2e8f0;
+  background-color: rgba(0, 0, 0, 0.08);
 }
 
-/* No Results */
 .noResults {
   grid-column: 1 / -1;
   text-align: center;
@@ -391,30 +454,30 @@
   font-size: 1rem;
 }
 
-/* Instagram Link */
 .instagramLink {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  color: #E1306C;
+  color: #E5E7EB;
   font-size: 0.875rem;
-  margin-top: 0.5rem;
   text-decoration: none;
-  transition: opacity 0.2s;
-  font-weight: 500;
+  margin-top: 0.5rem;
+  transition: color 0.2s;
+}
+
+.instagramLink svg {
+  margin-left: 0.375rem;
 }
 
 .instagramLink:hover {
-  opacity: 0.8;
+  color: white;
 }
 
-/* Dark Mode Adjustments */
 .dark .skeleton {
-  background-color: #1f2937;
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .dark .skeletonImage {
-  background-color: #374151;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .dark .noResults {
