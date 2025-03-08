@@ -1,20 +1,25 @@
 .banner {
-  background-color: #fff7e6;
-  border-bottom: 1px solid #ffecc7;
+  background-color: #54937f;
+  border-bottom: 1px solid #e6c200;
   width: 100%;
-  position: relative;
-  z-index: 40;
+  position: fixed;
+  top: 80px;
+  left: 0;
+  right: 0;
+  z-index: 45;
+  padding: 6px 0;
+  /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); */
 }
 
 .dark .banner {
   background-color: #2d2000;
-  border-bottom-color: #4d3800;
+  /* border-bottom-color: #4d3800; */
 }
 
 .container {
   max-width: 90rem;
   margin: 0 auto;
-  padding: 0.75rem 2rem;
+  padding: 0.5rem 2rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -27,17 +32,18 @@
 }
 
 .icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  color: #d97706;
+  width: 1rem;
+  height: 1rem;
+  color: #000;
   flex-shrink: 0;
 }
 
 .message {
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  color: #92400e;
+  font-size: 0.8rem;
+  line-height: 1.1rem;
+  color: #000;
   margin: 0;
+  font-weight: 500;
 }
 
 .dark .message {
@@ -48,20 +54,22 @@
   background: none;
   border: none;
   padding: 0.375rem;
-  color: #92400e;
+  color: #333;
   cursor: pointer;
   border-radius: 0.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s ease;
 }
 
 .closeButton:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(0, 0, 0, 0.1);
+  transform: scale(1.1);
 }
 
 .dark .closeButton {
-  color: #fbbf24;
+  color: #f5f5f5;
 }
 
 .dark .closeButton:hover {

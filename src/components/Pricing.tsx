@@ -7,58 +7,61 @@ const Pricing = () => {
   const pricingPlans = [
     {
       id: 1,
-      name: 'Single Session',
-      price: 45,
-      frequency: 'per session',
-      description: 'Perfect for trying out clay working for the first time',
+      name: 'Helgkurs',
+      price: '3000',
+      frequency: 'kr',
+      sessionCount: '',
+      description: 'Drejning, med inslag av korta förevisningsdrejningar som inspiration och tips för eget drejande.',
       isPopular: false,
       features: [
-        { text: '2-hour guided session', included: true },
-        { text: 'All materials included', included: true },
-        { text: 'One finished piece', included: true },
-        { text: 'Glazing included', included: true },
-        { text: 'Studio access', included: false },
-        { text: 'Private instruction', included: false },
+        { text: 'Dag 1 (5 h) - Drejning', included: true },
+        { text: 'Dag 2 (5 h) - Beskickning (färdigställer)', included: true },
+        { text: 'Dag 3 (ca 2 h, 3-4 veckor senare) - Glasyrtilfälle', included: true },
+        { text: '3 kg lera ingår', included: true },
+        { text: 'Glasering och bränningar ingår', included: true },
+        { text: 'Tillgång till egen drejskiva under kursen', included: true },
       ],
-      buttonText: 'Book a Session',
-      buttonLink: '/book-course',
-      isSecondary: true,
+      buttonText: 'Kontakta',
+      buttonLink: '/contact',
+      isSecondary: false,
     },
     {
       id: 2,
-      name: 'Beginner Course',
-      price: 299,
-      frequency: 'per course',
-      description: 'Our most popular introductory course for new potters',
+      name: 'Dag eller kvällskurs',
+      price: '3300/4500',
+      frequency: 'kr',
+      sessionCount: '5 gånger/ 7 gånger',
+      description: 'Egen stund vid drejskivan varje vecka. Lär om lerans olika stadier och få praktisera drejning, beskickning, dekortekniker och glasering.',
       isPopular: true,
       features: [
-        { text: '4-week course (8 hours)', included: true },
-        { text: 'All materials included', included: true },
-        { text: 'Up to 5 finished pieces', included: true },
-        { text: 'Glazing included', included: true },
-        { text: '2 hours studio access weekly', included: true },
-        { text: 'Group instruction', included: true },
+        { text: '3 h per tillfälle', included: true },
+        { text: '5 eller 7 gånger, sista gången glasering', included: true },
+        { text: '3 kg lera ingår', included: true },
+        { text: 'Glasering och bränningar ingår', included: true },
+        { text: 'Tillgång till egen drejskiva under kursen', included: true },
+        { text: 'Inblick i keramikens grunder', included: true },
       ],
-      buttonText: 'Enroll Now',
-      buttonLink: '/book-course',
+      buttonText: 'Kontakta',
+      buttonLink: '/contact',
       isSecondary: false,
     },
     {
       id: 3,
-      name: 'Studio Membership',
-      price: 150,
-      frequency: 'per month',
-      description: 'For experienced potters who want regular studio access',
+      name: 'Prova-på',
+      price: '800',
+      frequency: 'kr',
+      sessionCount: '',
+      description: 'Perfekt för nybörjare som vill prova på drejning för första gången.',
       isPopular: false,
       features: [
-        { text: 'Unlimited studio hours', included: true },
-        { text: 'Clay available for purchase', included: true },
-        { text: 'Storage space included', included: true },
-        { text: 'Glazing included', included: true },
-        { text: 'Access to all equipment', included: true },
-        { text: 'Monthly workshop included', included: true },
+        { text: '2 timmars session', included: true },
+        { text: 'Dreja så mycket du vill/hinner', included: true },
+        { text: 'Välj ut max 2 alster som bränns och glaseras', included: true },
+        { text: 'Möjlighet att lägga till fler för 100 kr/st', included: true },
+        { text: 'Du väljer glasyrfärg till dina alster', included: true },
+        { text: 'Alster beskickas och glaseras av Studio Clay', included: true },
       ],
-      buttonText: 'Join Now',
+      buttonText: 'Kontakta',
       buttonLink: '/contact',
       isSecondary: false,
     },
@@ -68,9 +71,9 @@ const Pricing = () => {
     <section id="pricing" className={styles.section}>
       <div className={styles.container}>
         <div className={styles.titleSection}>
-          <h2 className={styles.title}>Pricing Plans</h2>
+          <h2 className={styles.title}>Priser</h2>
           <p className={styles.description}>
-            Choose the perfect plan that fits your pottery journey, from single sessions to monthly memberships.
+            Välj den kurs som passar dig bäst, från provakurser till helgkurser och regelbundna kurstillfällen.
           </p>
         </div>
 
@@ -80,14 +83,14 @@ const Pricing = () => {
               key={plan.id} 
               className={`${styles.pricingCard} ${plan.isPopular ? styles.popularPlan : ''}`}
             >
-              {plan.isPopular && <div className={styles.popularBadge}>Popular</div>}
+              {plan.isPopular && <div className={styles.popularBadge}>Populär</div>}
               <div className={styles.cardHeader}>
                 <h3 className={styles.planName}>{plan.name}</h3>
                 <div className={styles.planPrice}>
-                  <span className={styles.currency}>$</span>
                   {plan.price}
                   <span className={styles.frequency}>{plan.frequency}</span>
                 </div>
+                {plan.sessionCount && <div className={styles.sessionCount}>{plan.sessionCount}</div>}
                 <p className={styles.planDescription}>{plan.description}</p>
               </div>
 

@@ -1,13 +1,38 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styles from '@/styles/ConstructionBanner.module.css';
+
+// Utility function for developers to reset the banner
+export const resetConstructionBanner = () => {
+  localStorage.removeItem('constructionBannerDismissed');
+  console.log('Construction banner reset! Refresh to see it again.');
+  // For convenience in development
+  window.location.reload();
+};
+
+// Make function available in the console for easy testing
+if (typeof window !== 'undefined') {
+  // @ts-ignore
+  window.resetConstructionBanner = resetConstructionBanner;
+}
 
 const ConstructionBanner = () => {
   const [isVisible, setIsVisible] = useState(true);
 
+  // Add localStorage persistence for the banner state
+  useEffect(() => {
+    // Check if banner was previously dismissed
+    const bannerDismissed = localStorage.getItem('constructionBannerDismissed');
+    if (bannerDismissed === 'true') {
+      setIsVisible(false);
+    }
+  }, []);
+
   const dismissBanner = () => {
     setIsVisible(false);
+    // Store the dismissal in localStorage so it persists between page loads
+    localStorage.setItem('constructionBannerDismissed', 'true');
   };
 
   if (!isVisible) return null;
@@ -20,9 +45,11 @@ const ConstructionBanner = () => {
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
-            strokeWidth={1.5}
+            strokeWidth={2}
             stroke="currentColor"
             className={styles.icon}
+            width="16"
+            height="16"
           >
             <path
               strokeLinecap="round"
@@ -31,7 +58,7 @@ const ConstructionBanner = () => {
             />
           </svg>
           <p className={styles.message}>
-            <strong>Under uppbyggnad:</strong> Denna webbplats håller på att byggas. Vissa funktioner kanske inte är tillgängliga ännu.
+            <strong>⚠️ Under uppbyggnad:</strong> Denna webbplats håller på att byggas. Vissa funktioner kanske inte är tillgängliga ännu.
           </p>
         </div>
         <button

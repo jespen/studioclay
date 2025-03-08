@@ -33,7 +33,7 @@ const Navbar = () => {
 
   useEffect(() => {
     const handleScroll = () => {
-      const sections = ['home', 'services', 'works', 'pricing'];
+      const sections = ['home', 'services', 'works', 'pricing', 'kontakt'];
       const scrollPosition = window.scrollY + 100;
 
       for (const section of sections) {
@@ -62,6 +62,7 @@ const Navbar = () => {
     { id: 'services', label: 'Tjänster' },
     { id: 'works', label: 'Arbeten' },
     { id: 'pricing', label: 'Priser' },
+    { id: 'kontakt', label: 'Kontakt' },
   ];
 
   return (
@@ -97,9 +98,6 @@ const Navbar = () => {
                   {link.label}
                 </a>
               ))}
-              <Link href="/contact" className={styles.contactButton}>
-                Kontakt
-              </Link>
             </div>
           </div>
 
@@ -137,13 +135,6 @@ const Navbar = () => {
                   {link.label}
                 </a>
               ))}
-              <Link 
-                href="/contact" 
-                className={styles.mobileContactButton}
-                onClick={closeMenu}
-              >
-                Kontakt
-              </Link>
             </div>
           </div>
         </div>

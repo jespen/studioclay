@@ -4,6 +4,7 @@ import Hero from '@/components/Hero';
 import Services from '@/components/Services';
 import Portfolio from '@/components/Portfolio';
 import Pricing from '@/components/Pricing';
+import Kontakt from '@/components/Contact';
 import Footer from '@/components/Footer';
 
 export default function Home() {
@@ -11,7 +12,7 @@ export default function Home() {
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <ConstructionBanner />
-      <main className="flex-grow">
+      <main className="flex-grow pt-[110px]">
         <section id="home">
           <Hero />
         </section>
@@ -23,6 +24,9 @@ export default function Home() {
         </section>
         <section id="pricing">
           <Pricing />
+        </section>
+        <section id="kontakt">
+          <Kontakt />
         </section>
       </main>
       <Footer />

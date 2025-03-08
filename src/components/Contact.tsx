@@ -1,8 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { TextField, Button, Box, Paper, Typography, CircularProgress, Grid } from '@mui/material';
+import SendIcon from '@mui/icons-material/Send';
+import Image from 'next/image';
+import emailjs from '@emailjs/browser';
+import { emailConfig } from '../config/email';
 
-const Contact = () => {
+/*
+ * EmailJS Setup Instructions:
+ * 1. Create an account at https://www.emailjs.com/
+ * 2. Create a new Email Service (e.g., Gmail, Outlook, or other)
+ * 3. Create a new Email Template with the variables:
+ *    - to_email (recipient's email - evabjorkhtc@gmail.com)
+ *    - from_name (sender's name)
+ *    - from_email (sender's email)
+ *    - message (message content)
+ * 4. Get your EmailJS credentials and update them in src/config/email.ts:
+ *    - Public Key: From Account > API Keys
+ *    - Service ID: From Email Services > [Your Service] > Service ID
+ *    - Template ID: From Email Templates > [Your Template] > Template ID
+ */
+
+const Kontakt = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -11,6 +31,12 @@ const Contact = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
+
+  // Initialize EmailJS with your public key (only needed for older versions)
+  useEffect(() => {
+    emailjs.init(emailConfig.publicKey);
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -23,170 +49,228 @@ const Contact = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError('');
     
-    // Simulate form submission
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSubmitted(true);
-      setFormData({ name: '', email: '', message: '' });
+    // Check if EmailJS credentials are properly configured
+    if (emailConfig.publicKey === "YOUR_PUBLIC_KEY" || 
+        emailConfig.serviceId === "YOUR_SERVICE_ID" || 
+        emailConfig.templateId === "YOUR_TEMPLATE_ID") {
       
-      // Reset success message after 5 seconds
-      setTimeout(() => {
-        setSubmitted(false);
-      }, 5000);
-    }, 1500);
+      setIsSubmitting(false);
+      setError('EmailJS-konfigurationen är inte korrekt inställd. Vänligen kontrollera src/config/email.ts-filen.');
+      console.error('EmailJS configuration error: EmailJS credentials are not properly set in src/config/email.ts');
+      return;
+    }
+    
+    // Create template parameters - make sure these match EXACTLY what's in your EmailJS template
+    // Including multiple property name patterns to handle different EmailJS template configurations
+    const templateParams = {
+      // For the recipient
+      to_email: emailConfig.recipientEmail,
+      to_name: 'Studio Clay',
+      toEmail: emailConfig.recipientEmail,
+      recipient: emailConfig.recipientEmail,
+      
+      // For the sender's name
+      from_name: formData.name,
+      fromName: formData.name,
+      name: formData.name,
+      sender_name: formData.name,
+      
+      // For the sender's email
+      from_email: formData.email,
+      fromEmail: formData.email,
+      email: formData.email,
+      sender_email: formData.email,
+      reply_to: formData.email,
+      
+      // For the message
+      message: formData.message,
+      content: formData.message,
+      body: formData.message,
+      
+      // Additional context
+      subject: 'Nytt meddelande från Studio Clay webbformulär'
+    };
+    
+    // Log the parameters being sent for debugging
+    console.log('Sending email with params:', templateParams);
+    
+    // Using the recommended method from EmailJS documentation
+    emailjs.send(
+      emailConfig.serviceId,
+      emailConfig.templateId,
+      templateParams,
+      {
+        publicKey: emailConfig.publicKey,
+      }
+    )
+      .then((response) => {
+        console.log('Email sent successfully:', response);
+        setIsSubmitting(false);
+        setSubmitted(true);
+        setFormData({ name: '', email: '', message: '' });
+        
+        // Reset success message after 5 seconds
+        setTimeout(() => {
+          setSubmitted(false);
+        }, 5000);
+      })
+      .catch((err) => {
+        console.error('Email sending failed:', err);
+        setIsSubmitting(false);
+        
+        // Safely access error message or convert error to string
+        const errorMessage = err && typeof err === 'object' ? 
+          (err.message || err.text || JSON.stringify(err)) : 
+          String(err);
+        
+        console.log('Error message:', errorMessage);
+        
+        // Provide more specific error messages based on common issues
+        if (errorMessage.includes('service_id')) {
+          setError('Fel service ID. Kontrollera ditt EmailJS service ID i config/email.ts.');
+        } else if (errorMessage.includes('template_id')) {
+          setError('Fel template ID. Kontrollera ditt EmailJS template ID i config/email.ts.');
+        } else if (errorMessage.includes('public_key')) {
+          setError('Fel public key. Kontrollera din EmailJS public key i config/email.ts.');
+        } else if (errorMessage.includes('network')) {
+          setError('Nätverksfel. Kontrollera din internetanslutning och försök igen.');
+        } else {
+          setError('Det gick inte att skicka meddelandet. Kontrollera att din EmailJS-mall har variablerna: to_email, from_name, from_email, message.');
+        }
+      });
   };
 
   return (
-    <section className="py-16 md:py-24">
-      <div className="container-custom">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Get in Touch</h2>
+    <section className="py-16 md:py-24 pb-48" id="kontakt">
+      <div className="container-custom mb-12">
+        <div className="text-center mb-20">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Kontakta Oss</h2>
           <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Ready to start your next project? Contact us today for a consultation.
+            Redo att starta ditt nästa projekt? Kontakta oss idag för en konsultation.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          <div>
-            <h3 className="text-2xl font-semibold mb-6">Contact Information</h3>
-            <div className="space-y-6">
-              <div className="flex items-start">
-                <div className="mt-1 mr-4 text-primary">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                  </svg>
-                </div>
-                <div>
-                  <h4 className="text-lg font-medium mb-1">Our Location</h4>
-                  <p className="text-gray-600 dark:text-gray-400">123 Design Street, Stockholm, Sweden</p>
-                </div>
-              </div>
+        <Grid container spacing={4}>
+          <Grid item xs={12} md={6} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Box sx={{ 
+              position: 'relative', 
+              width: '90%', 
+              height: { xs: '250px', md: '420px' },
+              borderRadius: 2,
+              overflow: 'hidden',
+              boxShadow: 3,
+              mb: { xs: 4, md: 8 }
+            }}>
+              <Image 
+                src="/pictures/471904659_17904629667091314_3509545999734555197_n_18299326909224234.jpg"
+                alt="Studio Clay" 
+                layout="fill"
+                objectFit="cover"
+                priority
+              />
+            </Box>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Box sx={{ maxWidth: '90%', mx: 'auto' }}>
+              <Typography variant="h5" component="h3" sx={{ fontWeight: 600, mb: 3 }}>
+                Skicka ett Meddelande
+              </Typography>
               
-              <div className="flex items-start">
-                <div className="mt-1 mr-4 text-primary">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
-                  </svg>
-                </div>
-                <div>
-                  <h4 className="text-lg font-medium mb-1">Email Us</h4>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    <a href="mailto:info@studioclay.com" className="hover:text-primary">info@studioclay.com</a>
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-start">
-                <div className="mt-1 mr-4 text-primary">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z" />
-                  </svg>
-                </div>
-                <div>
-                  <h4 className="text-lg font-medium mb-1">Call Us</h4>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    <a href="tel:+46123456789" className="hover:text-primary">+46 123 456 789</a>
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-start">
-                <div className="mt-1 mr-4 text-primary">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                  </svg>
-                </div>
-                <div>
-                  <h4 className="text-lg font-medium mb-1">Working Hours</h4>
-                  <p className="text-gray-600 dark:text-gray-400">Monday - Friday: 9:00 AM - 6:00 PM</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div>
-            <h3 className="text-2xl font-semibold mb-6">Send Us a Message</h3>
-            {submitted ? (
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6 text-center">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 mx-auto text-green-500 mb-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                </svg>
-                <h4 className="text-xl font-medium mb-2">Thank You!</h4>
-                <p className="text-gray-600 dark:text-gray-400">Your message has been sent successfully. We&apos;ll get back to you soon.</p>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label htmlFor="name" className="block mb-2 font-medium text-gray-700 dark:text-gray-300">
-                    Your Name
-                  </label>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-gray-800"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="email" className="block mb-2 font-medium text-gray-700 dark:text-gray-300">
-                    Your Email
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-gray-800"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="message" className="block mb-2 font-medium text-gray-700 dark:text-gray-300">
-                    Your Message
-                  </label>
-                  <textarea
-                    id="message"
-                    name="message"
-                    value={formData.message}
-                    onChange={handleChange}
-                    required
-                    rows={5}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-gray-800"
-                  ></textarea>
-                </div>
-                
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="btn btn-primary w-full flex justify-center items-center"
+              {submitted ? (
+                <Paper 
+                  elevation={2} 
+                  sx={{ 
+                    padding: 3, 
+                    textAlign: 'center',
+                    backgroundColor: 'rgba(84, 114, 100, 0.08)',
+                    borderRadius: 2,
+                    mb: 8
+                  }}
                 >
-                  {isSubmitting ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Sending...
-                    </>
-                  ) : (
-                    'Send Message'
-                  )}
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
+                  <Typography variant="h6" sx={{ mb: 1, fontWeight: 500 }}>
+                    Tack!
+                  </Typography>
+                  <Typography variant="body1" color="text.secondary">
+                    Ditt meddelande har skickats. Vi återkommer till dig så snart som möjligt.
+                  </Typography>
+                </Paper>
+              ) : (
+                <Paper elevation={2} sx={{ p: 3, borderRadius: 2, mb: 8 }}>
+                  <Box component="form" onSubmit={handleSubmit} sx={{ '& .MuiTextField-root': { mb: 2.5 } }}>
+                    {error && (
+                      <Typography color="error" sx={{ mb: 2 }}>
+                        {error}
+                      </Typography>
+                    )}
+                    <TextField
+                      fullWidth
+                      required
+                      id="name"
+                      name="name"
+                      label="Ditt Namn"
+                      value={formData.name}
+                      onChange={handleChange}
+                      variant="outlined"
+                      size="small"
+                    />
+                    
+                    <TextField
+                      fullWidth
+                      required
+                      id="email"
+                      name="email"
+                      label="Din E-post"
+                      type="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      variant="outlined"
+                      size="small"
+                    />
+                    
+                    <TextField
+                      fullWidth
+                      required
+                      id="message"
+                      name="message"
+                      label="Ditt Meddelande"
+                      value={formData.message}
+                      onChange={handleChange}
+                      multiline
+                      rows={4}
+                      variant="outlined"
+                      size="small"
+                    />
+                    
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      fullWidth
+                      size="medium"
+                      disabled={isSubmitting}
+                      startIcon={isSubmitting ? <CircularProgress size={18} color="inherit" /> : <SendIcon />}
+                      sx={{ 
+                        mt: 2, 
+                        py: 1.25,
+                        bgcolor: '#547264', 
+                        '&:hover': {
+                          bgcolor: '#3f5a4b'
+                        }
+                      }}
+                    >
+                      {isSubmitting ? 'Skickar...' : 'Skicka Meddelande'}
+                    </Button>
+                  </Box>
+                </Paper>
+              )}
+            </Box>
+          </Grid>
+        </Grid>
       </div>
     </section>
   );
 };
 
-export default Contact; 
+export default Kontakt; 
