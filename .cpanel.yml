@@ -27,6 +27,7 @@ deployment:
     - BACKUP_DIR=$BACKUPPATH/backup_$(date +%Y%m%d_%H%M%S)
     - /bin/mkdir -p $BACKUP_DIR
     - /bin/cp -R $DEPLOYPATH/* $BACKUP_DIR/ 2>> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log || true
+    - /bin/cp -R $DEPLOYPATH/.htaccess $BACKUP_DIR/ 2>> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log || true
     - chmod -R 755 $BACKUP_DIR >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
     # CRITICAL: Show current directory and files to diagnose structure
@@ -34,29 +35,22 @@ deployment:
     - echo "DEBUG: Listing files in current directory:" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     - ls -la >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
-    # Build project with flattened structure
-    - echo "Building project with flattened structure..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
-    - npm install --no-audit --loglevel=error >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
-    - NODE_ENV=production npm run export >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    # Check that out directory was created correctly during Git clone
+    - echo "Checking output directory..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - ls -la out >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || echo "Warning: 'out' directory not found!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     
-    # Check that out directory was created correctly
-    - echo "Checking build result..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
-    - ls -la out >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
-    - if [ ! -d "out" ]; then echo "CRITICAL ERROR: out directory was not created!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log; exit 1; fi
-    
-    # CRITICAL: Create a fallback index.html if one doesn't exist
-    - echo "Checking for index.html..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
-    - if [ ! -f "out/index.html" ]; then 
-        echo "WARNING: index.html not found in build output! Creating a basic version..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log;
-        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Studio Clay</title><meta http-equiv="refresh" content="0;url=test.html"></head><body><p>Redirecting to site...</p></body></html>' > out/index.html;
+    # CRITICAL: Make sure .htaccess is included in deploy path
+    - echo "Checking for .htaccess file in repository..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - if [ -f "out/.htaccess" ]; then 
+        echo "Found .htaccess in out directory" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log;
+      else 
+        echo "WARNING: .htaccess not found in out directory!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log;
       fi
-    - echo "Index.html exists:" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
-    - ls -la out/index.html >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
     # Set permissions for output files BEFORE copying
     - echo "Setting output directory permissions..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
-    - find out -type f -exec chmod 644 {} \; >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
-    - find out -type d -exec chmod 755 {} \; >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - find out -type f -exec chmod 644 {} \; >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || true
+    - find out -type d -exec chmod 755 {} \; >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || true
     
     # Temporarily lock deployment directory to prevent access during update
     - echo "<?php header('HTTP/1.1 503 Service Temporarily Unavailable'); header('Status: 503 Service Temporarily Unavailable'); header('Retry-After: 300'); ?><html><head><title>Maintenance in progress</title></head><body><h1>Maintenance in progress</h1><p>The website is currently being updated. Please try again in a few minutes.</p></body></html>" > $DEPLOYPATH/maintenance.php
@@ -71,11 +65,12 @@ deployment:
     # DIRECTLY COPY FILES FROM FLATTENED BUILD TO ROOT LEVEL
     - echo "Copying built files directly to website root..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     - /bin/cp -R out/* $DEPLOYPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
-    - /bin/cp -R out/.htaccess $DEPLOYPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || true
+    - /bin/cp -R out/.htaccess $DEPLOYPATH/ >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || echo "WARNING: Could not copy .htaccess file!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     
     # VERIFY critical files were copied
     - echo "Verifying critical files were copied..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     - ls -la $DEPLOYPATH/index.html >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || echo "WARNING: index.html not found after copy!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - ls -la $DEPLOYPATH/.htaccess >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1 || echo "WARNING: .htaccess not found after copy!" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     
     # Create standard index.php that points to index.html for backward compatibility
     - echo "Creating PHP index file..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
@@ -86,6 +81,18 @@ deployment:
     - if [ ! -f "$DEPLOYPATH/index.html" ]; then 
         echo "CRITICAL: index.html still missing after copy! Creating emergency version..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log;
         echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Studio Clay</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:20px;text-align:center}</style></head><body><h1>Studio Clay</h1><p>Welcome to Studio Clay. The website is being updated. Please check back shortly.</p><p><a href="test.html">View Test Page</a></p></body></html>' > $DEPLOYPATH/index.html;
+      fi
+    
+    # ADDITIONAL FALLBACK: Create a basic .htaccess if it's still missing
+    - echo "Creating fallback .htaccess if needed..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - if [ ! -f "$DEPLOYPATH/.htaccess" ] || [ ! -s "$DEPLOYPATH/.htaccess" ]; then
+        echo "CRITICAL: .htaccess missing or empty after copy! Creating emergency version..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log;
+        echo 'DirectoryIndex index.html index.php' > $DEPLOYPATH/.htaccess;
+        echo 'RewriteEngine On' >> $DEPLOYPATH/.htaccess;
+        echo 'RewriteBase /' >> $DEPLOYPATH/.htaccess;
+        echo 'RewriteCond %{REQUEST_FILENAME} !-f' >> $DEPLOYPATH/.htaccess;
+        echo 'RewriteCond %{REQUEST_FILENAME} !-d' >> $DEPLOYPATH/.htaccess;
+        echo 'RewriteRule . /index.html [L]' >> $DEPLOYPATH/.htaccess;
       fi
     
     # Set correct file permissions - thorough permission setting
@@ -103,6 +110,11 @@ deployment:
     # Final verification of index files
     - echo "Final verification of index files:" >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
     - ls -la $DEPLOYPATH/index.* >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    - ls -la $DEPLOYPATH/.htaccess >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
+    
+    # Remove maintenance mode
+    - echo "Removing maintenance mode..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log
+    - rm -f $DEPLOYPATH/maintenance.php >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log 2>&1
     
     # Final parent directory permissions check
     - echo "Final parent directory permissions check..." >> $LOGPATH/deploy_$(date +%Y%m%d_%H%M%S).log

@@ -10,8 +10,8 @@
     "backup": "node scripts/backup-site.js",
     "start": "next start",
     "lint": "next lint",
-    "deploy": "node scripts/direct-deploy.js",
-    "simple-deploy": "node scripts/simple-deploy.js"
+    "verify": "node scripts/verify-build.js",
+    "prepare-git": "npm run build && npm run verify"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
@@ -20,8 +20,7 @@
     "@mui/icons-material": "^6.4.7",
     "@mui/material": "^6.4.7",
     "@tailwindcss/typography": "^0.5.16",
-    "ftp": "^0.3.10",
-    "ftp-deploy": "^2.4.7",
+    "basic-ftp": "^5.0.5",
     "next": "15.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
