@@ -1,126 +1,117 @@
-# Instagram Integration for Studio Clay
+# Instagram Integration Setup
 
-## Current Status
+This guide explains how to set up Instagram integration for Studio Clay's website.
 
-The Instagram integration is currently using mock data because the Instagram token provided doesn't have access to any Facebook Pages. For the Instagram Graph API to work properly, you need to have:
+## Prerequisites
 
-1. An Instagram Business or Creator account (not a personal account)
-2. A Facebook Page linked to your Instagram account
-3. A Facebook Developer App with the Instagram Graph API enabled
-4. A long-lived access token with the proper permissions
+1. An Instagram Business or Creator account
+2. A Facebook Developer account (used to create an app that connects to Instagram)
 
-## How to Set Up a Proper Instagram Integration
+## Step 1: Create a Facebook App
 
-### 1. Convert Your Instagram Account to a Business/Creator Account
+1. Go to [Facebook Developers](https://developers.facebook.com/)
+2. Log in with your Facebook account
+3. Click "My Apps" and then "Create App"
+4. Choose "Business" as the app type
+5. Enter details for your app (name, contact email, etc.)
+6. Complete app creation
 
-1. Open the Instagram app
-2. Go to your profile
-3. Tap the menu (hamburger icon) in the top-right corner
-4. Go to Settings > Account
-5. Scroll down and tap "Switch to Professional Account"
-6. Choose "Business" or "Creator" based on your needs
-7. Follow the prompts to complete the setup
+## Step 2: Configure Instagram Basic Display
 
-### 2. Link Your Instagram Account to a Facebook Page
+1. In your app dashboard, click "Add Product"
+2. Find "Instagram Basic Display" and click "Set Up"
+3. Under "Basic Display", configure:
+   - Valid OAuth Redirect URIs (e.g., `https://studioclay.se`)
+   - Deauthorize Callback URL
+   - Data Deletion Request URL
+4. Save your changes
 
-1. In the Instagram app, go to your profile
-2. Tap "Edit Profile"
-3. Tap "Page" under "Public Business Information"
-4. Either create a new Facebook Page or select an existing one
-5. Follow the prompts to complete the connection
+## Step 3: Configure App Settings
 
-### 3. Create a Facebook Developer App
+1. Go to "App Settings" > "Basic"
+2. Note down your "App ID" and "App Secret" - you'll need these later
+3. Make sure your app's privacy policy URL is set
+4. If needed, add additional app admins
 
-1. Go to [Facebook for Developers](https://developers.facebook.com/)
-2. Click "My Apps" > "Create App"
-3. Select "Business" as the app type
-4. Fill in the app name (e.g., "Studio Clay Website")
-5. Click "Create App"
-6. In your app dashboard, add the "Instagram Graph API" product
+## Step 4: Create Access Token
 
-### 4. Generate a Long-Lived Access Token
+1. Under "Instagram Basic Display" > "Basic Display", click "Generate Token"
+2. Log in with your Instagram account
+3. Authorize your app
+4. Copy the short-lived access token that is generated
 
-#### Option 1: Using Graph API Explorer
+## Step 5: Convert to Long-lived Token
 
-1. Go to [Graph API Explorer](https://developers.facebook.com/tools/explorer/)
-2. Select your app from the dropdown
-3. Click "Get Token" > "Page Access Token"
-4. Select your Facebook Page
-5. Make sure to select these permissions:
-   - `instagram_basic`
-   - `instagram_content_publish` (if you want to post to Instagram)
-   - `pages_show_list`
-   - `pages_read_engagement`
-6. Click "Generate Token"
-7. Convert this short-lived token to a long-lived token using the Access Token Debugging Tool:
-   - Go to [Access Token Debugger](https://developers.facebook.com/tools/debug/accesstoken/)
-   - Use the Graph API to exchange the token: 
-     ```
-     /oauth/access_token?grant_type=fb_exchange_token&client_id={app-id}&client_secret={app-secret}&fb_exchange_token={short-lived-token}
-     ```
+The short-lived token expires in 1 hour. You need to convert it to a long-lived token (valid for 60 days).
 
-#### Option 2: Using Our Script
-
-You can use the script we created to simplify the process:
+Use our Instagram tools script to convert your token:
 
 ```bash
-node scripts/convert-token.js
+# Replace YOUR_SHORT_LIVED_TOKEN with the token from step 4
+node scripts/instagram-tools.js convert YOUR_SHORT_LIVED_TOKEN
 ```
 
-### 5. Update Your Environment Variables
+This will:
+1. Convert your short-lived token to a long-lived token
+2. Save the token to your `.env.local` file
 
-Once you have a long-lived token:
+## Step 6: Verify Token and Setup
 
-1. Open the `.env.local` file
-2. Update the `INSTAGRAM_ACCESS_TOKEN` value with your new token
-3. Add your Facebook App ID and App Secret for token refresh:
-   ```
-   INSTAGRAM_ACCESS_TOKEN=your_long_lived_token_here
-   FACEBOOK_APP_ID=your_app_id
-   FACEBOOK_APP_SECRET=your_app_secret
-   ```
-4. Restart the development server
-
-### 6. Test the Integration
-
-Use our test script to verify your token works correctly:
+Verify your token works correctly:
 
 ```bash
-node scripts/test-instagram-token.js
+# Check your Instagram API access
+npm run instagram:check
 ```
 
-If the test is successful, you should see your Instagram posts displayed in the Portfolio section of your website.
+## Step 7: Schedule Token Refresh
 
-## Token Refresh
+The long-lived token expires after 60 days. You should refresh it at least once every 30-45 days.
 
-Instagram access tokens expire after approximately 60 days. To prevent disruption to your Instagram feed, we've provided a script to refresh your token before it expires:
+### Option 1: Manual Refresh
+
+Run this command to manually refresh your token:
 
 ```bash
-node scripts/refresh-token.js
+npm run instagram:refresh
 ```
 
-You should run this script approximately every 45 days to ensure your token stays valid. The script will:
+### Option 2: Automated Refresh (Recommended)
 
-1. Check the current token's expiration date
-2. Only refresh the token if it's within 15 days of expiring
-3. Update the token in your `.env.local` file automatically
-4. Display the new expiration date
+Set up a scheduled task or cron job to automatically refresh your token:
 
-Consider setting up a recurring calendar reminder or automated task to run this script.
+```bash
+# Example cron job (runs every 30 days)
+0 0 */30 * * cd /path/to/studioclay && npm run instagram:refresh
+```
 
 ## Troubleshooting
 
-If you're experiencing issues:
+If you encounter issues, use these commands to diagnose:
 
-1. **No Facebook Pages Found:** Make sure your Instagram account is properly linked to a Facebook Page
-2. **No Instagram Business Account Found:** Ensure your Instagram account is set to Business or Creator
-3. **Token Issues:** Tokens expire after about 60 days, so you'll need to refresh it periodically
-4. **API Errors:** Check the console for detailed error messages
+```bash
+# Check token details
+npm run instagram:details
 
-For assistance, please refer to the [Instagram Graph API documentation](https://developers.facebook.com/docs/instagram-api/).
+# Check API access
+npm run instagram:check
+```
 
-## Long-Term Solution
+Common issues:
+- Invalid token: The token might be expired or invalid
+- Insufficient permissions: The token doesn't have the required scopes
+- Rate limiting: Too many requests to the Instagram API
 
-The current mock implementation ensures your website looks good with sample pottery images. For a production environment, complete the steps above to connect to your actual Instagram account.
+## How it Works
 
-You could also consider using a service like [Curator.io](https://curator.io/) or [EmbedSocial](https://embedsocial.com/) that can simplify Instagram integration for your website. 
+The Instagram integration:
+1. Fetches photos from your Instagram account
+2. Displays them on the website
+3. Updates automatically when you post new content
+
+## Maintenance
+
+To keep the integration working:
+1. Refresh the token regularly
+2. Monitor for any error messages in the website logs
+3. Check for any Instagram API changes that might affect the integration 

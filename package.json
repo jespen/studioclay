@@ -11,7 +11,10 @@
     "start": "next start",
     "lint": "next lint",
     "verify": "node scripts/verify-build.js",
-    "prepare-git": "npm run build && npm run verify"
+    "prepare-git": "npm run build && npm run verify",
+    "instagram:check": "node scripts/instagram-tools.js check",
+    "instagram:refresh": "node scripts/instagram-tools.js refresh",
+    "instagram:details": "node scripts/instagram-tools.js details"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
