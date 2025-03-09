@@ -12,9 +12,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ userName }) => {
     <div className={styles.pageContainer}>
       <AdminHeader title="Admin Dashboard" subtitle={userName ? `Välkommen, ${userName}` : 'Välkommen'} />
       
-      <main className={styles.mainContent}>
-        {/* Course Manager with maxCourses to limit how many are shown */}
-        <CourseManager showHeader={false} maxCourses={3} />
+      <main className={styles.dashboardMainContent}>
+        {/* Course Manager without limiting the number of courses */}
+        <CourseManager showHeader={false} />
       </main>
     </div>
   );

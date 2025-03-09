@@ -19,6 +19,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   const [endDate, setEndDate] = useState('');
   const [endTime, setEndTime] = useState('');
   const [price, setPrice] = useState('');
+  const [maxParticipants, setMaxParticipants] = useState('');
   const [isPublished, setIsPublished] = useState(false);
   const [categoryId, setCategoryId] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
@@ -27,6 +28,9 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   
   // Primary color from globals.css
   const primaryColor = '#547264';
+  
+  // Default instructor ID for Eva
+  const DEFAULT_INSTRUCTOR_ID = 'd34b1b44-9e49-4b7a-a038-84580f8ab9f0';
   
   // Fetch categories
   useEffect(() => {
@@ -57,6 +61,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
       setIsPublished(course.is_published || false);
       setPrice(course.price ? course.price.toString() : '');
       setCategoryId(course.category_id || '');
+      setMaxParticipants(course.max_participants ? course.max_participants.toString() : '');
       
       // Handle dates
       if (course.start_date) {
@@ -86,9 +91,14 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Basic validation
+    // Enhanced validation - all fields are mandatory
     if (!title.trim()) {
       alert('Titel är obligatoriskt');
+      return;
+    }
+    
+    if (!description.trim()) {
+      alert('Beskrivning är obligatoriskt');
       return;
     }
     
@@ -97,24 +107,52 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
       return;
     }
     
-    // Combine date and time for start and end
-    const combinedStartDate = new Date(`${startDate}T${startTime}:00`);
-    
-    let combinedEndDate = null;
-    if (endDate && endTime) {
-      combinedEndDate = new Date(`${endDate}T${endTime}:00`);
+    if (!endDate || !endTime) {
+      alert('Slutdatum och sluttid är obligatoriskt');
+      return;
     }
     
-    // Create course data with default values for location and currency
+    if (!price || parseFloat(price) <= 0) {
+      alert('Pris måste anges och vara större än 0');
+      return;
+    }
+    
+    if (!maxParticipants || parseInt(maxParticipants) <= 0) {
+      alert('Max antal deltagare måste anges och vara större än 0');
+      return;
+    }
+    
+    if (!categoryId) {
+      alert('Kategori måste väljas');
+      return;
+    }
+    
+    // Combine date and time for start and end
+    const combinedStartDate = new Date(`${startDate}T${startTime}:00`);
+    const combinedEndDate = new Date(`${endDate}T${endTime}:00`);
+    
+    // Validate that end date is after start date
+    if (combinedEndDate <= combinedStartDate) {
+      alert('Sluttid måste vara efter starttid');
+      return;
+    }
+    
+    // Calculate duration in minutes
+    const durationMinutes = Math.round((combinedEndDate.getTime() - combinedStartDate.getTime()) / 60000);
+    
+    // Create course data with required values
     const courseData: Partial<Course> = {
       title,
       description,
       location: 'Studio Clay', // Default value
       start_date: combinedStartDate.toISOString(),
-      end_date: combinedEndDate ? combinedEndDate.toISOString() : undefined,
-      price: price ? parseFloat(price) : undefined,
+      end_date: combinedEndDate.toISOString(),
+      price: parseFloat(price),
       currency: 'SEK', // Default value
-      category_id: categoryId || null,
+      category_id: categoryId,
+      instructor_id: DEFAULT_INSTRUCTOR_ID, // Default instructor (Eva)
+      max_participants: parseInt(maxParticipants),
+      duration_minutes: durationMinutes,
       is_published: isPublished,
     };
     
@@ -173,11 +211,10 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           sx={inputStyles}
         />
         
-
-        
         {/* Category */}
         <TextField
           fullWidth
+          required
           select
           id="category"
           name="category"
@@ -237,6 +274,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
+              required
               id="endDate"
               name="endDate"
               label="Slutdatum"
@@ -252,6 +290,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
+              required
               id="endTime"
               name="endTime"
               label="Sluttid"
@@ -266,22 +305,44 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           </Grid>
         </Grid>
         
-        {/* Price */}
+        {/* Price and Max Participants */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              required
+              id="price"
+              name="price"
+              label="Pris (SEK)"
+              type="number"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              variant="outlined"
+              size="small"
+              sx={inputStyles}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              required
+              id="maxParticipants"
+              name="maxParticipants"
+              label="Max antal deltagare"
+              type="number"
+              value={maxParticipants}
+              onChange={(e) => setMaxParticipants(e.target.value)}
+              variant="outlined"
+              size="small"
+              sx={inputStyles}
+            />
+          </Grid>
+        </Grid>
+        
+        {/* Description */}
         <TextField
           fullWidth
-          id="price"
-          name="price"
-          label="Pris (SEK)"
-          type="number"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          variant="outlined"
-          size="small"
-          sx={inputStyles}
-        />
-                {/* Description */}
-                <TextField
-          fullWidth
+          required
           id="description"
           name="description"
           label="Beskrivning"

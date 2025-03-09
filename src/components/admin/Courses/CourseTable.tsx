@@ -67,7 +67,7 @@ export const CourseTable: React.FC<CourseTableProps> = ({
               </td>
               <td className={styles.tableCell}>
                 <span className={`${styles.statusBadge} ${course.is_published ? styles.publishedBadge : styles.draftBadge}`}>
-                  {course.is_published ? 'Publicerad' : 'Utkast'}
+                  {course.is_published ? 'Publicerad' : 'Avpublicerad'}
                 </span>
               </td>
               <td className={styles.tableCell}>
@@ -80,10 +80,14 @@ export const CourseTable: React.FC<CourseTableProps> = ({
                       Redigera
                     </button>
                   )}
-                  {onPublish && (
+                  {onPublish && variant !== 'past' && (
                     <button
                       className={`${styles.actionButton} ${course.is_published ? styles.unpublishButton : styles.publishButton}`}
-                      onClick={() => onPublish(course)}
+                      onClick={() => {
+                        console.log('Publish button clicked for course:', course);
+                        console.log('Course ID:', course.id);
+                        onPublish(course);
+                      }}
                     >
                       {course.is_published ? 'Avpublicera' : 'Publicera'}
                     </button>

@@ -38,11 +38,14 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
       
       const data = await response.json();
       console.log('Received courses data:', data);
+      console.log('Raw API response:', JSON.stringify(data));
       
       // Extract courses array from the response
       if (data && Array.isArray(data.courses)) {
+        console.log('Setting courses from data.courses:', data.courses);
         setCourses(data.courses);
       } else if (Array.isArray(data)) {
+        console.log('Setting courses from data array:', data);
         setCourses(data);
       } else {
         console.error('Unexpected API response format:', data);
@@ -59,6 +62,15 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
   // Function to toggle course publish status
   async function handlePublishToggle(course: Course) {
     try {
+      console.log('Toggling publish status for course:', course);
+      console.log('Course ID:', course.id);
+      console.log('API URL:', `/api/courses/${course.id}`);
+      
+      if (!course || !course.id) {
+        console.error('Invalid course object or missing ID:', course);
+        throw new Error('Course ID is required');
+      }
+      
       const updatedCourse = { ...course, is_published: !course.is_published };
       
       const response = await fetch(`/api/courses/${course.id}`, {
@@ -70,13 +82,17 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to update course: ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.error || `Failed to update course: ${response.status}`;
+        console.error('Error details:', errorData);
+        throw new Error(errorMessage);
       }
 
       await fetchCourses(); // Refresh the courses list
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      console.error(err);
+      console.error('Error toggling publish status:', err);
+      alert(`Kunde inte ändra publiceringsstatus: ${err instanceof Error ? err.message : 'Okänt fel'}`);
     }
   }
 
@@ -146,25 +162,86 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
     if (courses.length > 0) {
       const now = new Date();
       let allCourses = [...courses];
-      if (maxCourses) {
-        allCourses = allCourses.slice(0, maxCourses);
+      
+      console.log('All courses from API:', allCourses);
+      console.log('maxCourses parameter:', maxCourses);
+      
+      // Filter out any courses without an ID
+      allCourses = allCourses.filter(course => course && course.id);
+      
+      // Apply maxCourses limit if specified
+      let limitedCourses = [...allCourses];
+      if (maxCourses && maxCourses > 0) {
+        console.log(`Limiting to ${maxCourses} courses`);
+        limitedCourses = allCourses.slice(0, maxCourses);
+        console.log('Courses after limiting:', limitedCourses);
+      } else {
+        console.log('No course limit applied');
       }
       
-      const activeCourses = allCourses.filter(course => 
-        course.end_date && new Date(course.end_date) >= now
+      console.log('Current date for filtering:', now.toISOString());
+      
+      // First, separate courses by date (past vs. active)
+      const pastCourses = limitedCourses.filter(course => 
+        course.end_date && new Date(course.end_date) < now
       );
       
-      setPublishedActiveCourses(activeCourses.filter(course => course.is_published));
-      setUnpublishedActiveCourses(activeCourses.filter(course => !course.is_published));
+      const activeCourses = limitedCourses.filter(course => 
+        !course.end_date || new Date(course.end_date) >= now
+      );
       
-      setPastCourses(allCourses.filter(course => 
-        course.end_date && new Date(course.end_date) < now
-      ));
+      console.log('Past courses:', pastCourses);
+      console.log('Active courses:', activeCourses);
+      
+      // Then, for active courses, separate by published status
+      const publishedActiveCourses = activeCourses.filter(course => course.is_published);
+      const unpublishedActiveCourses = activeCourses.filter(course => !course.is_published);
+      
+      // Set the state variables
+      setPublishedActiveCourses(publishedActiveCourses);
+      setUnpublishedActiveCourses(unpublishedActiveCourses);
+      setPastCourses(pastCourses); // All past courses go to "Tidigare kurser" regardless of published status
+      
+      // Automatically unpublish past courses that are still marked as published
+      pastCourses.forEach(async (course) => {
+        if (course.is_published) {
+          console.log(`Auto-unpublishing past course: ${course.title} (ID: ${course.id})`);
+          try {
+            const response = await fetch(`/api/courses/${course.id}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ is_published: false }),
+            });
+            
+            if (!response.ok) {
+              console.error(`Failed to auto-unpublish course ${course.id}: ${response.statusText}`);
+            } else {
+              console.log(`Successfully auto-unpublished course: ${course.title}`);
+            }
+          } catch (error) {
+            console.error(`Error auto-unpublishing course ${course.id}:`, error);
+          }
+        }
+      });
+      
+      // Refresh courses after unpublishing
+      if (pastCourses.some(course => course.is_published)) {
+        setTimeout(() => {
+          fetchCourses();
+        }, 1000);
+      }
 
+      console.log('=== COURSE DEBUG INFO ===');
       console.log(`All courses: ${allCourses.length}`);
+      console.log(`Limited courses: ${limitedCourses.length}`);
       console.log(`Active courses: ${activeCourses.length}`);
-      console.log(`Published active courses: ${activeCourses.filter(course => course.is_published).length}`);
-      console.log(`Unpublished active courses: ${activeCourses.filter(course => !course.is_published).length}`);
+      console.log(`Published active courses: ${publishedActiveCourses.length}`);
+      console.log(`Unpublished active courses: ${unpublishedActiveCourses.length}`);
+      console.log(`Past courses: ${pastCourses.length}`);
+      console.log('Unpublished active courses details:', unpublishedActiveCourses);
+      console.log('=== END DEBUG INFO ===');
     }
   }, [courses, maxCourses]);
 
@@ -197,10 +274,34 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
           <div>Laddar kurser...</div>
         ) : (
           <>
-            <div className={styles.navButtons} style={{ marginBottom: '2rem' }}>
+            <div className={styles.navButtons} style={{ marginBottom: '1rem' }}>
               <button onClick={handleAddCourse} className={styles.addButton}>
                 + Lägg till ny kurs
               </button>
+            </div>
+
+            {/* Debug information */}
+            <div style={{ 
+              background: '#f0f0f0', 
+              padding: '10px', 
+              marginBottom: '20px', 
+              border: '1px solid #ccc',
+              borderRadius: '4px'
+            }}>
+              <h3>Debug Information</h3>
+              <p>All courses: {courses.length}</p>
+              <p>Active courses: {publishedActiveCourses.length + unpublishedActiveCourses.length}</p>
+              <p>Published active courses: {publishedActiveCourses.length}</p>
+              <p>Unpublished active courses: {unpublishedActiveCourses.length}</p>
+              <p>Past courses: {pastCourses.length}</p>
+              <h4>Unpublished Active Courses:</h4>
+              <ul>
+                {unpublishedActiveCourses.map(course => (
+                  <li key={course.id}>
+                    {course.title} - End date: {course.end_date} - Published: {course.is_published ? 'Yes' : 'No'}
+                  </li>
+                ))}
+              </ul>
             </div>
 
             {/* Published courses */}

@@ -11,7 +11,7 @@
   color: white;
   padding: 1rem 0;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin-bottom: 3.5rem;
+  margin-bottom: 1.5rem;
   position: relative;
   z-index: 10;
 }
@@ -133,12 +133,17 @@
 }
 
 .mainContent {
-  padding: 16;
+  padding: 0;
   max-width: 100%;
   margin: 0 auto;
-  margin-top: 3rem;
+  margin-top: 1rem;
   position: relative;
   z-index: 5;
+}
+
+.dashboardMainContent {
+  composes: mainContent;
+  margin-bottom: 0;
 }
 
 .sectionContainer {
@@ -236,6 +241,7 @@
   font-weight: 600;
   color: #111827;
   margin: 0;
+  font-size: 1rem;
 }
 
 .courseDescription {
@@ -247,6 +253,7 @@
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  font-size: 0.875rem;
 }
 
 .statusBadge {
