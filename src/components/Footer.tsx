@@ -84,7 +84,7 @@ const Footer = () => {
               <p className={styles.contactLine}>Norrtullsgatan 65</p>
               <p className={styles.contactLine}>Stockholm, Sverige</p>
               <p className={styles.contactLine}>
-                <a href="mailto:Evabjorkhtc@gmail.com" className={styles.footerLink}>
+                <a href="mailto:eva@studioclay.se" className={styles.footerLink}>
                   Evabjorkhtc@gmail.com
                 </a>
               </p>

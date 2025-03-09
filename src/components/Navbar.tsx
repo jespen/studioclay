@@ -60,7 +60,7 @@ const Navbar = () => {
   const navigationLinks = [
     { id: 'home', label: 'Hem' },
     { id: 'services', label: 'Tjänster' },
-    { id: 'works', label: 'Arbeten' },
+    { id: 'works', label: 'Portfolio' },
     { id: 'pricing', label: 'Priser' },
     { id: 'kontakt', label: 'Kontakt' },
   ];

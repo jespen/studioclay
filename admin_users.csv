@@ -1,0 +1,5 @@
+email,password,created_at,confirmed_at,user_metadata
+eva@studioclay.se,StrongPassword123,2024-07-01T00:00:00Z,2024-07-01T00:00:00Z,"{""role"":""admin""}"
+# Replace admin@studioclay.se with your admin email
+# Replace StrongPassword123 with a secure password
+# You can add more admin users by adding more rows 

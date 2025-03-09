@@ -9,8 +9,8 @@ const nextConfig = {
     // Disable ESLint during production builds
     ignoreDuringBuilds: true,
   },
-  // Enable static exports with specific config
-  output: 'export',
+  // Comment out static export configuration for admin authentication functionality
+  // output: 'export',
   // Disable default basePath
   basePath: '',
   // Make sure assets have proper paths

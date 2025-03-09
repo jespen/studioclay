@@ -184,7 +184,7 @@ const Portfolio = () => {
     <section id="works" className={styles.section}>
       <div className={styles.container}>
         <div className={styles.titleSection}>
-          <h2 className={styles.title}>Vårt arbete</h2>
+          <h2 className={styles.title}>Portfolio</h2>
           <p className={styles.description}>
             En samling av vackra skapelser från vår studio och verkstad.
           </p>
