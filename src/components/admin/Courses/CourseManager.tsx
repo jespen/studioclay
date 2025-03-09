@@ -171,7 +171,6 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
   if (showForm) {
     return (
       <div className={styles.pageContainer}>
-        {showHeader && <AdminHeader title="Kurshantering" subtitle="Hantera kurser" />}
         <main className={styles.mainContent}>
           <CourseForm
             course={editingCourse}
