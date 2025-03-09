@@ -1,0 +1,324 @@
+/* Course Management Styles */
+
+.pageContainer {
+  min-height: 100vh;
+  background-color: #f9fafb;
+  padding: 0;
+}
+
+.header {
+  background-color: #547264;
+  color: white;
+  padding: 1rem 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 3.5rem;
+  position: relative;
+  z-index: 10;
+}
+
+.headerContent {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.headerTitle {
+  font-size: 2.25rem;
+  font-weight: bold;
+  font-family: Georgia, serif;
+  margin-bottom: 0.5rem;
+}
+
+.headerSubtitle {
+  font-size: 1.125rem;
+  opacity: 0.9;
+  margin-bottom: 1rem;
+}
+
+.welcomeMessage {
+  font-size: 1.1rem;
+  margin: 1rem 0;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.navButtons {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.navButtonsColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.navButtonsRow {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  align-items: center;
+}
+
+.navButton {
+  background-color: transparent;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 0.25rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-right: 0;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  width: auto;
+  min-width: 120px;
+  text-align: center;
+}
+
+.navButton:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.addButton {
+  background-color: #547264;
+  color: white;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 0.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.addButton:hover {
+  background-color: #3d5349;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.logoutButton {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  font-weight: 600;
+  margin-left: 0;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.logoutButton:hover {
+  background-color: #d32f2f;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.logoutButton:disabled {
+  background-color: #ffcdd2;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.mainContent {
+  padding: 16;
+  max-width: 100%;
+  margin: 0 auto;
+  margin-top: 3rem;
+  position: relative;
+  z-index: 5;
+}
+
+.sectionContainer {
+  background-color: white;
+  border-radius: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+  border-left: none;
+  padding: 0;
+  overflow: hidden;
+}
+
+.draftContainer {
+  border-color: var(--primary-light);
+}
+
+.pastContainer {
+  border-color: #9ca3af;
+}
+
+.sectionHeader {
+  background-color: #f3f4f6;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  border-left: 4px solid #547264;
+}
+
+.draftHeader {
+  background-color: #f3f4f6;
+  border-bottom-color: #fde68a;
+}
+
+.pastHeader {
+  background-color: #f3f4f6;
+  border-bottom-color: #e5e7eb;
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+}
+
+.tableHeader {
+  background-color: #f9fafb;
+}
+
+.draftTableHeader {
+  background-color: #f9fafb;
+}
+
+.pastTableHeader {
+  background-color: #f9fafb;
+}
+
+.tableHeaderCell {
+  text-align: left;
+  padding: 0.5rem;
+  font-weight: 600;
+  color: #4b5563;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.tableRow {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.15s;
+}
+
+.tableRow:hover {
+  background-color: #f9fafb;
+}
+
+.publishedRow:hover {
+  background-color: #f0fdf4;
+}
+
+.draftRow {
+  background-color: #f9fafb;
+}
+
+.tableCell {
+  padding: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: top;
+}
+
+.courseTitle {
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.courseDescription {
+  color: #6b7280;
+  margin: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.publishedBadge {
+  background-color: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.draftBadge {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.actionButton {
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: 0.25rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.editButton {
+  background-color: #6b7280;
+}
+
+.editButton:hover {
+  background-color: #4b5563;
+}
+
+.publishButton {
+  background-color: #547264;
+}
+
+.publishButton:hover {
+  background-color: #3e5549;
+}
+
+.unpublishButton {
+  background-color: #547264;
+}
+
+.unpublishButton:hover {
+  background-color: #3e5549;
+}
+
+.deleteButton {
+  background-color: #ef4444;
+}
+
+.deleteButton:hover {
+  background-color: #dc2626;
+}
+
+.actionButtonsContainer {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+} 

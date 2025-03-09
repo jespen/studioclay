@@ -1,34 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-type Category = {
-  id: string;
-  name: string;
-};
-
-type Instructor = {
-  id: string;
-  name: string;
-};
-
-type Course = {
-  id: string;
-  title: string;
-  description: string;
-  start_date: string | null;
-  end_date: string | null;
-  duration_minutes: number | null;
-  price: number;
-  currency: string;
-  max_participants: number | null;
-  current_participants: number;
-  location: string;
-  image_url: string | null;
-  category_id: string | null;
-  instructor_id: string | null;
-  is_published: boolean;
-};
+import { Course, Category, Instructor } from '../../../../types/course';
+import { TextField, Button, Box, Paper, Typography, FormControlLabel, Switch, Grid, MenuItem } from '@mui/material';
 
 type CourseFormProps = {
   course: Course | null;
@@ -37,11 +11,7 @@ type CourseFormProps = {
 };
 
 export default function CourseForm({ course, onSave, onCancel }: CourseFormProps) {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [instructors, setInstructors] = useState<Instructor[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
+  // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -49,50 +19,46 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   const [endDate, setEndDate] = useState('');
   const [endTime, setEndTime] = useState('');
   const [price, setPrice] = useState('');
-  const [maxParticipants, setMaxParticipants] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [instructorId, setInstructorId] = useState('');
   const [isPublished, setIsPublished] = useState(false);
-
-  // Fetch categories and instructors
+  const [categoryId, setCategoryId] = useState('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  
+  // Primary color from globals.css
+  const primaryColor = '#547264';
+  
+  // Fetch categories
   useEffect(() => {
-    async function fetchData() {
+    const fetchCategories = async () => {
       try {
-        setLoading(true);
-        
-        // Fetch categories
-        const categoriesResponse = await fetch('/api/categories');
-        if (!categoriesResponse.ok) {
-          throw new Error('Failed to fetch categories');
+        const response = await fetch('/api/categories/');
+        if (!response.ok) {
+          throw new Error('Kunde inte hämta kategorier');
         }
-        const categoriesData = await categoriesResponse.json();
-        setCategories(categoriesData.categories || []);
-        
-        // Fetch instructors
-        const instructorsResponse = await fetch('/api/instructors');
-        if (!instructorsResponse.ok) {
-          throw new Error('Failed to fetch instructors');
-        }
-        const instructorsData = await instructorsResponse.json();
-        setInstructors(instructorsData.instructors || []);
-        
-        setLoading(false);
+        const data = await response.json();
+        setCategories(Array.isArray(data.categories) ? data.categories : []);
       } catch (err) {
-        console.error('Error fetching form data:', err);
-        setError('Failed to load form data');
+        console.error('Error fetching categories:', err);
+        setError('Kunde inte hämta kategorier');
+      } finally {
         setLoading(false);
       }
-    }
+    };
     
-    fetchData();
+    fetchCategories();
   }, []);
-
+  
   // Initialize form with course data if editing
   useEffect(() => {
     if (course) {
       setTitle(course.title || '');
       setDescription(course.description || '');
+      setIsPublished(course.is_published || false);
+      setPrice(course.price ? course.price.toString() : '');
+      setCategoryId(course.category_id || '');
       
+      // Handle dates
       if (course.start_date) {
         const startDateTime = new Date(course.start_date);
         setStartDate(formatDateForInput(startDateTime));
@@ -104,293 +70,295 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
         setEndDate(formatDateForInput(endDateTime));
         setEndTime(formatTimeForInput(endDateTime));
       }
-      
-      setPrice(course.price?.toString() || '');
-      setMaxParticipants(course.max_participants?.toString() || '');
-      setCategoryId(course.category_id || '');
-      setInstructorId(course.instructor_id || '');
-      setIsPublished(course.is_published || false);
-    } else {
-      // Default values for new course
-      const now = new Date();
-      setStartDate(formatDateForInput(now));
-      setStartTime('18:00');
-      
-      const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-      setEndDate(formatDateForInput(now));
-      setEndTime('20:00');
-      
-      setPrice('495');
-      setMaxParticipants('8');
-      setIsPublished(false);
-      
-      // Set default instructor to Eva Björk if available
-      const evaInstructor = instructors.find(i => i.name.includes('Eva'));
-      if (evaInstructor) {
-        setInstructorId(evaInstructor.id);
-      }
     }
-  }, [course, instructors]);
-
-  function formatDateForInput(date: Date): string {
+  }, [course]);
+  
+  // Helper functions for date formatting
+  const formatDateForInput = (date: Date): string => {
     return date.toISOString().split('T')[0];
-  }
-
-  function formatTimeForInput(date: Date): string {
-    return date.toTimeString().substring(0, 5);
-  }
-
-  function handleSubmit(e: React.FormEvent) {
+  };
+  
+  const formatTimeForInput = (date: Date): string => {
+    return date.toISOString().split('T')[1].substring(0, 5);
+  };
+  
+  // Form submission
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Combine date and time
-    const startDateTime = new Date(`${startDate}T${startTime}`);
-    const endDateTime = new Date(`${endDate}T${endTime}`);
+    // Basic validation
+    if (!title.trim()) {
+      alert('Titel är obligatoriskt');
+      return;
+    }
     
-    // Calculate duration in minutes
-    const durationMinutes = Math.round((endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60));
+    if (!startDate || !startTime) {
+      alert('Startdatum och starttid är obligatoriskt');
+      return;
+    }
     
+    // Combine date and time for start and end
+    const combinedStartDate = new Date(`${startDate}T${startTime}:00`);
+    
+    let combinedEndDate = null;
+    if (endDate && endTime) {
+      combinedEndDate = new Date(`${endDate}T${endTime}:00`);
+    }
+    
+    // Create course data with default values for location and currency
     const courseData: Partial<Course> = {
       title,
       description,
-      start_date: startDateTime.toISOString(),
-      end_date: endDateTime.toISOString(),
-      duration_minutes: durationMinutes,
-      price: parseFloat(price),
-      currency: 'SEK',
-      max_participants: maxParticipants ? parseInt(maxParticipants) : null,
+      location: 'Studio Clay', // Default value
+      start_date: combinedStartDate.toISOString(),
+      end_date: combinedEndDate ? combinedEndDate.toISOString() : undefined,
+      price: price ? parseFloat(price) : undefined,
+      currency: 'SEK', // Default value
       category_id: categoryId || null,
-      instructor_id: instructorId || null,
-      location: 'Studio Clay, Stockholm',
-      is_published: isPublished
+      is_published: isPublished,
     };
     
+    // Call the onSave callback with the course data
     onSave(courseData);
-  }
-
+  };
+  
   if (loading) {
-    return (
-      <div className="bg-white p-6 rounded-lg shadow">
-        <div className="text-center py-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-2 text-gray-500">Laddar formulär...</p>
-        </div>
-      </div>
-    );
+    return <div>Laddar...</div>;
   }
 
-  if (error) {
-    return (
-      <div className="bg-white p-6 rounded-lg shadow">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          <p>{error}</p>
-          <button 
-            className="mt-2 bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded"
-            onClick={() => window.location.reload()}
-          >
-            Försök igen
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Custom styles for Material UI components
+  const inputStyles = {
+    '& .MuiOutlinedInput-root': {
+      '&:hover fieldset': {
+        borderColor: primaryColor,
+      },
+      '&.Mui-focused fieldset': {
+        borderColor: primaryColor,
+        borderWidth: 2,
+      },
+    },
+    '& .MuiInputLabel-root.Mui-focused': {
+      color: primaryColor,
+    },
+    mb: 3
+  };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow">
-      <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Left column */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Kurstitel *
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Beskrivning
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Kategori *
-              </label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Välj kategori</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Instruktör *
-              </label>
-              <select
-                value={instructorId}
-                onChange={(e) => setInstructorId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Välj instruktör</option>
-                {instructors.map((instructor) => (
-                  <option key={instructor.id} value={instructor.id}>
-                    {instructor.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
-          {/* Right column */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Startdatum *
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Starttid *
-                </label>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Slutdatum *
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Sluttid *
-                </label>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Pris (SEK) *
-                </label>
-                <input
-                  type="number"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  min="0"
-                  step="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Max antal deltagare *
-                </label>
-                <input
-                  type="number"
-                  value={maxParticipants}
-                  onChange={(e) => setMaxParticipants(e.target.value)}
-                  min="1"
-                  step="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-            </div>
-            
-            <div className="flex items-center mt-4">
-              <input
-                type="checkbox"
-                id="is-published"
+    <Paper elevation={3} sx={{ overflow: 'hidden', borderRadius: 2 }}>
+      {/* Material UI-style header with primary color */}
+      <Box sx={{ 
+        bgcolor: primaryColor, 
+        color: 'white', 
+        px: 3, 
+        py: 2 
+      }}>
+        <Typography variant="h6" component="h2">
+          {course ? 'Redigera kurs' : 'Skapa kurs'}
+        </Typography>
+      </Box>
+      
+      {/* Form */}
+      <Box component="form" onSubmit={handleSubmit} sx={{ p: 3 }}>
+        {/* Title */}
+        <TextField
+          fullWidth
+          required
+          id="title"
+          name="title"
+          label="Kurstitel"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          variant="outlined"
+          size="small"
+          sx={inputStyles}
+        />
+        
+
+        
+        {/* Category */}
+        <TextField
+          fullWidth
+          select
+          id="category"
+          name="category"
+          label="Kategori"
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          variant="outlined"
+          size="small"
+          sx={inputStyles}
+        >
+          <MenuItem value="">Välj kategori</MenuItem>
+          {categories.map((category) => (
+            <MenuItem key={category.id} value={category.id}>
+              {category.name}
+            </MenuItem>
+          ))}
+        </TextField>
+        
+        {/* Date and Time */}
+        <Typography variant="subtitle2" sx={{ mb: 1, color: primaryColor, fontWeight: 'medium' }}>
+          Datum och tid
+        </Typography>
+        
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              required
+              id="startDate"
+              name="startDate"
+              label="Startdatum"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              variant="outlined"
+              size="small"
+              InputLabelProps={{ shrink: true }}
+              sx={inputStyles}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              required
+              id="startTime"
+              name="startTime"
+              label="Starttid"
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              variant="outlined"
+              size="small"
+              InputLabelProps={{ shrink: true }}
+              sx={inputStyles}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              id="endDate"
+              name="endDate"
+              label="Slutdatum"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              variant="outlined"
+              size="small"
+              InputLabelProps={{ shrink: true }}
+              sx={inputStyles}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              id="endTime"
+              name="endTime"
+              label="Sluttid"
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              variant="outlined"
+              size="small"
+              InputLabelProps={{ shrink: true }}
+              sx={inputStyles}
+            />
+          </Grid>
+        </Grid>
+        
+        {/* Price */}
+        <TextField
+          fullWidth
+          id="price"
+          name="price"
+          label="Pris (SEK)"
+          type="number"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          variant="outlined"
+          size="small"
+          sx={inputStyles}
+        />
+                {/* Description */}
+                <TextField
+          fullWidth
+          id="description"
+          name="description"
+          label="Beskrivning"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          variant="outlined"
+          size="small"
+          multiline
+          rows={4}
+          sx={inputStyles}
+        />
+        
+        {/* Published Status */}
+        <Box sx={{ mb: 3 }}>
+          <FormControlLabel
+            control={
+              <Switch
                 checked={isPublished}
                 onChange={(e) => setIsPublished(e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                color="primary"
+                sx={{
+                  '& .MuiSwitch-switchBase.Mui-checked': {
+                    color: primaryColor,
+                    '&:hover': {
+                      backgroundColor: 'rgba(84, 114, 100, 0.08)',
+                    },
+                  },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                    backgroundColor: primaryColor,
+                  },
+                }}
               />
-              <label htmlFor="is-published" className="ml-2 block text-sm text-gray-900">
-                Publicera kurs (synlig för besökare)
-              </label>
-            </div>
-
-            <div className="mt-2 text-xs text-gray-500">
-              <p>
-                {isPublished 
-                  ? "Kursen kommer att vara synlig för besökare på hemsidan." 
-                  : "Kursen kommer att sparas som utkast och kan publiceras senare."}
-              </p>
-            </div>
-          </div>
-        </div>
+            }
+            label="Publicera kurs (synlig för besökare)"
+          />
+        </Box>
         
-        <div className="mt-8 flex justify-end space-x-3">
-          <button
-            type="button"
+        {/* Form Actions */}
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'flex-end', 
+          gap: 2, 
+          mt: 4, 
+          pt: 2, 
+          borderTop: '1px solid', 
+          borderColor: 'divider' 
+        }}>
+          <Button
+            variant="outlined"
             onClick={onCancel}
-            className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            size="medium"
+            sx={{
+              borderColor: primaryColor,
+              color: primaryColor,
+              '&:hover': {
+                borderColor: primaryColor,
+                backgroundColor: 'rgba(84, 114, 100, 0.08)',
+              },
+            }}
           >
             Avbryt
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            variant="contained"
+            size="medium"
+            sx={{
+              backgroundColor: primaryColor,
+              '&:hover': {
+                backgroundColor: '#3D544A', // Darker shade of the primary color
+              },
+            }}
           >
-            {course ? 'Uppdatera kurs' : 'Skapa kurs'}
-          </button>
-        </div>
-      </form>
-    </div>
+            {course ? 'Uppdatera' : 'Skapa'}
+          </Button>
+        </Box>
+      </Box>
+    </Paper>
   );
 } 
