@@ -99,18 +99,24 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
   // Function to delete a course
   async function handleDeleteCourse(courseId: string) {
     try {
+      console.log(`Attempting to delete course with ID: ${courseId}`);
+      
       const response = await fetch(`/api/courses/${courseId}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to delete course: ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        console.error('Delete course error response:', response.status, errorData);
+        throw new Error(`Failed to delete course: ${response.status}${errorData ? ' - ' + JSON.stringify(errorData) : ''}`);
       }
 
+      console.log(`Successfully deleted course with ID: ${courseId}`);
       await fetchCourses(); // Refresh the courses list
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      console.error(err);
+      console.error('Error in handleDeleteCourse:', err);
+      alert(`Kunde inte ta bort kursen: ${err instanceof Error ? err.message : 'Okänt fel'}`);
     }
   }
 
@@ -280,30 +286,6 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
               </button>
             </div>
 
-            {/* Debug information */}
-            <div style={{ 
-              background: '#f0f0f0', 
-              padding: '10px', 
-              marginBottom: '20px', 
-              border: '1px solid #ccc',
-              borderRadius: '4px'
-            }}>
-              <h3>Debug Information</h3>
-              <p>All courses: {courses.length}</p>
-              <p>Active courses: {publishedActiveCourses.length + unpublishedActiveCourses.length}</p>
-              <p>Published active courses: {publishedActiveCourses.length}</p>
-              <p>Unpublished active courses: {unpublishedActiveCourses.length}</p>
-              <p>Past courses: {pastCourses.length}</p>
-              <h4>Unpublished Active Courses:</h4>
-              <ul>
-                {unpublishedActiveCourses.map(course => (
-                  <li key={course.id}>
-                    {course.title} - End date: {course.end_date} - Published: {course.is_published ? 'Yes' : 'No'}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
             {/* Published courses */}
             <SectionContainer title="Publicerade kurser">
               <CourseTable 
@@ -335,6 +317,39 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
                 onDelete={handleDeleteCourse}
               />
             </SectionContainer>
+            
+            {/* Debug information - moved to the end */}
+            <div style={{ 
+              background: '#f0f0f0', 
+              padding: '10px', 
+              marginTop: '30px',
+              marginBottom: '20px', 
+              border: '1px solid #ccc',
+              borderRadius: '4px'
+            }}>
+              <h3>Debug Information</h3>
+              <p>All courses: {courses.length}</p>
+              <p>Active courses: {publishedActiveCourses.length + unpublishedActiveCourses.length}</p>
+              <p>Published active courses: {publishedActiveCourses.length}</p>
+              <p>Unpublished active courses: {unpublishedActiveCourses.length}</p>
+              <p>Past courses: {pastCourses.length}</p>
+              <h4>Unpublished Active Courses:</h4>
+              <ul>
+                {unpublishedActiveCourses.map(course => (
+                  <li key={course.id}>
+                    {course.title} - End date: {course.end_date} - Published: {course.is_published ? 'Yes' : 'No'}
+                  </li>
+                ))}
+              </ul>
+              <h4>Past Courses:</h4>
+              <ul>
+                {pastCourses.map(course => (
+                  <li key={course.id}>
+                    {course.title} - End date: {course.end_date} - Published: {course.is_published ? 'Yes' : 'No'}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </>
         )}
       </main>

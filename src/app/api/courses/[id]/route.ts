@@ -135,10 +135,30 @@ export async function DELETE(request: Request) {
   try {
     // Extract the ID from the URL
     const url = new URL(request.url);
-    const pathParts = url.pathname.split('/');
-    const id = pathParts[pathParts.length - 1];
+    console.log('DELETE request URL:', url.toString());
     
+    // Try to extract ID from pathname
+    const pathParts = url.pathname.split('/');
+    console.log('Path parts:', pathParts);
+    
+    // Find the ID in the path - it should be after 'courses'
+    let id = '';
+    for (let i = 0; i < pathParts.length; i++) {
+      if (pathParts[i] === 'courses' && i + 1 < pathParts.length) {
+        id = pathParts[i + 1];
+        break;
+      }
+    }
+    
+    // If not found, try the last part
     if (!id) {
+      id = pathParts[pathParts.length - 1];
+    }
+    
+    console.log('Extracted ID for deletion:', id);
+    
+    if (!id || id === '' || id === 'courses') {
+      console.error('No valid ID extracted from URL for deletion');
       return NextResponse.json(
         { error: 'Course ID is required' },
         { status: 400 }
@@ -160,6 +180,8 @@ export async function DELETE(request: Request) {
       );
     }
     
+    console.log(`Found course for deletion: ${existingCourse.title} (${id})`);
+    
     // Now delete the course
     const { error } = await supabaseAdmin
       .from('courses')
@@ -174,6 +196,7 @@ export async function DELETE(request: Request) {
       );
     }
     
+    console.log(`Successfully deleted course: ${existingCourse.title} (${id})`);
     return NextResponse.json({ success: true, message: 'Course deleted successfully' });
   } catch (error) {
     console.error('Error deleting course:', error);
