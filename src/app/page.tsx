@@ -3,8 +3,7 @@ import ConstructionBanner from '@/components/ConstructionBanner';
 import Hero from '@/components/Hero';
 import Services from '@/components/Services';
 import Portfolio from '@/components/Portfolio';
-import Pricing from '@/components/Pricing';
-import Kontakt from '@/components/Contact';
+import Courses from '@/components/Courses';
 import Footer from '@/components/Footer';
 
 export default function Home() {
@@ -16,17 +15,14 @@ export default function Home() {
         <section id="home">
           <Hero />
         </section>
+        <section id="courses">
+          <Courses />
+        </section>
         <section id="services">
           <Services />
         </section>
         <section id="works">
           <Portfolio />
-        </section>
-        <section id="pricing">
-          <Pricing />
-        </section>
-        <section id="kontakt">
-          <Kontakt />
         </section>
       </main>
       <Footer />

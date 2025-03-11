@@ -96,38 +96,65 @@ export async function getInstructors() {
 // Courses
 export async function getCourses({ published }: { published?: boolean | undefined } = {}) {
   const query = supabaseAdmin
-    .from('courses')
+    .from('course_instances')
     .select(`
       *,
-      category:categories(*),
-      instructor:instructors(*)
+      template:course_templates(
+        *,
+        category:categories(*),
+        instructor:instructors(*)
+      )
     `)
     .order('start_date');
     
   // Only filter by is_published if the published parameter is explicitly set
-  // If published is undefined, return all courses (both published and unpublished)
   if (published !== undefined) {
     query.eq('is_published', published);
   }
   
   const { data, error } = await query;
   if (error) throw error;
-  return data as Course[];
+  
+  // Process instances to include template data
+  const processedData = (data || []).map(instance => ({
+    ...instance,
+    ...instance.template,
+    template_id: instance.template?.id,
+    availableSpots: instance.max_participants !== null 
+      ? instance.max_participants - (instance.current_participants || 0)
+      : null
+  }));
+  
+  return processedData;
 }
 
 export async function getCourse(id: string) {
   const { data, error } = await supabaseAdmin
-    .from('courses')
+    .from('course_instances')
     .select(`
       *,
-      category:categories(*),
-      instructor:instructors(*)
+      template:course_templates(
+        *,
+        category:categories(*),
+        instructor:instructors(*)
+      )
     `)
     .eq('id', id)
     .single();
     
   if (error) throw error;
-  return data as Course;
+  
+  // Process instance to include template data
+  const processedData = {
+    ...data,
+    ...data.template,
+    template_id: data.template?.id,
+    availableSpots: data.max_participants !== null 
+      ? data.max_participants - (data.current_participants || 0)
+      : null
+  };
+  
+  return processedData;
 }
 
 // Bookings

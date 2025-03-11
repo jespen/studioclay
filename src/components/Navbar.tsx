@@ -33,7 +33,7 @@ const Navbar = () => {
 
   useEffect(() => {
     const handleScroll = () => {
-      const sections = ['home', 'services', 'works', 'pricing', 'kontakt'];
+      const sections = ['home', 'services', 'works', 'courses', 'kontakt'];
       const scrollPosition = window.scrollY + 100;
 
       for (const section of sections) {
@@ -58,10 +58,10 @@ const Navbar = () => {
   }, []);
 
   const navigationLinks = [
-    { id: 'home', label: 'Hem' },
+    { id: 'home', label: 'Hem' },   
+    { id: 'courses', label: 'Kurser' },
     { id: 'services', label: 'Tjänster' },
     { id: 'works', label: 'Portfolio' },
-    { id: 'pricing', label: 'Priser' },
     { id: 'kontakt', label: 'Kontakt' },
   ];
 

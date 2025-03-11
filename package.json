@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
+    "dev:clean": "rm -rf .next && next dev",
+    "dev:reset": "pkill -f 'node.*next' || true && rm -rf .next node_modules/.cache && npm run dev",
     "build": "next build",
     "postbuild": "node scripts/flatten-build.js",
     "export": "next build && node scripts/flatten-build.js && node scripts/backup-site.js",

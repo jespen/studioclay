@@ -63,15 +63,15 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
   async function handlePublishToggle(course: Course) {
     try {
       console.log('Toggling publish status for course:', course);
-      console.log('Course ID:', course.id);
-      console.log('API URL:', `/api/courses/${course.id}`);
       
-      if (!course || !course.id) {
-        console.error('Invalid course object or missing ID:', course);
-        throw new Error('Course ID is required');
+      // Make sure we're using the instance ID
+      if (!course.id) {
+        console.error('Invalid course object - missing instance ID:', course);
+        throw new Error('Course instance ID is required');
       }
       
-      const updatedCourse = { ...course, is_published: !course.is_published };
+      console.log('Course instance ID:', course.id);
+      console.log('API URL:', `/api/courses/${course.id}`);
       
       const response = await fetch(`/api/courses/${course.id}`, {
         method: 'PATCH',
@@ -135,26 +135,65 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
   // Function to handle saving a course
   async function handleSaveCourse(courseData: Partial<Course>) {
     try {
-      const method = courseData.id ? 'PATCH' : 'POST';
-      const url = courseData.id ? `/api/courses/${courseData.id}` : '/api/courses';
+      console.log('Saving course with data:', courseData);
       
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(courseData),
-      });
+      // If we have an ID, we're updating an existing course
+      if (courseData.id) {
+        const response = await fetch(`/api/courses/${courseData.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: courseData.title,
+            start_date: courseData.start_date,
+            end_date: courseData.end_date,
+            max_participants: courseData.max_participants,
+            is_published: courseData.is_published,
+            template: courseData.template // Include template updates
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error(`Failed to save course: ${response.status}`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw new Error(`Failed to save course: ${response.status}${errorData ? ' - ' + JSON.stringify(errorData) : ''}`);
+        }
+      } else if (courseData.template_id) {
+        // Creating a new instance of an existing template
+        const response = await fetch('/api/courses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(courseData),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw new Error(`Failed to save course: ${response.status}${errorData ? ' - ' + JSON.stringify(errorData) : ''}`);
+        }
+      } else {
+        // Creating a completely new course with a new template
+        const response = await fetch('/api/courses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(courseData),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw new Error(`Failed to save course: ${response.status}${errorData ? ' - ' + JSON.stringify(errorData) : ''}`);
+        }
       }
 
       await fetchCourses(); // Refresh the courses list
       setShowForm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      console.error(err);
+      console.error('Error saving course:', err);
+      alert(`Kunde inte spara kursen: ${err instanceof Error ? err.message : 'Okänt fel'}`);
     }
   }
 

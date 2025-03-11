@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Course, Category, Instructor } from '../../../../types/course';
+import { Course, Category, Instructor, CourseInstance, CourseTemplate } from '../../../../types/course';
 import { TextField, Button, Box, Paper, Typography, FormControlLabel, Switch, Grid, MenuItem } from '@mui/material';
 
 type CourseFormProps = {
@@ -41,7 +41,16 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           throw new Error('Kunde inte hämta kategorier');
         }
         const data = await response.json();
-        setCategories(Array.isArray(data.categories) ? data.categories : []);
+        const fetchedCategories = Array.isArray(data.categories) ? data.categories : [];
+        setCategories(fetchedCategories);
+        
+        // If we have a categoryId but no description, set the description from the category
+        if (categoryId && !description && !course) {
+          const selectedCategory = fetchedCategories.find((cat: Category) => cat.id === categoryId);
+          if (selectedCategory?.description) {
+            setDescription(selectedCategory.description);
+          }
+        }
       } catch (err) {
         console.error('Error fetching categories:', err);
         setError('Kunde inte hämta kategorier');
@@ -51,16 +60,16 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     };
     
     fetchCategories();
-  }, []);
+  }, [categoryId, description, course]);
   
   // Initialize form with course data if editing
   useEffect(() => {
     if (course) {
       setTitle(course.title || '');
-      setDescription(course.description || '');
+      setDescription(course.template?.description || '');
       setIsPublished(course.is_published || false);
-      setPrice(course.price ? course.price.toString() : '');
-      setCategoryId(course.category_id || '');
+      setPrice(course.template?.price ? course.template.price.toString() : '');
+      setCategoryId(course.template?.category_id || '');
       setMaxParticipants(course.max_participants ? course.max_participants.toString() : '');
       
       // Handle dates
@@ -92,8 +101,8 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     e.preventDefault();
     
     // Enhanced validation - all fields are mandatory
-    if (!title.trim()) {
-      alert('Titel är obligatoriskt');
+    if (!categoryId) {
+      alert('Kategori måste väljas');
       return;
     }
     
@@ -122,8 +131,10 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
       return;
     }
     
-    if (!categoryId) {
-      alert('Kategori måste väljas');
+    // Get the selected category name to use as title
+    const selectedCategory = categories.find(cat => cat.id === categoryId);
+    if (!selectedCategory) {
+      alert('Kunde inte hitta vald kategori');
       return;
     }
     
@@ -141,20 +152,32 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     const durationMinutes = Math.round((combinedEndDate.getTime() - combinedStartDate.getTime()) / 60000);
     
     // Create course data with required values
-    const courseData: Partial<Course> = {
-      title,
-      description,
-      location: 'Studio Clay', // Default value
+    const courseData: Partial<CourseInstance> = {
+      id: course?.id || undefined,
+      title: selectedCategory.name,
       start_date: combinedStartDate.toISOString(),
       end_date: combinedEndDate.toISOString(),
-      price: parseFloat(price),
-      currency: 'SEK', // Default value
-      category_id: categoryId,
-      instructor_id: DEFAULT_INSTRUCTOR_ID, // Default instructor (Eva)
       max_participants: parseInt(maxParticipants),
-      duration_minutes: durationMinutes,
       is_published: isPublished,
+      template_id: course?.template_id || undefined
     };
+
+    // Add template data
+    const templateData: Partial<CourseTemplate> = {
+      id: course?.template_id || undefined,
+      title: selectedCategory.name,
+      description,
+      duration_minutes: durationMinutes,
+      price: parseFloat(price),
+      currency: 'SEK',
+      category_id: categoryId,
+      instructor_id: DEFAULT_INSTRUCTOR_ID,
+      max_participants: parseInt(maxParticipants),
+      location: 'Studio Clay',
+      is_published: isPublished
+    };
+    
+    courseData.template = templateData;
     
     // Call the onSave callback with the course data
     onSave(courseData);
@@ -197,20 +220,6 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
       
       {/* Form */}
       <Box component="form" onSubmit={handleSubmit} sx={{ p: 3 }}>
-        {/* Title */}
-        <TextField
-          fullWidth
-          required
-          id="title"
-          name="title"
-          label="Kurstitel"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          variant="outlined"
-          size="small"
-          sx={inputStyles}
-        />
-        
         {/* Category */}
         <TextField
           fullWidth
@@ -220,7 +229,16 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           name="category"
           label="Kategori"
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
+          onChange={(e) => {
+            const newCategoryId = e.target.value;
+            setCategoryId(newCategoryId);
+            // Find the selected category and update description
+            const selectedCategory = categories.find(cat => cat.id === newCategoryId);
+            // Only set description if we're not editing an existing course
+            if (selectedCategory?.description && !course) {
+              setDescription(selectedCategory.description);
+            }
+          }}
           variant="outlined"
           size="small"
           sx={inputStyles}

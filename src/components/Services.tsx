@@ -7,30 +7,6 @@ const Services = () => {
   const services = [
     {
       id: 1,
-      title: 'Prova på',
-      description: 'Praktiska kurser för alla kunskapsnivåer, från nybörjare till erfarna keramiker.',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="20" height="20">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-        </svg>
-      ),
-      link: '/book-course',
-      audience: ['Individuell', 'Grupp']
-    },
-    {
-      id: 2,
-      title: 'Längre kurser',
-      description: 'Individuell undervisning anpassad efter dina specifika intressen och kunskapsnivå.',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="20" height="20">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-        </svg>
-      ),
-      link: '/book-course',
-      audience: ['Individuell']
-    },
-    {
-      id: 3,
       title: 'Företagsevent',
       description: 'Kreativa keramikworkshops för företag som vill stärka teambuilding.',
       icon: (
@@ -42,7 +18,7 @@ const Services = () => {
       audience: ['Företag']
     },
     {
-      id: 4,
+      id: 2,
       title: 'Designa ditt event',
       description: 'Tillgång till professionell utrustning och utrymme för erfarna keramiker.',
       icon: (
@@ -54,7 +30,7 @@ const Services = () => {
       audience: ['Individuell', 'Företag']
     },
     {
-      id: 5,
+      id: 3,
       title: 'Presentkort',
       description: 'Perfekta presenter för vänner och familj som vill utforska keramik.',
       icon: (
@@ -64,18 +40,6 @@ const Services = () => {
       ),
       link: '/gift-card',
       audience: ['Individuell', 'Företag']
-    },
-    {
-      id: 6,
-      title: 'Köp Konstverk',
-      description: 'Skräddarsydda keramikprodukter för företagsgåvor och speciella tillfällen.',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="20" height="20">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
-        </svg>
-      ),
-      link: '/contact',
-      audience: ['Individuell', 'Företag']
     }
   ];
 
@@ -83,9 +47,9 @@ const Services = () => {
     <section id="services" className={styles.section}>
       <div className={styles.container}>
         <div className={styles.titleSection}>
-          <h2 className={styles.title}>Våra Tjänster</h2>
+          <h2 className={styles.title}>Övriga Tjänster</h2>
           <p className={styles.description}>
-            Från prova-på-kurser till teambuilding-workshops, vi erbjuder en rad kreativa keramikupplevelser för både privatpersoner och företag.
+            Vi erbjuder kreativa keramikupplevelser för både privatpersoner och företag, från företagsevent till presentkort.
           </p>
         </div>
 

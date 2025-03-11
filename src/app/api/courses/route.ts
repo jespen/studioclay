@@ -1,16 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getCourses, supabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function GET(request: Request) {
   try {
-    // Get the URL to parse query parameters
     const { searchParams } = new URL(request.url);
-    
-    // Parse the "published" query parameter
     const publishedParam = searchParams.get('published');
-    // If 'all' is specified, pass undefined to get all courses
-    // If 'false' is specified, get only unpublished courses
-    // Otherwise, get only published courses
     const published = publishedParam === 'all' ? undefined : 
                       publishedParam === 'false' ? false : true;
     
@@ -18,128 +12,223 @@ export async function GET(request: Request) {
     console.log('API request - published value:', published);
     
     try {
-      // Get courses from Supabase
-      const courses = await getCourses({ published });
-      
-      // Filter out any null or undefined courses
-      const validCourses = courses.filter(course => course && course.id);
-      
-      console.log('API response - courses count:', validCourses.length);
-      console.log('API response - courses:', validCourses.map(c => ({ 
-        id: c.id, 
-        title: c.title, 
-        is_published: c.is_published,
-        start_date: c.start_date,
-        end_date: c.end_date
-      })));
-      
-      // Return the courses as JSON
-      return NextResponse.json({ 
-        courses: validCourses,
-        count: validCourses.length
-      });
-    } catch (error) {
-      console.error('Error in getCourses:', error);
-      
-      // Fallback: direct query to Supabase if getCourses fails
+      // Get course instances with their templates
       const query = supabaseAdmin
-        .from('courses')
+        .from('course_instances')
         .select(`
           *,
-          category:categories(*),
-          instructor:instructors(*)
+          template:course_templates(
+            *,
+            category:categories(*),
+            instructor:instructors(*)
+          )
         `)
         .order('start_date');
-        
+      
       if (published !== undefined) {
         query.eq('is_published', published);
       }
       
-      const { data, error: supabaseError } = await query;
+      const { data: instances, error } = await query;
       
-      if (supabaseError) {
-        throw supabaseError;
-      }
+      if (error) throw error;
       
-      const validCourses = (data || []).filter(course => course && course.id);
+      // Filter out any null or undefined instances
+      const validInstances = (instances || []).filter(instance => 
+        instance && instance.id && instance.template
+      );
       
-      console.log('API fallback response - courses count:', validCourses.length);
-      
-      return NextResponse.json({ 
-        courses: validCourses,
-        count: validCourses.length
+      // Process instances to ensure valid participant counts and calculate available spots
+      const processedInstances = validInstances.map(instance => {
+        // Ensure current_participants is a valid number
+        if (instance.current_participants === null || instance.current_participants === undefined) {
+          instance.current_participants = 0;
+        }
+        
+        // Calculate available spots
+        const availableSpots = instance.max_participants !== null 
+          ? instance.max_participants - instance.current_participants 
+          : null;
+        
+        // Combine template and instance data, ensuring instance properties take precedence
+        return {
+          ...instance.template, // Template data first (base properties)
+          ...instance, // Instance data overrides template properties
+          availableSpots,
+          template_id: instance.template.id, // Preserve template reference
+          category: instance.template.category, // Preserve nested objects
+          instructor: instance.template.instructor
+        };
       });
+      
+      console.log('API response - courses count:', processedInstances.length);
+      
+      return new Response(JSON.stringify({ 
+        courses: processedInstances,
+        count: processedInstances.length
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+      throw error;
     }
   } catch (error) {
-    console.error('Error fetching courses:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch courses', details: error instanceof Error ? error.message : String(error) }, 
-      { status: 500 }
-    );
+    console.error('Error in API route:', error);
+    return new Response(JSON.stringify(
+      { error: 'Failed to fetch courses', details: error instanceof Error ? error.message : String(error) }
+    ), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    // Parse the request body
-    const courseData = await request.json();
+    const data = await request.json();
+    console.log('Creating new course with data:', data);
+    
+    // If we have a template_id, we're creating a new instance of an existing template
+    if (data.template_id) {
+      const instanceData = {
+        template_id: data.template_id,
+        title: data.title,
+        start_date: data.start_date,
+        end_date: data.end_date,
+        max_participants: data.max_participants,
+        current_participants: 0,
+        is_published: data.is_published ?? false
+      };
+      
+      const { data: instance, error: instanceError } = await supabaseAdmin
+        .from('course_instances')
+        .insert(instanceData)
+        .select(`
+          *,
+          template:course_templates(
+            *,
+            category:categories(*),
+            instructor:instructors(*)
+          )
+        `)
+        .single();
+      
+      if (instanceError) {
+        console.error('Error creating course instance:', instanceError);
+        return NextResponse.json(
+          { error: instanceError.message }, 
+          { status: 400 }
+        );
+      }
+      
+      // Process the response to match the expected format
+      const course = {
+        ...instance,
+        ...instance.template,
+        template_id: instance.template.id,
+        availableSpots: instance.max_participants - (instance.current_participants || 0)
+      };
+      
+      return NextResponse.json({ course });
+    }
+    
+    // Otherwise, we're creating a new template and instance
+    const templateData = {
+      title: data.template?.title || data.title,
+      description: data.template?.description || data.description,
+      duration_minutes: data.template?.duration_minutes || data.duration_minutes,
+      price: data.template?.price || data.price || 0, // Ensure price is never null
+      currency: data.template?.currency || data.currency || 'SEK',
+      max_participants: data.template?.max_participants || data.max_participants,
+      location: data.template?.location || data.location || 'Studio Clay',
+      image_url: data.template?.image_url || data.image_url,
+      category_id: data.template?.category_id || data.category_id,
+      instructor_id: data.template?.instructor_id || data.instructor_id,
+      is_published: data.template?.is_published || data.is_published || false
+    };
     
     // Validate required fields
-    const requiredFields = [
-      'title', 'description', 'start_date', 'end_date', 
-      'price', 'max_participants', 'category_id', 'instructor_id'
-    ];
-    
-    const missingFields = requiredFields.filter(field => !courseData[field]);
-    
-    if (missingFields.length > 0) {
+    if (!templateData.price || templateData.price <= 0) {
       return NextResponse.json(
-        { 
-          error: 'Missing required fields', 
-          missingFields 
-        }, 
+        { error: 'Price is required and must be greater than 0' }, 
         { status: 400 }
       );
     }
     
-    // Validate that end_date is after start_date
-    const startDate = new Date(courseData.start_date);
-    const endDate = new Date(courseData.end_date);
-    
-    if (endDate <= startDate) {
+    if (!templateData.category_id) {
       return NextResponse.json(
-        { error: 'End date must be after start date' }, 
+        { error: 'Category is required' }, 
         { status: 400 }
       );
     }
     
-    // Calculate duration_minutes if not provided
-    if (!courseData.duration_minutes) {
-      courseData.duration_minutes = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
-    }
-    
-    // Set default values for optional fields
-    if (courseData.currency === undefined) courseData.currency = 'SEK';
-    if (courseData.location === undefined) courseData.location = 'Studio Clay';
-    if (courseData.is_published === undefined) courseData.is_published = false;
-    
-    // Insert the course into Supabase
-    const { data, error } = await supabaseAdmin
-      .from('courses')
-      .insert(courseData)
+    const { data: template, error: templateError } = await supabaseAdmin
+      .from('course_templates')
+      .insert(templateData)
       .select()
       .single();
     
-    if (error) {
-      console.error('Error creating course:', error);
+    if (templateError) {
+      console.error('Error creating course template:', templateError);
       return NextResponse.json(
-        { error: error.message }, 
+        { error: templateError.message }, 
         { status: 400 }
       );
     }
     
-    // Return the created course
-    return NextResponse.json({ course: data });
+    console.log('Created course template:', template);
+    
+    // Then create the course instance
+    const instanceData = {
+      template_id: template.id,
+      title: data.title,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      max_participants: data.max_participants,
+      current_participants: 0,
+      is_published: data.is_published ?? false
+    };
+    
+    const { data: instance, error: instanceError } = await supabaseAdmin
+      .from('course_instances')
+      .insert(instanceData)
+      .select(`
+        *,
+        template:course_templates(
+          *,
+          category:categories(*),
+          instructor:instructors(*)
+        )
+      `)
+      .single();
+    
+    if (instanceError) {
+      console.error('Error creating course instance:', instanceError);
+      // If instance creation fails, delete the template
+      await supabaseAdmin
+        .from('course_templates')
+        .delete()
+        .eq('id', template.id);
+        
+      return NextResponse.json(
+        { error: instanceError.message }, 
+        { status: 400 }
+      );
+    }
+    
+    console.log('Created course instance:', instance);
+    
+    // Process the response to match the expected format
+    const course = {
+      ...instance,
+      ...instance.template,
+      template_id: instance.template.id,
+      availableSpots: instance.max_participants - (instance.current_participants || 0)
+    };
+    
+    return NextResponse.json({ course });
   } catch (error) {
     console.error('Error creating course:', error);
     return NextResponse.json(

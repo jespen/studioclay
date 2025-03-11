@@ -1,25 +1,66 @@
-import { NextResponse } from 'next/server';
-import { supabaseAdmin, getCourse } from '@/lib/supabaseAdmin';
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-export async function GET(request: Request) {
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+export async function GET(
+  request: Request,
+  context: { params: { id: string } }
+) {
   try {
-    // Extract the ID from the URL
-    const url = new URL(request.url);
-    const pathParts = url.pathname.split('/');
-    const id = pathParts[pathParts.length - 1];
+    // Properly await and extract the ID parameter in Next.js 13+
+    const id = await Promise.resolve(context.params.id);
+    console.log('API: Fetching course instance with ID:', id);
     
-    if (!id) {
+    // Fetch the course instance with its template
+    const { data: course, error } = await supabaseAdmin
+      .from('course_instances')
+      .select(`
+        *,
+        template:course_templates(
+          *,
+          category:categories(*)
+        )
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('API: Error fetching course:', error);
       return NextResponse.json(
-        { error: 'Course ID is required' },
-        { status: 400 }
+        { error: error.message },
+        { status: 404 }
       );
     }
+
+    if (!course) {
+      console.error('API: Course not found');
+      return NextResponse.json(
+        { error: 'Course not found' },
+        { status: 404 }
+      );
+    }
+
+    console.log('API: Successfully fetched course:', course.title);
     
-    const course = await getCourse(id);
-    
-    return NextResponse.json({ course });
+    // Calculate available spots
+    const availableSpots = course.max_participants !== null 
+      ? course.max_participants - course.current_participants 
+      : null;
+    console.log('API: Available spots:', availableSpots);
+
+    return NextResponse.json({ 
+      course: {
+        ...course,
+        availableSpots
+      }
+    });
   } catch (error) {
-    console.error('Error fetching course:', error);
+    console.error('API: Error in course fetch:', error);
     return NextResponse.json(
       { error: 'Failed to fetch course' },
       { status: 500 }
@@ -27,103 +68,124 @@ export async function GET(request: Request) {
   }
 }
 
-export async function PATCH(request: Request) {
+export async function PATCH(
+  request: Request,
+  context: { params: { id: string } }
+) {
   try {
-    // Extract the ID from the URL
-    const url = new URL(request.url);
-    console.log('PATCH request URL:', url.toString());
-    console.log('PATCH request pathname:', url.pathname);
+    const id = await Promise.resolve(context.params.id);
+    console.log('PATCH request for course instance ID:', id);
     
-    // Try to extract ID from pathname
-    const pathParts = url.pathname.split('/');
-    console.log('Path parts:', pathParts);
-    
-    // Find the ID in the path - it should be after 'courses'
-    let id = '';
-    for (let i = 0; i < pathParts.length; i++) {
-      if (pathParts[i] === 'courses' && i + 1 < pathParts.length) {
-        id = pathParts[i + 1];
-        break;
-      }
-    }
-    
-    // If not found, try the last part
     if (!id) {
-      id = pathParts[pathParts.length - 1];
-    }
-    
-    console.log('Extracted ID:', id);
-    
-    if (!id || id === '' || id === 'courses') {
-      console.error('No valid ID extracted from URL');
       return NextResponse.json(
-        { error: 'Course ID is required' },
+        { error: 'Course instance ID is required' },
         { status: 400 }
       );
     }
-    
+
+    // Get the update data from the request
     const data = await request.json();
-    console.log('Updating course with data:', data);
-    
-    // First check if the course exists
-    const { data: existingCourse, error: fetchError } = await supabaseAdmin
-      .from('courses')
+    console.log('Updating course instance with data:', data);
+
+    // First, get the current instance to get the template_id
+    const { data: currentInstance, error: fetchError } = await supabaseAdmin
+      .from('course_instances')
       .select('*')
       .eq('id', id)
       .single();
-      
-    if (fetchError || !existingCourse) {
-      console.error('Error fetching course for update:', fetchError);
+
+    if (fetchError) {
+      console.error('Error fetching course instance:', fetchError);
       return NextResponse.json(
-        { error: `Course not found: ${fetchError?.message || 'Course does not exist'}` },
+        { error: fetchError.message },
         { status: 404 }
       );
     }
-    
-    // If updating dates, validate that end_date is after start_date
-    if (data.start_date || data.end_date) {
-      const startDate = new Date(data.start_date || existingCourse.start_date);
-      const endDate = new Date(data.end_date || existingCourse.end_date);
-      
-      if (endDate <= startDate) {
-        return NextResponse.json(
-          { error: 'End date must be after start date' }, 
-          { status: 400 }
-        );
-      }
-      
-      // Recalculate duration_minutes if dates are changing
-      if (data.start_date || data.end_date) {
-        data.duration_minutes = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
-      }
-    }
-    
-    // Now update the course
-    const { data: course, error } = await supabaseAdmin
-      .from('courses')
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating course:', error);
+
+    // Update the instance
+    const instanceData = {
+      title: data.title,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      max_participants: data.max_participants,
+      is_published: data.is_published
+    };
+
+    const { error: instanceError } = await supabaseAdmin
+      .from('course_instances')
+      .update(instanceData)
+      .eq('id', id);
+
+    if (instanceError) {
+      console.error('Error updating course instance:', instanceError);
       return NextResponse.json(
-        { error: `Failed to update course: ${error.message}` },
+        { error: instanceError.message },
         { status: 400 }
       );
     }
-    
-    if (!course) {
+
+    // If template data is provided, update the template
+    if (data.template && currentInstance.template_id) {
+      const templateData = {
+        title: data.template.title,
+        description: data.template.description,
+        duration_minutes: data.template.duration_minutes,
+        price: data.template.price,
+        currency: data.template.currency || 'SEK',
+        category_id: data.template.category_id,
+        instructor_id: data.template.instructor_id,
+        max_participants: data.template.max_participants,
+        location: data.template.location || 'Studio Clay',
+        is_published: data.template.is_published
+      };
+
+      const { error: templateError } = await supabaseAdmin
+        .from('course_templates')
+        .update(templateData)
+        .eq('id', currentInstance.template_id);
+
+      if (templateError) {
+        console.error('Error updating course template:', templateError);
+        return NextResponse.json(
+          { error: templateError.message },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Fetch the updated instance with its template
+    const { data: updatedInstance, error: fetchUpdatedError } = await supabaseAdmin
+      .from('course_instances')
+      .select(`
+        *,
+        template:course_templates(
+          *,
+          category:categories(*),
+          instructor:instructors(*)
+        )
+      `)
+      .eq('id', id)
+      .single();
+
+    if (fetchUpdatedError) {
+      console.error('Error fetching updated course:', fetchUpdatedError);
       return NextResponse.json(
-        { error: 'Course updated but no data returned' },
-        { status: 500 }
+        { error: fetchUpdatedError.message },
+        { status: 400 }
       );
     }
-    
+
+    // Process the response to match the expected format
+    const course = {
+      ...updatedInstance,
+      ...updatedInstance.template,
+      template_id: updatedInstance.template.id,
+      availableSpots: updatedInstance.max_participants - (updatedInstance.current_participants || 0)
+    };
+
     return NextResponse.json({ course });
   } catch (error) {
-    console.error('Error updating course:', error);
+    console.error('Error in PATCH route:', error);
     return NextResponse.json(
       { error: 'Failed to update course', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
@@ -131,78 +193,77 @@ export async function PATCH(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const { id } = params;
   try {
-    // Extract the ID from the URL
-    const url = new URL(request.url);
-    console.log('DELETE request URL:', url.toString());
+    console.log('DELETE request for course instance ID:', id);
     
-    // Try to extract ID from pathname
-    const pathParts = url.pathname.split('/');
-    console.log('Path parts:', pathParts);
-    
-    // Find the ID in the path - it should be after 'courses'
-    let id = '';
-    for (let i = 0; i < pathParts.length; i++) {
-      if (pathParts[i] === 'courses' && i + 1 < pathParts.length) {
-        id = pathParts[i + 1];
-        break;
-      }
-    }
-    
-    // If not found, try the last part
     if (!id) {
-      id = pathParts[pathParts.length - 1];
+      console.error('No valid ID provided for DELETE');
+      return NextResponse.json({ error: 'Course ID is required' }, { status: 400 });
     }
     
-    console.log('Extracted ID for deletion:', id);
-    
-    if (!id || id === '' || id === 'courses') {
-      console.error('No valid ID extracted from URL for deletion');
-      return NextResponse.json(
-        { error: 'Course ID is required' },
-        { status: 400 }
-      );
-    }
-    
-    // First check if the course exists
-    const { data: existingCourse, error: fetchError } = await supabaseAdmin
-      .from('courses')
+    // First check if the instance exists
+    const { data: existingInstance, error: fetchError } = await supabase
+      .from('course_instances')
       .select('*')
       .eq('id', id)
       .single();
       
-    if (fetchError || !existingCourse) {
-      console.error('Error fetching course for deletion:', fetchError);
-      return NextResponse.json(
-        { error: `Course not found: ${fetchError?.message || 'Course does not exist'}` },
-        { status: 404 }
-      );
-    }
-    
-    console.log(`Found course for deletion: ${existingCourse.title} (${id})`);
-    
-    // Now delete the course
-    const { error } = await supabaseAdmin
-      .from('courses')
+    // Even if the instance doesn't exist, try to delete it anyway
+    const { error } = await supabase
+      .from('course_instances')
       .delete()
       .eq('id', id);
     
     if (error) {
-      console.error('Error deleting course:', error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 400 }
-      );
+      console.error('Error deleting course instance:', error);
+      
+      // If the error is about foreign key constraints, try to delete any related records
+      if (error.message?.includes('foreign key constraint')) {
+        console.log('Attempting to clean up related records...');
+        
+        // Try to delete any bookings for this course
+        await supabase
+          .from('bookings')
+          .delete()
+          .eq('course_id', id);
+          
+        // Try to delete any waitlist entries for this course
+        await supabase
+          .from('waitlist')
+          .delete()
+          .eq('course_id', id);
+          
+        // Try deleting the course instance again
+        const { error: retryError } = await supabase
+          .from('course_instances')
+          .delete()
+          .eq('id', id);
+          
+        if (retryError) {
+          return NextResponse.json({ 
+            error: 'Failed to delete course after cleanup',
+            details: retryError.message 
+          }, { status: 500 });
+        }
+      } else {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
     }
     
-    console.log(`Successfully deleted course: ${existingCourse.title} (${id})`);
-    return NextResponse.json({ success: true, message: 'Course deleted successfully' });
+    return NextResponse.json({ 
+      success: true, 
+      message: existingInstance ? 'Course deleted successfully' : 'Course instance removed (if it existed)'
+    }, { status: 200 });
   } catch (error) {
     console.error('Error deleting course:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete course', details: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
-    );
+    return NextResponse.json({ 
+      error: 'Failed to delete course', 
+      details: error instanceof Error ? error.message : String(error) 
+    }, { status: 500 });
   }
 } 
