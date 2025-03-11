@@ -193,7 +193,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ courseId }) => {
         customer_phone: formData.phone,
         number_of_participants: parseInt(formData.number_of_participants.toString()),
         booking_date: new Date().toISOString(),
-        status: 'pending',
+        status: 'confirmed',
         payment_status: 'unpaid',
         message: formData.message || null,
       };

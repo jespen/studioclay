@@ -1,7 +1,7 @@
 -- Create waitlist table
 CREATE TABLE IF NOT EXISTS waitlist (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  course_id UUID NOT NULL REFERENCES course_instances(id) ON DELETE CASCADE,
   customer_name TEXT NOT NULL,
   customer_email TEXT NOT NULL,
   customer_phone TEXT,

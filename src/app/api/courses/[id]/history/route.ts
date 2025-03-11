@@ -1,0 +1,37 @@
+import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
+
+export async function GET(
+  request: Request,
+  context: { params: { id: string } }
+) {
+  try {
+    const id = await Promise.resolve(context.params.id);
+    console.log('API: Fetching booking history for course:', id);
+    
+    // Fetch all history entries for this course
+    const { data: history, error } = await supabaseAdmin
+      .from('booking_history')
+      .select('*')
+      .eq('course_id', id)
+      .order('cancellation_date', { ascending: false });
+    
+    if (error) {
+      console.error('API: Error fetching booking history:', error);
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+    
+    console.log('API: Successfully fetched booking history:', history?.length || 0, 'entries');
+    
+    return NextResponse.json({ history });
+  } catch (error) {
+    console.error('API: Error in booking history fetch:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch booking history' },
+      { status: 500 }
+    );
+  }
+} 

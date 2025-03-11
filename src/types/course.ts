@@ -45,4 +45,36 @@ export interface Category {
 export interface Instructor {
   id: string;
   name: string;
+}
+
+export interface Booking {
+  id: string;
+  course_id: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string | null;
+  number_of_participants: number;
+  booking_date: string;
+  status: 'waiting' | 'confirmed';
+  payment_status: 'paid' | 'unpaid';
+  message: string | null;
+  created_at: string;
+  updated_at: string;
+  course?: CourseInstance & { template?: CourseTemplate };
+}
+
+export interface BookingHistory {
+  id: string;
+  original_booking_id: string;
+  course_id: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string | null;
+  number_of_participants: number;
+  original_booking_date: string;
+  cancellation_date: string;
+  history_type: 'cancelled';
+  message: string | null;
+  created_at: string;
+  updated_at: string;
 } 

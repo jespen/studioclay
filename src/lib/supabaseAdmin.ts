@@ -174,12 +174,32 @@ export async function getBookings() {
     .from('bookings')
     .select(`
       *,
-      course:courses(*)
+      course:course_instances(
+        *,
+        template:course_templates(
+          *,
+          category:categories(*),
+          instructor:instructors(*)
+        )
+      )
     `)
     .order('booking_date', { ascending: false });
     
   if (error) throw error;
-  return data as Booking[];
+  
+  // Process the data to maintain backward compatibility
+  const processedData = (data || []).map(booking => {
+    if (booking.course) {
+      booking.course = {
+        ...booking.course,
+        ...booking.course.template,
+        template_id: booking.course.template?.id
+      };
+    }
+    return booking;
+  });
+  
+  return processedData as Booking[];
 }
 
 export async function getBooking(id: string) {
@@ -187,12 +207,29 @@ export async function getBooking(id: string) {
     .from('bookings')
     .select(`
       *,
-      course:courses(*)
+      course:course_instances(
+        *,
+        template:course_templates(
+          *,
+          category:categories(*),
+          instructor:instructors(*)
+        )
+      )
     `)
     .eq('id', id)
     .single();
     
   if (error) throw error;
+  
+  // Process the data to maintain backward compatibility
+  if (data.course) {
+    data.course = {
+      ...data.course,
+      ...data.course.template,
+      template_id: data.course.template?.id
+    };
+  }
+  
   return data as Booking;
 }
 

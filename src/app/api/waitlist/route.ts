@@ -57,41 +57,43 @@ export async function POST(request: Request) {
       );
     }
     
-    // Set default values
-    if (!waitlistData.created_at) waitlistData.created_at = new Date().toISOString();
-    if (!waitlistData.status) waitlistData.status = 'waiting';
+    // Create a booking with 'waiting' status
+    const bookingData = {
+      course_id: waitlistData.course_id,
+      customer_name: waitlistData.customer_name,
+      customer_email: waitlistData.customer_email,
+      customer_phone: waitlistData.customer_phone || null,
+      number_of_participants: waitlistData.number_of_participants,
+      booking_date: new Date().toISOString(),
+      status: 'waiting',
+      payment_status: 'unpaid',
+      message: waitlistData.message || null
+    };
     
-    // Handle the optional message field
-    if (waitlistData.message) {
-      console.log('Customer message included in waitlist:', waitlistData.message);
-    } else {
-      waitlistData.message = null;
-    }
+    console.log('Creating booking with waiting status:', bookingData);
     
-    console.log('Inserting waitlist entry with data:', waitlistData);
-    
-    // Insert the waitlist entry into Supabase
-    const { data: waitlistEntry, error: waitlistError } = await supabaseAdmin
-      .from('waitlist')
-      .insert([waitlistData])
+    // Insert the booking into Supabase
+    const { data: booking, error: bookingError } = await supabaseAdmin
+      .from('bookings')
+      .insert([bookingData])
       .select()
       .single();
     
-    if (waitlistError) {
-      console.error('Error adding to waitlist:', waitlistError);
+    if (bookingError) {
+      console.error('Error creating waiting list booking:', bookingError);
       return NextResponse.json(
-        { error: waitlistError.message }, 
+        { error: bookingError.message }, 
         { status: 400 }
       );
     }
     
-    console.log('Waitlist entry created successfully:', waitlistEntry.id);
+    console.log('Waiting list booking created successfully:', booking.id);
     
-    // Return the created waitlist entry
+    // Return the created booking
     return NextResponse.json({ 
       success: true, 
-      message: 'Successfully added to waitlist',
-      data: waitlistEntry
+      message: 'Successfully added to waiting list',
+      data: booking
     });
   } catch (error) {
     console.error('Error in waitlist API:', error);

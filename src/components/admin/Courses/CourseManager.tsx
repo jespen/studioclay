@@ -122,8 +122,8 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
 
   // Function to handle editing a course
   function handleEditCourse(course: Course) {
-    setEditingCourse(course);
-    setShowForm(true);
+    console.log('Navigating to edit page for course:', course);
+    router.push(`/admin/dashboard/courses/${course.id}`);
   }
 
   // Function to handle adding a new course

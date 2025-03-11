@@ -72,7 +72,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
       setCategoryId(course.template?.category_id || '');
       setMaxParticipants(course.max_participants ? course.max_participants.toString() : '');
       
-      // Handle dates
+      // Handle dates with proper timezone handling
       if (course.start_date) {
         const startDateTime = new Date(course.start_date);
         setStartDate(formatDateForInput(startDateTime));
@@ -93,7 +93,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   };
   
   const formatTimeForInput = (date: Date): string => {
-    return date.toISOString().split('T')[1].substring(0, 5);
+    return date.toLocaleTimeString('sv-SE').substring(0, 5);
   };
   
   // Form submission
