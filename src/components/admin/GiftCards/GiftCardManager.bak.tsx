@@ -291,84 +291,62 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
     }
   }
 
+  function generateGiftCardPDF(card: GiftCard) {
+    // In a real implementation, this would generate a PDF
+    // For now, we'll just alert that this feature is coming soon
+    alert(`Generering av PDF för presentkort ${card.code} kommer snart!`);
+  }
+
   async function generateGiftCardPDF(card: GiftCard) {
     try {
-      // Show loading state
       setUpdatingCards(prev => ({ ...prev, [card.id]: true }));
       
       console.log(`Generating PDF for gift card: ${card.id}`);
       
-      // Dynamically import jsPDF (to avoid SSR issues)
-      const { default: jsPDF } = await import('jspdf');
-      
-      // Create a new PDF document
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
+      // Call the API endpoint
+      const response = await fetch('/api/gift-cards/generate-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: card.id,
+          code: card.code,
+          amount: card.amount,
+          sender_name: card.sender_name,
+          recipient_name: card.recipient_name,
+          expires_at: card.expires_at,
+          message: card.message
+        }),
       });
       
-      // Set up some dimensions
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 20;
-      const contentWidth = pageWidth - (margin * 2);
-      
-      // Add title
-      doc.setFontSize(24);
-      doc.text('STUDIO CLAY', pageWidth / 2, 30, { align: 'center' });
-      
-      doc.setFontSize(18);
-      doc.text('PRESENTKORT', pageWidth / 2, 40, { align: 'center' });
-      
-      // Add a decorative border
-      doc.rect(margin, 50, contentWidth, pageHeight - 100);
-      
-      // Gift card details
-      doc.setFontSize(14);
-      doc.text(`Kod: ${card.code}`, margin + 5, 60);
-      
-      doc.setFontSize(16);
-      doc.text(`Värde: ${card.amount} SEK`, margin + 5, 70);
-      
-      // Recipient and sender info
-      doc.setFontSize(12);
-      doc.text(`Till: ${card.recipient_name}`, margin + 5, 85);
-      doc.text(`Från: ${card.sender_name}`, margin + 5, 95);
-      
-      // Expiration date
-      const expiryDate = new Date(card.expires_at).toLocaleDateString('sv-SE');
-      doc.text(`Giltigt till: ${expiryDate}`, margin + 5, 105);
-      
-      // Add message if available
-      if (card.message) {
-        doc.text('Meddelande:', margin + 5, 120);
-        
-        // Split long messages into multiple lines
-        const messageLines = doc.splitTextToSize(card.message, contentWidth - 10);
-        doc.text(messageLines, margin + 5, 130);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate PDF');
       }
       
-      // Footer with terms
-      const footerY = pageHeight - 35;
-      doc.setFontSize(10);
-      doc.text('Villkor:', margin + 5, footerY);
+      // Get the PDF blob
+      const pdfBlob = await response.blob();
       
-      doc.setFontSize(8);
-      const terms = 'Detta presentkort kan användas för alla tjänster hos Studio Clay. Presentkortet kan inte bytas mot kontanter och är giltigt till och med det angivna utgångsdatumet.';
-      const termsLines = doc.splitTextToSize(terms, contentWidth - 10);
-      doc.text(termsLines, margin + 5, footerY + 5);
+      // Create a download link
+      const blobUrl = window.URL.createObjectURL(pdfBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = blobUrl;
+      downloadLink.download = `presentkort-${card.code}.pdf`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
       
-      // Save the PDF and trigger download
-      doc.save(`presentkort-${card.code}.pdf`);
+      // Clean up the blob URL
+      setTimeout(() => {
+        window.URL.revokeObjectURL(blobUrl);
+      }, 100);
       
-      console.log('PDF generation completed successfully');
       alert('PDF-generering slutförd!');
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Det gick inte att generera PDF: ' + (error instanceof Error ? error.message : 'Okänt fel'));
     } finally {
-      // Hide loading state
       setUpdatingCards(prev => ({ ...prev, [card.id]: false }));
     }
   }
@@ -693,9 +671,8 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
                             onClick={() => generateGiftCardPDF(card)}
                             className={`${styles.actionButton} ${styles.pdfButton}`}
                             title="Generera PDF"
-                            disabled={updatingCards[card.id]}
                           >
-                            {updatingCards[card.id] ? 'Genererar...' : 'PDF'}
+                            PDF
                           </button>
 
                           {card.type === 'digital' && (
