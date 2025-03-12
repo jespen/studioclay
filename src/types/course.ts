@@ -55,7 +55,7 @@ export interface Booking {
   customer_phone: string | null;
   number_of_participants: number;
   booking_date: string;
-  status: 'waiting' | 'confirmed';
+  status: 'waiting' | 'confirmed' | 'cancelled';
   payment_status: 'paid' | 'unpaid';
   message: string | null;
   created_at: string;
