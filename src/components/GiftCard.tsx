@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import styles from '@/styles/GiftCard.module.css';
 import Link from 'next/link';
+import { supabaseClient } from '@/lib/supabase';
 
 interface CardType {
   id: string;
@@ -71,14 +72,103 @@ const GiftCard = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // Simulate form submission
-    setTimeout(() => {
-      setIsSubmitting(false);
-      alert('Gift card purchase successful!');
+    try {
+      // Test Supabase connectivity first with a simpler query
+      console.log('Testing Supabase connectivity...');
+      const { data: testData, error: testError } = await supabaseClient
+        .from('gift_cards')
+        .select('id')
+        .limit(1);
+        
+      if (testError) {
+        console.error('Supabase connectivity test failed:', testError);
+        throw new Error(`Supabase connection error: ${testError.message}`);
+      } else {
+        console.log('Supabase connectivity test succeeded:', testData);
+      }
+      
+      // Calculate expiration date (1 year from now)
+      const expiresAt = new Date();
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+      
+      // Format amount properly
+      const amountValue = amount === 'custom' 
+        ? parseFloat(customAmount) || 0
+        : parseFloat(amount);
+      
+      if (amountValue <= 0) {
+        throw new Error('Vänligen ange ett giltigt belopp');
+      }
+      
+      console.log('Submitting gift card with data:', {
+        amount: amountValue,
+        type: cardType,
+        sender_name: formData.senderName,
+        sender_email: formData.senderEmail,
+        recipient_name: formData.recipientName,
+        recipient_email: formData.recipientEmail,
+        message: formData.message
+      });
+      
+      // Log Supabase connection state without accessing protected properties
+      console.log('Supabase client initialized:', !!supabaseClient);
+      
+      // Save to Supabase without using Promise.race (which could be causing issues)
+      console.log('Sending insert request to Supabase...');
+      
+      // Create a simple gift card object with generated code
+      const generateUniqueCode = () => {
+        // Generate a random code - in production this should be more sophisticated
+        const random = Math.random().toString(36).substring(2, 10).toUpperCase();
+        return `GC-${random}`;
+      };
+      
+      const giftCardData = {
+        code: generateUniqueCode(), // Explicitly provide code to avoid ambiguity
+        amount: amountValue,
+        type: cardType,
+        sender_name: formData.senderName,
+        sender_email: formData.senderEmail,
+        recipient_name: formData.recipientName,
+        recipient_email: formData.recipientEmail,
+        message: formData.message,
+        status: 'active', // Explicitly set status
+        remaining_balance: amountValue, // Set initial remaining balance
+        is_emailed: false,
+        is_printed: false,
+        is_paid: false, // Default to unpaid
+        expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString() // 1 year from now
+      };
+      
+      console.log('Gift card data being sent:', giftCardData);
+      
+      // Insert without select to avoid ambiguous column reference
+      const { error } = await supabaseClient
+        .from('gift_cards')
+        .insert([giftCardData]);
+      
+      console.log('Received response from Supabase:', { error });
+      
+      if (error) {
+        console.error('Supabase error details:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error details:', error.details);
+        // Check if the error is related to RLS
+        if (error.code === '42501') {
+          console.error('This appears to be a permissions error. RLS might be blocking the insert.');
+        }
+        throw error;
+      }
+      
+      // Success! Show confirmation message
+      alert(`Presentkortsköp genomfört! Ditt presentkort har skapats.`);
+      
+      // Reset form
       setFormData({
         senderName: '',
         senderEmail: '',
@@ -88,7 +178,30 @@ const GiftCard = () => {
       });
       setAmount('500');
       setCustomAmount('');
-    }, 1500);
+    } catch (error) {
+      console.error('Error submitting gift card:', error);
+      
+      // Show more detailed error information
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        alert('Det gick inte att slutföra köpet: ' + error.message);
+      } else {
+        console.error('Non-Error object thrown:', error);
+        console.error('Error type:', typeof error);
+        console.error('Error JSON stringified:', JSON.stringify(error));
+        
+        // Special handling for empty error objects
+        if (typeof error === 'object' && Object.keys(error || {}).length === 0) {
+          console.error('Empty error object received. This could indicate a network issue or CORS problem.');
+          alert('Serverfel: Kunde inte ansluta till databasen. Kontrollera din internetanslutning eller försök igen senare.');
+        } else {
+          alert('Ett oväntat fel inträffade. Försök igen eller kontakta kundtjänst. Se konsolen för detaljer.');
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -112,71 +225,77 @@ const GiftCard = () => {
           </p>
         </header>
 
-        <main className={styles.content}>
-          <div className={styles.leftColumn}>
-            <div className={styles.giftCardImage}>
-              <img 
-                src="/pictures/471904659_17904629667091314_3509545999734555197_n_18299326909224234.jpg"
-                alt="Studio Clay presentkort"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  borderRadius: '0.75rem'
-                }}
-              />
+        <main className={styles.mainContent}>
+          <div className={styles.topRow}>
+            <div className={styles.imageColumn}>
+              <div className={styles.giftCardImage}>
+                <img 
+                  src="/pictures/471904659_17904629667091314_3509545999734555197_n_18299326909224234.jpg"
+                  alt="Studio Clay presentkort"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    borderRadius: '0.75rem'
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className={styles.optionsColumn}>
+              <h2 className={styles.cardOptionsTitle}>Anpassa ditt presentkort</h2>
+              
+              <div className={styles.optionsStack}>
+                <div className={styles.cardTypeSection}>
+                  <h3 className={styles.sectionTitle}>Korttyp</h3>
+                  <div className={styles.cardTypes}>
+                    {cardTypes.map((type) => (
+                      <div 
+                        key={type.id}
+                        className={`${styles.cardType} ${cardType === type.id ? styles.cardTypeSelected : ''}`}
+                        onClick={() => handleCardTypeSelect(type.id)}
+                      >
+                        <span className={styles.cardTypeIcon}>{type.icon}</span>
+                        <span className={styles.cardTypeName}>{type.name}</span>
+                        <span className={styles.cardTypeDesc}>{type.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={styles.amountSection}>
+                  <h3 className={styles.sectionTitle}>Belopp</h3>
+                  <div className={styles.amounts}>
+                    {predefinedAmounts.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`${styles.amountButton} ${amount === value ? styles.amountSelected : ''}`}
+                        onClick={() => handleAmountSelect(value)}
+                      >
+                        {value} kr
+                      </button>
+                    ))}
+                  </div>
+                  <div className={styles.customAmount}>
+                    <input
+                      type="text"
+                      className={styles.customAmountInput}
+                      placeholder="Ange valfritt belopp"
+                      value={customAmount}
+                      onChange={handleCustomAmountChange}
+                    />
+                    <span className={styles.currencySymbol}>kr</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className={styles.rightColumn}>
-            <h2 className={styles.cardOptionsTitle}>Anpassa ditt presentkort</h2>
-
-            <div className={styles.formSection}>
-              <h3 className={styles.sectionTitle}>Korttyp</h3>
-              <div className={styles.cardTypes}>
-                {cardTypes.map((type) => (
-                  <div 
-                    key={type.id}
-                    className={`${styles.cardType} ${cardType === type.id ? styles.cardTypeSelected : ''}`}
-                    onClick={() => handleCardTypeSelect(type.id)}
-                  >
-                    <span className={styles.cardTypeIcon}>{type.icon}</span>
-                    <span className={styles.cardTypeName}>{type.name}</span>
-                    <span className={styles.cardTypeDesc}>{type.description}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className={styles.formSection}>
-              <h3 className={styles.sectionTitle}>Belopp</h3>
-              <div className={styles.amounts}>
-                {predefinedAmounts.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={`${styles.amountButton} ${amount === value ? styles.amountSelected : ''}`}
-                    onClick={() => handleAmountSelect(value)}
-                  >
-                    {value} kr
-                  </button>
-                ))}
-              </div>
-              <div className={styles.customAmount}>
-                <input
-                  type="text"
-                  className={styles.customAmountInput}
-                  placeholder="Ange valfritt belopp"
-                  value={customAmount}
-                  onChange={handleCustomAmountChange}
-                />
-                <span className={styles.currencySymbol}>kr</span>
-              </div>
-            </div>
-
+          <div className={styles.bottomRow}>
             <div className={styles.formSection}>
               <h3 className={styles.sectionTitle}>Kundinformation</h3>
               <form className={styles.form} onSubmit={handleSubmit}>
