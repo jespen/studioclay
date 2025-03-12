@@ -1,151 +1,415 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import styles from '@/styles/BookCourse.module.css';
+import coursesStyles from '@/styles/Courses.module.css';
+import servicesStyles from '@/styles/Services.module.css';
+import Services from '@/components/Services';
 
-interface Course {
-  id: number;
+// Define the course type based on the API response
+interface ApiCourse {
+  id: string;
   title: string;
-  level: string;
-  description: string;
-  duration: string;
-  schedule: string;
-  capacity: string;
+  description: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  duration_minutes: number | null;
+  price: number;
+  currency: string;
+  max_participants: number | null;
+  current_participants: number;
+  location: string | null;
+  image_url: string | null;
+  category_id: string | null;
+  instructor_id: string | null;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+  template?: { category?: { name: string } };
+}
+
+// Define our display course type
+interface DisplayCourse {
+  id: string;
+  name: string;
   price: string;
+  frequency: string;
+  sessionCount: string;
+  description: string;
+  isPopular: boolean;
+  isFullyBooked: boolean;
+  features: { text: string; included: boolean }[];
+  buttonText: string;
+  buttonLink: string;
+  isSecondary: boolean;
+  startDate: string | null;
+  endDate: string | null;
+  availableSpots: number | null;
 }
 
 const BookCourse = () => {
-  const [activeTab, setActiveTab] = useState('courses');
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    course: '',
-    participants: '1',
-    message: '',
-  });
+  const [tryCourses, setTryCourses] = useState<DisplayCourse[]>([]);
+  const [longerCourses, setLongerCourses] = useState<DisplayCourse[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
-  const courses: Course[] = [
+  // Default features for different course types
+  const tryOnFeatures = [
+    { text: '2 timmars session', included: true },
+    { text: 'Dreja så mycket du vill/hinner', included: true },
+    { text: 'Välj ut max 2 alster som bränns och glaseras', included: true },
+    { text: 'Möjlighet att lägga till fler för 100 kr/st', included: true },
+    { text: 'Du väljer glasyrfärg till dina alster', included: true },
+    { text: 'Alster beskickas och glaseras av Studio Clay', included: true },
+  ];
+
+  const helgkursFeatures = [
+    { text: 'Dag 1 (5 h) - Drejning', included: true },
+    { text: 'Dag 2 (5 h) - Beskickning (färdigställer)', included: true },
+    { text: 'Dag 3 (ca 2 h, 3-4 veckor senare) - Glasyrtilfälle', included: true },
+    { text: '3 kg lera ingår', included: true },
+    { text: 'Glasering och bränningar ingår', included: true },
+    { text: 'Tillgång till egen drejskiva under kursen', included: true },
+  ];
+
+  const kvallskursFeatures = [
+    { text: '3 h per tillfälle', included: true },
+    { text: '5 gånger, sista gången glasering', included: true },
+    { text: '3 kg lera ingår', included: true },
+    { text: 'Glasering och bränningar ingår', included: true },
+    { text: 'Tillgång till egen drejskiva under kursen', included: true },
+    { text: 'Inblick i keramikens grunder', included: true },
+  ];
+
+  const dagkursFeatures = [
+    { text: '3 h per tillfälle', included: true },
+    { text: '7 gånger, sista gången glasering', included: true },
+    { text: '3 kg lera ingår', included: true },
+    { text: 'Glasering och bränningar ingår', included: true },
+    { text: 'Tillgång till egen drejskiva under kursen', included: true },
+    { text: 'Inblick i keramikens grunder', included: true },
+  ];
+
+  const privatFeatures = [
+    { text: 'Personlig handledning', included: true },
+    { text: 'Flexibla tider', included: true },
+    { text: 'Anpassat efter dina önskemål', included: true },
+    { text: 'Lera ingår', included: true },
+    { text: 'Glasering och bränningar ingår', included: true },
+    { text: 'Tillgång till egen drejskiva under lektionen', included: true },
+  ];
+
+  // Translated FAQs to Swedish
+  const faqs = [
+    {
+      question: 'Vad ska jag ha på mig till en keramikkurs?',
+      answer: 'Använd bekväma kläder som du inte har något emot att få lera på. Många föredrar att bära förkläde eller rock. Undvik löst sittande ärmar som kan dra i lera eller vatten. Ta med en handduk och överväg att ha ett par rena skor om du vill hålla dina vanliga skor lerfria.',
+    },
+    {
+      question: 'Behöver jag ta med egna verktyg?',
+      answer: 'Alla grundläggande verktyg och material tillhandahålls för nybörjare. För mellan- och avancerade kurser ger vi en lista över rekommenderade verktyg som du kan vilja köpa. Många elever utvecklar preferenser för specifika verktyg när de fortskrider.',
+    },
+    {
+      question: 'Hur många föremål kommer jag att göra i en kurs?',
+      answer: 'Detta varierar beroende på kursnivå och typ. I nybörjarkurser slutför eleverna vanligtvis 3-5 färdiga föremål. Mer avancerade kurser kan fokusera på färre, mer komplexa föremål eller fler föremål beroende på de tekniker som lärs ut.',
+    },
+    {
+      question: 'Finns det en åldersgräns för era kurser?',
+      answer: 'Vuxenkurser är för personer från 16 år och uppåt. Vi erbjuder specifika kurser för barn i åldern 8-15 år, och familjekurser där föräldrar och barn kan arbeta tillsammans. Kontrollera de specifika kursbeskrivningarna för åldersrekommendationer.',
+    },
+    {
+      question: 'När får jag mina färdiga föremål?',
+      answer: 'Keramik kräver tid för torkning, biskuitbränning, glasering och slutlig bränning. Denna process tar vanligtvis 3-4 veckor efter din sista lektion. Vi meddelar dig när dina föremål är klara för upphämtning.',
+    },
+  ];
+
+  // Function to determine features based on course title
+  const getFeatures = (title: string) => {
+    const lowerTitle = title.toLowerCase();
+    if (lowerTitle.includes('prova')) return tryOnFeatures;
+    if (lowerTitle.includes('helg')) return helgkursFeatures;
+    if (lowerTitle.includes('kväll')) return kvallskursFeatures;
+    if (lowerTitle.includes('dag')) return dagkursFeatures;
+    if (lowerTitle.includes('privat')) return privatFeatures;
+    // Default features if no match
+    return [
+      { text: 'Professionell handledning', included: true },
+      { text: 'Lera ingår', included: true },
+      { text: 'Glasering och bränningar ingår', included: true },
+    ];
+  };
+
+  // Function to format date for display
+  const formatDate = (dateString: string | null): string => {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    
+    // Format: "15 aug 2025, 16:00"
+    const day = date.getDate();
+    const month = date.toLocaleString('sv-SE', { month: 'short' });
+    const year = date.getFullYear();
+    const time = date.toLocaleString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+    
+    return `${day} ${month} ${year}, ${time}`;
+  };
+
+  // Function to get date display text
+  const getDateDisplay = (startDate: string | null, endDate: string | null): string => {
+    if (!startDate) return '';
+    
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : null;
+    
+    // If start and end are on the same day
+    if (end && start.toDateString() === end.toDateString()) {
+      const startTime = start.toLocaleString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+      const endTime = end.toLocaleString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+      const day = start.getDate();
+      const month = start.toLocaleString('sv-SE', { month: 'short' });
+      const year = start.getFullYear();
+      
+      return `${day} ${month} ${year}, ${startTime} - ${endTime}`;
+    }
+    
+    // If multi-day course
+    if (end && start.toDateString() !== end.toDateString()) {
+      // For longer courses that span weeks
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays > 14) {
+        // Weekly course
+        const startDay = start.getDate();
+        const startMonth = start.toLocaleString('sv-SE', { month: 'short' });
+        const endDay = end.getDate();
+        const endMonth = end.toLocaleString('sv-SE', { month: 'short' });
+        const year = start.getFullYear();
+        const dayOfWeek = start.toLocaleString('sv-SE', { weekday: 'long' });
+        const startTime = start.toLocaleString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+        const endTime = end.toLocaleString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+        
+        return `${dayOfWeek}ar, ${startDay} ${startMonth} - ${endDay} ${endMonth} ${year}, ${startTime} - ${endTime}`;
+      } else {
+        // Weekend course or short course
+        const startDay = start.getDate();
+        const startMonth = start.toLocaleString('sv-SE', { month: 'short' });
+        const endDay = end.getDate();
+        const endMonth = end.toLocaleString('sv-SE', { month: 'short' });
+        const year = start.getFullYear();
+        
+        return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${year}`;
+      }
+    }
+    
+    // Single date with no end time
+    return formatDate(startDate);
+  };
+
+  // Function to determine session count based on course title and duration
+  const getSessionCount = (title: string, startDate: string | null, endDate: string | null) => {
+    const lowerTitle = title.toLowerCase();
+    
+    // Try to extract session count from title
+    if (lowerTitle.includes('5 gånger')) return '5 gånger';
+    if (lowerTitle.includes('7 gånger')) return '7 gånger';
+    
+    // If no session count in title, calculate from dates if available
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      // If same day, no session count
+      if (start.toDateString() === end.toDateString()) return '';
+      
+      // If more than 1 day apart, calculate days
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays > 1) {
+        // For longer courses, estimate number of sessions
+        if (diffDays > 14) {
+          // If more than 2 weeks, assume weekly sessions
+          const weeks = Math.ceil(diffDays / 7);
+          return `${weeks} gånger`;
+        } else {
+          // Otherwise, show days
+          return `${diffDays} dagar`;
+        }
+      }
+    }
+    
+    return '';
+  };
+
+  // Function to convert API course to display course
+  const mapApiCourseToDisplayCourse = (course: ApiCourse): DisplayCourse => {
+    // Check if the course is fully booked
+    const isFullyBooked = course.max_participants !== null && 
+                          course.current_participants >= course.max_participants;
+    
+    // Calculate available spots
+    const availableSpots = course.max_participants !== null 
+      ? course.max_participants - course.current_participants 
+      : null;
+
+    // Get the category name from the template if available
+    const displayName = course.template?.category?.name || course.title;
+    
+    return {
+      id: course.id,
+      name: displayName,
+      price: course.price ? course.price.toString() : '0',
+      frequency: course.currency || 'kr',
+      sessionCount: getSessionCount(displayName, course.start_date, course.end_date),
+      description: course.description || '',
+      isPopular: false, // Will be set later
+      isFullyBooked: isFullyBooked,
+      features: getFeatures(displayName),
+      buttonText: isFullyBooked ? 'Skriv upp dig på väntelista' : 'Boka kurs',
+      buttonLink: isFullyBooked ? `/waitlist/${course.id}` : `/book-course/${course.id}`,
+      isSecondary: false,
+      startDate: course.start_date,
+      endDate: course.end_date,
+      availableSpots: availableSpots,
+    };
+  };
+
+  // Services data
+  const services = [
     {
       id: 1,
-      title: 'Introduction to Clay Working',
-      level: 'Beginner',
-      description: 'Perfect for newcomers to clay. Learn the basic techniques and create your first pottery pieces.',
-      duration: '4 weeks',
-      schedule: 'Mondays, 6-8 PM',
-      capacity: '12 people',
-      price: '$350',
+      title: 'Företagsevent',
+      description: 'Kreativa keramikworkshops för företag som vill stärka teambuilding.',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="20" height="20">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+        </svg>
+      ),
+      link: '/contact',
+      audience: ['Företag']
     },
     {
       id: 2,
-      title: 'Wheel Throwing Techniques',
-      level: 'Intermediate',
-      description: 'Develop your wheel throwing skills and create vessels of various shapes and sizes.',
-      duration: '6 weeks',
-      schedule: 'Wednesdays, 6-9 PM',
-      capacity: '10 people',
-      price: '$450',
+      title: 'Designa ditt event',
+      description: 'Tillgång till professionell utrustning och utrymme för erfarna keramiker.',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="20" height="20">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+        </svg>
+      ),
+      link: '/contact',
+      audience: ['Individuell', 'Företag']
     },
     {
       id: 3,
-      title: 'Clay Sculpture Workshop',
-      level: 'All Levels',
-      description: 'Explore sculptural techniques and create figurative or abstract pieces in clay.',
-      duration: '2 days',
-      schedule: 'Weekend Workshop, 10 AM-4 PM',
-      capacity: '8 people',
-      price: '$275',
-    },
-    {
-      id: 4,
-      title: 'Glaze Chemistry & Application',
-      level: 'Advanced',
-      description: 'Learn about glaze formulation, testing, and advanced application techniques.',
-      duration: '5 weeks',
-      schedule: 'Thursdays, 6-8:30 PM',
-      capacity: '8 people',
-      price: '$425',
-    },
-    {
-      id: 5,
-      title: 'Handbuilding Masterclass',
-      level: 'Intermediate',
-      description: 'Focus on coil, slab, and pinch techniques to create functional and decorative pieces.',
-      duration: '6 weeks',
-      schedule: 'Tuesdays, 6-8:30 PM',
-      capacity: '10 people',
-      price: '$400',
-    },
-    {
-      id: 6,
-      title: 'Kids Clay Camp',
-      level: 'Children (8-12)',
-      description: 'A fun introduction to clay for children. Create animals, containers, and more.',
-      duration: '1 week',
-      schedule: 'Summer M-F, 9 AM-12 PM',
-      capacity: '15 children',
-      price: '$250',
-    },
+      title: 'Presentkort',
+      description: 'Perfekta presenter för vänner och familj som vill utforska keramik.',
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="20" height="20">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+        </svg>
+      ),
+      link: '/gift-card',
+      audience: ['Individuell', 'Företag']
+    }
   ];
 
-  const faqs = [
-    {
-      question: 'What should I wear to a clay class?',
-      answer: 'Wear comfortable clothes that you don\'t mind getting clay on. Many people prefer to wear an apron or smock. Avoid loose-fitting sleeves that might drag in clay or water. Bring a towel and consider having a clean change of shoes if you want to keep your regular shoes clay-free.',
-    },
-    {
-      question: 'Do I need to bring my own tools?',
-      answer: 'All basic tools and materials are provided for beginners. For intermediate and advanced classes, we provide a list of recommended tools that you may want to purchase. Many students develop preferences for specific tools as they progress.',
-    },
-    {
-      question: 'How many pieces will I make in a class?',
-      answer: 'This varies by course level and type. In beginner courses, students typically complete 3-5 finished pieces. More advanced classes might focus on fewer, more complex pieces or more pieces depending on the techniques being taught.',
-    },
-    {
-      question: 'Is there an age requirement for your courses?',
-      answer: 'Adult classes are for ages 16 and up. We offer specific classes for children ages 8-15, and family classes where parents and children can work together. Please check the specific course descriptions for age recommendations.',
-    },
-    {
-      question: 'When do I get my finished pieces?',
-      answer: 'Pottery requires time for drying, bisque firing, glazing, and final firing. This process typically takes 3-4 weeks after your last class. We\'ll notify you when your pieces are ready for pickup.',
-    },
-  ];
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch('/api/courses/?published=true');
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch courses: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.courses || !Array.isArray(data.courses)) {
+          throw new Error('Invalid response format');
+        }
+        
+        // Convert API courses to display courses
+        const displayCourses = data.courses.map(mapApiCourseToDisplayCourse);
+        
+        // Categorize courses
+        const tryOnCourses: DisplayCourse[] = [];
+        const otherCourses: DisplayCourse[] = [];
+        
+        displayCourses.forEach((course: DisplayCourse) => {
+          // If course is fully booked, show "Fullbokad" instead of "Populär"
+          if (course.isFullyBooked) {
+            course.isPopular = true; // Use the popular tag to show "Fullbokad"
+          } else {
+            // Otherwise, mark some courses as popular (e.g., every second course)
+            course.isPopular = course.id.charCodeAt(0) % 2 === 0;
+          }
+          
+          if (course.name.toLowerCase().includes('prova')) {
+            tryOnCourses.push(course);
+          } else {
+            otherCourses.push(course);
+          }
+        });
+        
+        setTryCourses(tryOnCourses);
+        setLongerCourses(otherCourses);
+        setError(null);
+      } catch (err: any) {
+        console.error('Error fetching courses:', err);
+        setError('Failed to load courses. Please try again later.');
+        
+        // Fallback to sample data if API fails
+        setTryCourses([
+          {
+            id: '1',
+            name: 'Prova-på',
+            price: '800',
+            frequency: 'kr',
+            sessionCount: '',
+            description: 'Perfekt för nybörjare som vill prova på drejning för första gången.',
+            isPopular: false,
+            isFullyBooked: false,
+            features: tryOnFeatures,
+            buttonText: 'Boka kurs',
+            buttonLink: '/book-course/1',
+            isSecondary: false,
+            startDate: '2025-03-27T11:30:00+00:00',
+            endDate: '2025-03-27T13:30:00+00:00',
+            availableSpots: null,
+          },
+        ]);
+        
+        setLongerCourses([
+          {
+            id: '2',
+            name: 'Helgkurs',
+            price: '3000',
+            frequency: 'kr',
+            sessionCount: '',
+            description: 'Drejning, med inslag av korta förevisningsdrejningar som inspiration och tips för eget drejande.',
+            isPopular: true,
+            isFullyBooked: false,
+            features: helgkursFeatures,
+            buttonText: 'Boka kurs',
+            buttonLink: '/book-course/2',
+            isSecondary: false,
+            startDate: '2025-03-22T09:00:00+00:00',
+            endDate: '2025-03-23T16:00:00+00:00',
+            availableSpots: null,
+          },
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
     
-    // Simulate form submission
-    setTimeout(() => {
-      setIsSubmitting(false);
-      alert('Booking request submitted successfully!');
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        course: '',
-        participants: '1',
-        message: '',
-      });
-    }, 1500);
-  };
-
-  const selectCourse = (course: Course) => {
-    setSelectedCourse(course);
-    setFormData((prev) => ({ ...prev, course: course.title }));
-    window.scrollTo({
-      top: document.getElementById('booking-form')?.offsetTop || 0,
-      behavior: 'smooth'
-    });
-  };
+    fetchCourses();
+  }, []);
 
   const toggleFaq = (index: number) => {
     setOpenFaqIndex(openFaqIndex === index ? null : index);
@@ -154,199 +418,296 @@ const BookCourse = () => {
   return (
     <div className={styles.pageContainer}>
       <div className={styles.container}>
+        {/* Back to Home button */}
+        <div className={styles.backButtonContainer}>
+          <Link href="/" className={styles.backButton}>
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor" 
+              width="20" 
+              height="20"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M10 19l-7-7m0 0l7-7m-7 7h18" 
+              />
+            </svg>
+            Tillbaka till startsidan
+          </Link>
+        </div>
+
         <div className={styles.titleSection}>
           <h1 className={styles.title}>
-            Book a <span className={styles.highlightText}>Clay Course</span>
+            Boka en <span className={styles.highlightText}>Keramikkurs</span>
           </h1>
           <p className={styles.description}>
-            Join one of our hands-on clay courses and learn pottery techniques from experienced instructors in a creative and supportive environment.
+            Anmäl dig till en av våra praktiska keramikkurser och lär dig drejningstekniker från erfarna instruktörer i en kreativ och stödjande miljö.
           </p>
         </div>
 
-        <div className={styles.coursesGrid}>
-          {courses.map((course) => (
-            <div key={course.id} className={styles.courseCard}>
-              <div className={styles.cardImage}></div>
-              <div className={styles.cardContent}>
-                <span className={styles.courseLevel}>{course.level}</span>
-                <h3 className={styles.courseTitle}>{course.title}</h3>
-                <p className={styles.courseDesc}>{course.description}</p>
-                <div className={styles.courseDetails}>
-                  <span className={styles.detailItem}>
-                    <svg className={styles.detailIcon} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="16" height="16">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {course.duration}
-                  </span>
-                  <span className={styles.detailItem}>
-                    <svg className={styles.detailIcon} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="16" height="16">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    {course.schedule}
-                  </span>
-                  <span className={styles.detailItem}>
-                    <svg className={styles.detailIcon} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="16" height="16">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    {course.capacity}
-                  </span>
-                </div>
-                <div className={styles.priceRow}>
-                  <span className={styles.price}>{course.price}</span>
-                  <button className={styles.bookButton} onClick={() => selectCourse(course)}>
-                    Book Now
-                  </button>
-                </div>
-              </div>
+        {/* Courses section using the Courses component style */}
+        <div className={coursesStyles.container}>
+          {isLoading ? (
+            <div className={coursesStyles.loadingContainer}>
+              <p>Laddar kurser...</p>
             </div>
-          ))}
+          ) : error ? (
+            <div className={coursesStyles.errorContainer}>
+              <p>{error}</p>
+            </div>
+          ) : (
+            <>
+              {tryCourses.length > 0 && (
+                <div className={coursesStyles.categorySection}>
+                  <h3 className={coursesStyles.categoryTitle}>Prova på</h3>
+                  <div className={coursesStyles.courseScroll}>
+                    <div className={coursesStyles.courseScrollInner}>
+                      {tryCourses.map((course) => (
+                        <div 
+                          key={course.id} 
+                          className={`${coursesStyles.courseCard} ${course.isPopular ? coursesStyles.popularCourse : ''}`}
+                        >
+                          {course.isPopular && (
+                            <div className={coursesStyles.popularTag}>
+                              {course.isFullyBooked ? 'Fullbokad' : 'Populär'}
+                            </div>
+                          )}
+                          <div className={coursesStyles.cardHeader}>
+                            <h3 className={coursesStyles.courseName}>{course.name}</h3>
+                            <div className={coursesStyles.coursePrice}>
+                              {course.price}
+                              <span className={coursesStyles.frequency}>{course.frequency}</span>
+                            </div>
+                            {course.sessionCount && <div className={coursesStyles.sessionCount}>{course.sessionCount}</div>}
+                            {course.startDate && (
+                              <div className={coursesStyles.courseDate}>
+                                <svg 
+                                  className={coursesStyles.dateIcon}
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  fill="none" 
+                                  viewBox="0 0 24 24" 
+                                  strokeWidth={1.5} 
+                                  stroke="currentColor" 
+                                  width="16" 
+                                  height="16"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                                </svg>
+                                {getDateDisplay(course.startDate, course.endDate)}
+                              </div>
+                            )}
+                            {course.availableSpots !== null && (
+                              <div className={coursesStyles.availableSpots}>
+                                <svg 
+                                  className={coursesStyles.spotsIcon}
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  fill="none" 
+                                  viewBox="0 0 24 24" 
+                                  strokeWidth={1.5} 
+                                  stroke="currentColor" 
+                                  width="16" 
+                                  height="16"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                                </svg>
+                                {course.availableSpots} platser kvar
+                              </div>
+                            )}
+                            <p className={coursesStyles.courseDescription}>{course.description}</p>
+                          </div>
+
+                          <ul className={coursesStyles.featuresList}>
+                            {course.features.map((feature, index) => (
+                              <li 
+                                key={index} 
+                                className={`${coursesStyles.featureItem} ${!feature.included ? coursesStyles.disabledFeature : ''}`}
+                              >
+                                <svg 
+                                  className={coursesStyles.featureIcon}
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  width="16" 
+                                  height="16" 
+                                  viewBox="0 0 24 24" 
+                                  fill="none" 
+                                  stroke="currentColor" 
+                                  strokeWidth="2" 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round"
+                                >
+                                  {feature.included ? (
+                                    <path d="M20 6L9 17l-5-5" />
+                                  ) : (
+                                    <path d="M18 6L6 18M6 6l12 12" />
+                                  )}
+                                </svg>
+                                {feature.text}
+                              </li>
+                            ))}
+                          </ul>
+
+                          <div className={coursesStyles.cardFooter}>
+                            <Link 
+                              href={course.buttonLink} 
+                              className={`${coursesStyles.actionButton} ${course.isSecondary ? coursesStyles.secondaryButton : ''}`}
+                            >
+                              {course.buttonText}
+                            </Link>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {longerCourses.length > 0 && (
+                <div className={coursesStyles.categorySection}>
+                  <h3 className={coursesStyles.categoryTitle}>Längre kurser</h3>
+                  <div className={coursesStyles.courseScroll}>
+                    <div className={coursesStyles.courseScrollInner}>
+                      {longerCourses.map((course) => (
+                        <div 
+                          key={course.id} 
+                          className={`${coursesStyles.courseCard} ${course.isPopular ? coursesStyles.popularCourse : ''}`}
+                        >
+                          {course.isPopular && (
+                            <div className={coursesStyles.popularTag}>
+                              {course.isFullyBooked ? 'Fullbokad' : 'Populär'}
+                            </div>
+                          )}
+                          <div className={coursesStyles.cardHeader}>
+                            <h3 className={coursesStyles.courseName}>{course.name}</h3>
+                            <div className={coursesStyles.coursePrice}>
+                              {course.price}
+                              <span className={coursesStyles.frequency}>{course.frequency}</span>
+                            </div>
+                            {course.sessionCount && <div className={coursesStyles.sessionCount}>{course.sessionCount}</div>}
+                            {course.startDate && (
+                              <div className={coursesStyles.courseDate}>
+                                <svg 
+                                  className={coursesStyles.dateIcon}
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  fill="none" 
+                                  viewBox="0 0 24 24" 
+                                  strokeWidth={1.5} 
+                                  stroke="currentColor" 
+                                  width="16" 
+                                  height="16"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                                </svg>
+                                {getDateDisplay(course.startDate, course.endDate)}
+                              </div>
+                            )}
+                            {course.availableSpots !== null && (
+                              <div className={coursesStyles.availableSpots}>
+                                <svg 
+                                  className={coursesStyles.spotsIcon}
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  fill="none" 
+                                  viewBox="0 0 24 24" 
+                                  strokeWidth={1.5} 
+                                  stroke="currentColor" 
+                                  width="16" 
+                                  height="16"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                                </svg>
+                                {course.availableSpots} platser kvar
+                              </div>
+                            )}
+                            <p className={coursesStyles.courseDescription}>{course.description}</p>
+                          </div>
+
+                          <ul className={coursesStyles.featuresList}>
+                            {course.features.map((feature, index) => (
+                              <li 
+                                key={index} 
+                                className={`${coursesStyles.featureItem} ${!feature.included ? coursesStyles.disabledFeature : ''}`}
+                              >
+                                <svg 
+                                  className={coursesStyles.featureIcon}
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  width="16" 
+                                  height="16" 
+                                  viewBox="0 0 24 24" 
+                                  fill="none" 
+                                  stroke="currentColor" 
+                                  strokeWidth="2" 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round"
+                                >
+                                  {feature.included ? (
+                                    <path d="M20 6L9 17l-5-5" />
+                                  ) : (
+                                    <path d="M18 6L6 18M6 6l12 12" />
+                                  )}
+                                </svg>
+                                {feature.text}
+                              </li>
+                            ))}
+                          </ul>
+
+                          <div className={coursesStyles.cardFooter}>
+                            <Link 
+                              href={course.buttonLink} 
+                              className={`${coursesStyles.actionButton} ${course.isSecondary ? coursesStyles.secondaryButton : ''}`}
+                            >
+                              {course.buttonText}
+                            </Link>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        <div id="booking-form" className={styles.formSection}>
-          <div className={styles.formGrid}>
-            <div>
-              <h2 className={styles.formTitle}>Book Your Clay Course</h2>
-              <form className={styles.form} onSubmit={handleSubmit}>
-                <div className={styles.formGroup}>
-                  <label htmlFor="name" className={styles.label}>Full Name</label>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    required
-                    className={styles.input}
-                    placeholder="Your full name"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label htmlFor="email" className={styles.label}>Email Address</label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    className={styles.input}
-                    placeholder="your.email@example.com"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label htmlFor="phone" className={styles.label}>Phone Number</label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    className={styles.input}
-                    placeholder="+1 (555) 123-4567"
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label htmlFor="course" className={styles.label}>Select Course</label>
-                  <select
-                    id="course"
-                    name="course"
-                    value={formData.course}
-                    onChange={handleChange}
-                    required
-                    className={styles.select}
-                  >
-                    <option value="">Select a course</option>
-                    {courses.map((course) => (
-                      <option key={course.id} value={course.title}>
-                        {course.title} ({course.level})
-                      </option>
+        {/* Services section */}
+        <div className={styles.servicesSection}>
+          <div className={servicesStyles.titleSection}>
+            <h2 className={servicesStyles.title}>Övriga Tjänster</h2>
+            <p className={servicesStyles.description}>
+              Vi erbjuder kreativa keramikupplevelser för både privatpersoner och företag, från företagsevent till presentkort.
+            </p>
+          </div>
+
+          <div className={servicesStyles.servicesGrid}>
+            {services.map((service) => (
+              <div key={service.id} className={servicesStyles.serviceCard}>
+                <div className={servicesStyles.serviceContent}>
+                  <div className={servicesStyles.serviceIcon}>{service.icon}</div>
+                  <h3 className={servicesStyles.serviceTitle}>{service.title}</h3>
+                  <p className={servicesStyles.serviceDesc}>{service.description}</p>
+                  <div className={servicesStyles.audienceTags}>
+                    {service.audience.map((type) => (
+                      <span key={type} className={servicesStyles.audienceTag}>
+                        {type}
+                      </span>
                     ))}
-                  </select>
+                  </div>
                 </div>
-                <div className={styles.formGroup}>
-                  <label htmlFor="participants" className={styles.label}>Number of Participants</label>
-                  <select
-                    id="participants"
-                    name="participants"
-                    value={formData.participants}
-                    onChange={handleChange}
-                    className={styles.select}
-                  >
-                    {[1, 2, 3, 4, 5].map((num) => (
-                      <option key={num} value={num.toString()}>
-                        {num} {num === 1 ? 'person' : 'people'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className={styles.formGroup}>
-                  <label htmlFor="message" className={styles.label}>Additional Information</label>
-                  <textarea
-                    id="message"
-                    name="message"
-                    value={formData.message}
-                    onChange={handleChange}
-                    className={styles.textarea}
-                    placeholder="Let us know if you have any questions or special requirements..."
-                  ></textarea>
-                </div>
-                <button
-                  type="submit"
-                  className={styles.submitButton}
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Submitting...' : 'Book Course'}
-                </button>
-              </form>
-            </div>
-            <div>
-              <div className={styles.infoCard}>
-                <h3 className={styles.infoTitle}>Course Information</h3>
-                <ul className={styles.infoList}>
-                  <li className={styles.infoItem}>
-                    <svg className={styles.infoIcon} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className={styles.infoText}>
-                      All materials and tools are provided with your course fee.
-                    </span>
-                  </li>
-                  <li className={styles.infoItem}>
-                    <svg className={styles.infoIcon} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className={styles.infoText}>
-                      Classes start promptly at the scheduled time. Please arrive 15 minutes early.
-                    </span>
-                  </li>
-                  <li className={styles.infoItem}>
-                    <svg className={styles.infoIcon} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                    <span className={styles.infoText}>
-                      A 50% deposit is required to secure your booking.
-                    </span>
-                  </li>
-                  <li className={styles.infoItem}>
-                    <svg className={styles.infoIcon} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    <span className={styles.infoText}>
-                      Wear comfortable clothes that you don&apos;t mind getting dirty.
-                    </span>
-                  </li>
-                </ul>
-                <h3 className={styles.infoTitle}>Cancellation Policy</h3>
-                <p className={styles.infoText}>
-                  Full refund if cancelled at least 7 days before the start date. 50% refund if cancelled 3-6 days before. No refunds for cancellations less than 3 days before the course starts.
-                </p>
+                <Link href={service.link} className={servicesStyles.serviceLink}>
+                  Läs Mer
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="16" height="16">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                  </svg>
+                </Link>
               </div>
-            </div>
+            ))}
           </div>
         </div>
 
+        {/* FAQ section - Translated to Swedish */}
         <div className={styles.faqSection}>
-          <h2 className={styles.faqTitle}>Frequently Asked Questions</h2>
+          <h2 className={styles.faqTitle}>Vanliga frågor</h2>
           <div className={styles.faqList}>
             {faqs.map((faq, index) => (
               <div key={index} className={styles.faqItem}>

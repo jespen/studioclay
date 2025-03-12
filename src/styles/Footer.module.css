@@ -22,7 +22,8 @@
 
 @media (min-width: 768px) {
   .footerGrid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: 2fr 1fr auto;
+    gap: 4rem;
   }
 }
 
@@ -111,14 +112,17 @@
 
 .socialLinks {
   display: flex;
-  gap: 1rem;
+  gap: 1.5rem;
   margin-top: 1rem;
+  justify-content: center;
+  width: 100%;
 }
 
 @media (min-width: 768px) {
   .bottomBar {
-    flex-direction: row;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
   }
   
   .socialLinks {
@@ -129,6 +133,7 @@
 .socialLink {
   color: #6B7280;
   transition: color 0.2s;
+  padding: 0.5rem;
 }
 
 .socialLink:hover {
@@ -140,6 +145,16 @@
 }
 
 .socialIcon {
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
+}
+
+.contactSpacer {
+  height: 1rem;
+}
+
+.footerLink[href*="maps.google.com"],
+.footerLink[href*="maps/place"] {
+  text-decoration: underline;
+  font-style: normal;
 } 

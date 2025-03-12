@@ -227,3 +227,12 @@ a:hover {
 .dark .bg-black {
   background-color: #121212;
 }
+
+.hide-navigation nav,
+.hide-navigation footer {
+  display: none !important;
+}
+
+.hide-navigation main {
+  padding-top: 0 !important;
+}

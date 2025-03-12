@@ -1,0 +1,123 @@
+.section {
+  padding: 2.5rem 0;
+  background-color: #f7f7f7; /* Matching the gray used in the kurser section */
+}
+
+.dark .section {
+  background-color: #2a2a2a;
+}
+
+.container {
+  max-width: 90rem;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.bannerContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.75rem;
+  background-color: white;
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+.dark .bannerContent {
+  background-color: #1F2937;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.textContent {
+  text-align: center;
+  width: 100%;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: var(--primary);
+}
+
+.description {
+  font-size: 1.125rem;
+  color: #6B7280;
+  margin-bottom: 1.25rem;
+}
+
+.dark .description {
+  color: #D1D5DB;
+}
+
+.features {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.featureItem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.featureIcon {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.ctaButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--primary);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.ctaButton:hover {
+  background-color: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.buttonIcon {
+  transition: transform 0.2s ease;
+}
+
+.ctaButton:hover .buttonIcon {
+  transform: translateX(3px);
+}
+
+@media (min-width: 768px) {
+  .bannerContent {
+    padding: 2rem;
+  }
+  
+  .title {
+    font-size: 2.25rem;
+  }
+  
+  .features {
+    gap: 2rem;
+    margin-bottom: 1.75rem;
+  }
+  
+  .featureItem {
+    font-size: 1rem;
+  }
+} 

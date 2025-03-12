@@ -27,8 +27,8 @@ const Hero = ({
               <Link href="/book-course" className={styles.primaryButton}>
                 Boka en kurs
               </Link>
-              <Link href="/portfolio" className={styles.secondaryButton}>
-                Se vårt arbete
+              <Link href="/contact" className={styles.secondaryButton}>
+                Kontaka mig för skräddarsydda kurser
               </Link>
             </div>
             <div className={styles.clientTypes}>

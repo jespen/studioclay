@@ -1,0 +1,55 @@
+.banner {
+  background-color: #f8f9fa;
+  padding: 2rem 0;
+  margin: 2rem 0;
+}
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.highlight {
+  color: #547264;
+}
+
+.regularText {
+  color: #2C3E50;
+}
+
+.description {
+  color: #6c757d;
+  margin-bottom: 1.5rem;
+}
+
+.form {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+}
+
+.success {
+  color: #547264;
+  font-size: 1.1rem;
+  padding: 1rem;
+}
+
+@media (max-width: 600px) {
+  .form {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .form > * {
+    width: 100% !important;
+  }
+} 
