@@ -35,18 +35,8 @@ import PendingIcon from '@mui/icons-material/Pending';
 import CancelIcon from '@mui/icons-material/Cancel';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-
-interface Booking {
-  id: string;
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string | null;
-  number_of_participants: number;
-  booking_date: string;
-  status: 'waiting' | 'confirmed' | 'cancelled';
-  payment_status: 'paid' | 'unpaid';
-  message: string | null;
-}
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Booking } from '@/lib/supabaseAdmin';
 
 interface BookingsListProps {
   courseId: string;
@@ -71,6 +61,8 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
   
   // Primary color from globals.css
   const primaryColor = '#547264';
+  
+  const supabase = createClientComponentClient();
 
   useEffect(() => {
     fetchBookings();
@@ -79,15 +71,47 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
   const fetchBookings = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/courses/${courseId}/bookings`);
+      const { data, error } = await supabase
+        .from('bookings')
+        .select(`
+          *,
+          course:course_instances(
+            *,
+            template:course_templates(
+              *,
+              category:categories(*),
+              instructor:instructors(*)
+            )
+          )
+        `)
+        .eq('course_id', courseId)
+        .order('booking_date', { ascending: false });
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to fetch bookings');
-      }
+      if (error) throw error;
       
-      const data = await response.json();
-      setBookings(data.bookings || []);
+      // Process the data to maintain backward compatibility
+      const processedData = (data || []).map((booking: Booking) => {
+        if (booking.course) {
+          const template = booking.course.template;
+          booking.course = {
+            id: booking.course.id,
+            template_id: template?.id || booking.course.template_id,
+            current_participants: booking.course.current_participants || 0,
+            max_participants: template?.max_participants || booking.course.max_participants || 0,
+            start_date: booking.course.start_date,
+            end_date: booking.course.end_date,
+            status: booking.course.status,
+            created_at: booking.course.created_at,
+            updated_at: booking.course.updated_at,
+            template,
+            instructor: booking.course.instructor,
+            category: booking.course.category
+          };
+        }
+        return booking;
+      });
+      
+      setBookings(processedData);
       setError(null);
     } catch (err) {
       console.error('Error fetching bookings:', err);
@@ -112,22 +136,56 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
     setDeleteDialogOpen(true);
   };
 
-  // Handle confirming the deletion
+  // Handle delete confirmation
   const handleDeleteConfirm = async () => {
     if (!bookingToDelete) return;
     
     try {
-      const response = await fetch(`/api/bookings/${bookingToDelete.id}`, {
-        method: 'DELETE',
-      });
+      // First, create history record
+      const historyData = {
+        original_booking_id: bookingToDelete.id,
+        course_id: bookingToDelete.course_id,
+        customer_name: bookingToDelete.customer_name,
+        customer_email: bookingToDelete.customer_email,
+        customer_phone: bookingToDelete.customer_phone,
+        number_of_participants: bookingToDelete.number_of_participants,
+        original_booking_date: bookingToDelete.booking_date,
+        cancellation_date: new Date().toISOString(),
+        history_type: 'cancelled',
+        message: bookingToDelete.message
+      };
+
+      const { error: historyError } = await supabase
+        .from('booking_history')
+        .insert(historyData);
+
+      if (historyError) throw historyError;
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to delete booking');
+      // Then delete the booking
+      const { error: deleteError } = await supabase
+        .from('bookings')
+        .delete()
+        .eq('id', bookingToDelete.id);
+
+      if (deleteError) throw deleteError;
+      
+      // Update course participants count
+      if (bookingToDelete.course_id) {
+        const { data: course, error: courseError } = await supabase
+          .from('course_instances')
+          .select('current_participants')
+          .eq('id', bookingToDelete.course_id)
+          .single();
+        
+        if (!courseError && course) {
+          await supabase
+            .from('course_instances')
+            .update({
+              current_participants: Math.max(0, course.current_participants - bookingToDelete.number_of_participants)
+            })
+            .eq('id', bookingToDelete.course_id);
+        }
       }
-      
-      // Remove the booking from the state
-      setBookings(bookings.filter(booking => booking.id !== bookingToDelete.id));
       
       // Close the dialog
       setDeleteDialogOpen(false);
@@ -136,8 +194,13 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
       // Show success message
       alert('Bokningen har tagits bort');
       
-      // Notify parent component if needed
-      if (onBookingUpdate) onBookingUpdate();
+      // Refresh the bookings list
+      fetchBookings();
+      
+      // Notify parent component
+      if (onBookingUpdate) {
+        onBookingUpdate();
+      }
     } catch (err) {
       console.error('Error deleting booking:', err);
       alert(`Kunde inte ta bort bokningen: ${err instanceof Error ? err.message : 'Okänt fel'}`);
@@ -147,59 +210,85 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
   // Handle opening the edit dialog
   const handleEditClick = (booking: Booking) => {
     setBookingToEdit(booking);
-    setEditFormData({
-      customer_name: booking.customer_name,
-      customer_email: booking.customer_email,
-      customer_phone: booking.customer_phone,
-      number_of_participants: booking.number_of_participants,
-      status: booking.status,
-      payment_status: booking.payment_status,
-      message: booking.message
-    });
+    setEditFormData(booking);
     setEditDialogOpen(true);
   };
 
-  // Handle text field input changes
-  const handleTextFieldChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setEditFormData({
-      ...editFormData,
-      [name]: value
-    });
+  // Handle edit form changes
+  const handleEditFormChange = (field: keyof Booking, value: any) => {
+    setEditFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
-  // Handle select field changes
-  const handleSelectChange = (e: SelectChangeEvent) => {
-    const { name, value } = e.target;
-    setEditFormData({
-      ...editFormData,
-      [name]: value
-    });
-  };
-
-  // Handle saving the edited booking
+  // Handle edit save
   const handleEditSave = async () => {
     if (!bookingToEdit) return;
     
     try {
-      const response = await fetch(`/api/bookings/${bookingToEdit.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(editFormData),
-      });
+      // First, get the current booking to calculate participant differences
+      const { data: currentBooking, error: fetchError } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('id', bookingToEdit.id)
+        .single();
+        
+      if (fetchError) throw fetchError;
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to update booking');
+      // Prepare the update data
+      const updateData = {
+        ...editFormData,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Update the booking
+      const { error: updateError } = await supabase
+        .from('bookings')
+        .update(updateData)
+        .eq('id', bookingToEdit.id);
+
+      if (updateError) throw updateError;
+      
+      // Update course participants count if needed
+      if (currentBooking && currentBooking.course_id) {
+        let participantsDiff = 0;
+        
+        // Calculate participant difference based on number changes
+        const newParticipants = editFormData.number_of_participants ?? currentBooking.number_of_participants;
+        if (newParticipants !== currentBooking.number_of_participants) {
+          participantsDiff = newParticipants - currentBooking.number_of_participants;
+        }
+        
+        // Adjust for status changes
+        if (editFormData.status !== currentBooking.status) {
+          if (editFormData.status === 'cancelled' && currentBooking.status !== 'cancelled') {
+            // When changing to cancelled, subtract all participants
+            participantsDiff -= newParticipants;
+          } else if (editFormData.status !== 'cancelled' && currentBooking.status === 'cancelled') {
+            // When changing from cancelled to another status, add all participants
+            participantsDiff += newParticipants;
+          }
+        }
+        
+        // Only update if there's a change in participants
+        if (participantsDiff !== 0) {
+          const { data: course, error: courseError } = await supabase
+            .from('course_instances')
+            .select('current_participants')
+            .eq('id', currentBooking.course_id)
+            .single();
+          
+          if (!courseError && course) {
+            await supabase
+              .from('course_instances')
+              .update({
+                current_participants: Math.max(0, course.current_participants + participantsDiff)
+              })
+              .eq('id', currentBooking.course_id);
+          }
+        }
       }
-      
-      // Update the booking in the state
-      const updatedData = await response.json();
-      setBookings(bookings.map(booking => 
-        booking.id === bookingToEdit.id ? { ...booking, ...updatedData.booking } : booking
-      ));
       
       // Close the dialog
       setEditDialogOpen(false);
@@ -208,8 +297,13 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
       // Show success message
       alert('Bokningen har uppdaterats');
       
-      // Notify parent component if needed
-      if (onBookingUpdate) onBookingUpdate();
+      // Refresh the bookings list
+      fetchBookings();
+      
+      // Notify parent component
+      if (onBookingUpdate) {
+        onBookingUpdate();
+      }
     } catch (err) {
       console.error('Error updating booking:', err);
       alert(`Kunde inte uppdatera bokningen: ${err instanceof Error ? err.message : 'Okänt fel'}`);
@@ -449,7 +543,7 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
                 name="customer_name"
                 label="Namn"
                 value={editFormData.customer_name || ''}
-                onChange={handleTextFieldChange}
+                onChange={(e) => handleEditFormChange('customer_name', e.target.value)}
                 fullWidth
                 margin="dense"
               />
@@ -460,7 +554,7 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
                 label="Email"
                 type="email"
                 value={editFormData.customer_email || ''}
-                onChange={handleTextFieldChange}
+                onChange={(e) => handleEditFormChange('customer_email', e.target.value)}
                 fullWidth
                 margin="dense"
               />
@@ -470,7 +564,7 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
                 name="customer_phone"
                 label="Telefon"
                 value={editFormData.customer_phone || ''}
-                onChange={handleTextFieldChange}
+                onChange={(e) => handleEditFormChange('customer_phone', e.target.value)}
                 fullWidth
                 margin="dense"
               />
@@ -481,7 +575,7 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
                 label="Antal deltagare"
                 type="number"
                 value={editFormData.number_of_participants || ''}
-                onChange={handleTextFieldChange}
+                onChange={(e) => handleEditFormChange('number_of_participants', e.target.value)}
                 fullWidth
                 margin="dense"
                 InputProps={{ inputProps: { min: 1 } }}
@@ -493,7 +587,7 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
                 <Select
                   name="status"
                   value={editFormData.status || ''}
-                  onChange={handleSelectChange}
+                  onChange={(e) => handleEditFormChange('status', e.target.value as string)}
                   label="Status"
                 >
                   <MenuItem value="waiting">Väntande</MenuItem>
@@ -508,7 +602,7 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
                 <Select
                   name="payment_status"
                   value={editFormData.payment_status || ''}
-                  onChange={handleSelectChange}
+                  onChange={(e) => handleEditFormChange('payment_status', e.target.value as string)}
                   label="Betalningsstatus"
                 >
                   <MenuItem value="paid">Betald</MenuItem>
@@ -521,7 +615,7 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
                 name="message"
                 label="Meddelande"
                 value={editFormData.message || ''}
-                onChange={handleTextFieldChange}
+                onChange={(e) => handleEditFormChange('message', e.target.value)}
                 fullWidth
                 margin="dense"
                 multiline

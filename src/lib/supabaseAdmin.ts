@@ -28,7 +28,7 @@ export type Instructor = {
   updated_at: string;
 };
 
-export type Course = {
+export type CourseTemplate = {
   id: string;
   title: string;
   description: string | null;
@@ -52,16 +52,34 @@ export type Course = {
   instructor?: Instructor;
 };
 
+export type Course = {
+  id: string;
+  template_id: string;
+  current_participants: number;
+  max_participants: number;
+  start_date: string;
+  end_date: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+  
+  // Joined fields
+  template?: CourseTemplate;
+  instructor?: Instructor;
+  category?: Category;
+};
+
 export type Booking = {
   id: string;
   course_id: string;
   customer_name: string;
   customer_email: string;
   customer_phone: string | null;
+  number_of_participants: number;
   booking_date: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
-  payment_status: 'unpaid' | 'paid' | 'refunded';
-  notes: string | null;
+  status: 'waiting' | 'confirmed' | 'cancelled';
+  payment_status: 'paid' | 'unpaid';
+  message: string | null;
   created_at: string;
   updated_at: string;
   
