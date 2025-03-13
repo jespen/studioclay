@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -20,7 +15,7 @@ export async function GET(
     console.log('API: Fetching course template with ID:', id);
     
     // Fetch the course template
-    const { data: template, error } = await supabase
+    const { data: template, error } = await supabaseAdmin
       .from('course_templates')
       .select(`
         *,
@@ -67,7 +62,7 @@ export async function PATCH(
     console.log('Updating course template with data:', data);
     
     // First check if the template exists
-    const { data: existingTemplate, error: fetchError } = await supabase
+    const { data: existingTemplate, error: fetchError } = await supabaseAdmin
       .from('course_templates')
       .select('*')
       .eq('id', id)
@@ -90,7 +85,7 @@ export async function PATCH(
     }
     
     // Update the template
-    const { data: updatedTemplate, error: updateError } = await supabase
+    const { data: updatedTemplate, error: updateError } = await supabaseAdmin
       .from('course_templates')
       .update(data)
       .eq('id', id)
@@ -137,7 +132,7 @@ export async function DELETE(
     }
     
     // First check if the template exists
-    const { data: existingTemplate, error: fetchError } = await supabase
+    const { data: existingTemplate, error: fetchError } = await supabaseAdmin
       .from('course_templates')
       .select('*')
       .eq('id', id)
@@ -151,7 +146,7 @@ export async function DELETE(
     }
     
     // Check if there are any instances using this template
-    const { data: instances, error: instancesError } = await supabase
+    const { data: instances, error: instancesError } = await supabaseAdmin
       .from('course_instances')
       .select('id')
       .eq('template_id', id);
@@ -172,7 +167,7 @@ export async function DELETE(
     }
     
     // Delete the template
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('course_templates')
       .delete()
       .eq('id', id);

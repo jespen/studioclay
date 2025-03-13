@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -213,14 +207,14 @@ export async function DELETE(
     }
     
     // First check if the instance exists
-    const { data: existingInstance, error: fetchError } = await supabase
+    const { data: existingInstance, error: fetchError } = await supabaseAdmin
       .from('course_instances')
       .select('*')
       .eq('id', id)
       .single();
       
     // Even if the instance doesn't exist, try to delete it anyway
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('course_instances')
       .delete()
       .eq('id', id);
@@ -233,43 +227,47 @@ export async function DELETE(
         console.log('Attempting to clean up related records...');
         
         // Try to delete any bookings for this course
-        await supabase
+        await supabaseAdmin
           .from('bookings')
           .delete()
           .eq('course_id', id);
           
         // Try to delete any waitlist entries for this course
-        await supabase
+        await supabaseAdmin
           .from('waitlist')
           .delete()
           .eq('course_id', id);
           
         // Try deleting the course instance again
-        const { error: retryError } = await supabase
+        const { error: retryError } = await supabaseAdmin
           .from('course_instances')
           .delete()
           .eq('id', id);
           
         if (retryError) {
-          return NextResponse.json({ 
-            error: 'Failed to delete course after cleanup',
-            details: retryError.message 
-          }, { status: 500 });
+          console.error('Error in retry delete:', retryError);
+          return NextResponse.json(
+            { error: retryError.message },
+            { status: 400 }
+          );
         }
       } else {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json(
+          { error: error.message },
+          { status: 400 }
+        );
       }
     }
     
     return NextResponse.json({ 
-      success: true, 
-      message: existingInstance ? 'Course deleted successfully' : 'Course instance removed (if it existed)'
-    }, { status: 200 });
+      success: true,
+      message: 'Course deleted successfully'
+    });
   } catch (error) {
-    console.error('Error deleting course:', error);
-    return NextResponse.json({ 
-      error: 'Failed to delete course', 
-      details: error instanceof Error ? error.message : String(error) 
-    }, { status: 500 });
+    console.error('Error in DELETE route:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete course' },
+      { status: 500 }
+    );
   }
 } 
