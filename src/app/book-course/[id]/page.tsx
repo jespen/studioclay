@@ -1,8 +1,12 @@
 import BookingForm from '@/components/BookingForm';
 
-export default async function BookCoursePage({ params }: { params: { id: string } }) {
-  // Properly await and extract the ID parameter in Next.js 13+
-  const courseId = await Promise.resolve(params.id);
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default async function BookCoursePage({ params }: PageProps) {
+  const resolvedParams = await params;
+  const courseId = resolvedParams.id;
   
   return (
     <div className="min-h-screen pt-[120px] pb-16">
