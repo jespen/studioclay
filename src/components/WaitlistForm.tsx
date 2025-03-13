@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styles from '@/styles/BookingForm.module.css'; // Reuse booking form styles
+import { supabase } from '@/utils/supabase';
 
 interface WaitlistFormProps {
   courseId: string;
@@ -105,44 +106,29 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
         setLoading(true);
         console.log('Client: Fetching course with ID:', courseId);
         
-        // Add a small delay to ensure the API route is ready
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const { data: courseData, error: courseError } = await supabase
+          .from('course_instances')
+          .select(`
+            *,
+            course_template:course_templates(*),
+            category:categories(*),
+            instructor:instructors(*)
+          `)
+          .eq('id', courseId)
+          .single();
         
-        const response = await fetch(`/api/courses/${courseId}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
-          }
-        });
-        
-        console.log('Client: API response status:', response.status);
-        
-        if (!response.ok) {
-          let errorMessage = `Failed to fetch course: ${response.status} ${response.statusText}`;
-          
-          try {
-            const errorData = await response.json();
-            console.error('Client: API error response:', errorData);
-            if (errorData.error) {
-              errorMessage += ` - ${errorData.error}`;
-            }
-          } catch (parseError) {
-            console.error('Client: Could not parse error response:', parseError);
-          }
-          
-          throw new Error(errorMessage);
+        if (courseError) {
+          console.error('Client: Supabase error:', courseError);
+          throw new Error(courseError.message);
         }
         
-        const data = await response.json();
-        
-        if (!data || !data.course) {
-          console.error('Client: Course data is missing in the response');
-          throw new Error('Course data is missing in the response');
+        if (!courseData) {
+          console.error('Client: Course data is missing');
+          throw new Error('Course not found');
         }
         
-        console.log('Client: Course data received:', data.course);
-        setCourse(data.course);
+        console.log('Client: Course data received:', courseData);
+        setCourse(courseData);
         setError(null);
       } catch (err: any) {
         console.error('Client: Error fetching course:', err);
@@ -186,24 +172,15 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
       
       console.log('Submitting waitlist data:', waitlistData);
       
-      const response = await fetch('/api/waitlist', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(waitlistData),
-      });
+      const { data, error } = await supabase
+        .from('waitlist')
+        .insert([waitlistData])
+        .select()
+        .single();
       
-      const data = await response.json();
-      
-      if (!response.ok) {
-        // If the course is not actually full, redirect to booking
-        if (data.shouldBook) {
-          router.push(`/book-course/${course.id}`);
-          return;
-        }
-        
-        throw new Error(data.error || 'Failed to join waitlist');
+      if (error) {
+        console.error('Error submitting waitlist form:', error);
+        throw new Error(error.message);
       }
       
       console.log('Waitlist entry created:', data);

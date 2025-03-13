@@ -256,6 +256,8 @@ const Courses = () => {
         setIsLoading(true);
         setError(null);
 
+        console.log('Fetching courses from Supabase...');
+        
         // Fetch courses directly from Supabase
         const { data: courses, error } = await supabase
           .from('course_instances')
@@ -271,11 +273,22 @@ const Courses = () => {
           .order('start_date', { ascending: true });
 
         if (error) {
+          console.error('Supabase error:', error);
           throw error;
+        }
+
+        console.log('Courses fetched:', courses);
+
+        if (!courses || courses.length === 0) {
+          console.log('No courses found');
+          setTryCourses([]);
+          setLongerCourses([]);
+          return;
         }
 
         // Map courses to display format
         const displayCourses = courses.map(mapApiCourseToDisplayCourse);
+        console.log('Mapped courses:', displayCourses);
 
         // Split courses into try-on and longer courses
         const tryOn = displayCourses.filter(course => 
@@ -284,6 +297,9 @@ const Courses = () => {
         const longer = displayCourses.filter(course => 
           !course.name.toLowerCase().includes('prova')
         );
+
+        console.log('Try-on courses:', tryOn);
+        console.log('Longer courses:', longer);
 
         setTryCourses(tryOn);
         setLongerCourses(longer);
