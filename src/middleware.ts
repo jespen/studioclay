@@ -4,6 +4,15 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   console.log('Middleware running on path:', request.nextUrl.pathname);
   
+  // Check if we're in a static export context
+  const isStaticExport = process.env.NEXT_RUNTIME !== 'nodejs';
+  console.log('Is static export:', isStaticExport);
+  
+  // If we're in a static export, simply pass through all requests
+  if (isStaticExport) {
+    return NextResponse.next();
+  }
+  
   // Add cache-control headers in development mode
   const response = NextResponse.next();
   

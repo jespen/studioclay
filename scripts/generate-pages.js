@@ -5,6 +5,7 @@ const routes = [
   { path: '/', file: 'index.html' },
   { path: '/admin', file: 'admin.html' },
   { path: '/admin/dashboard', file: 'admin/dashboard.html' },
+  { path: '/contact', file: 'contact.html' },
   { path: '/waitlist-confirmation', file: 'waitlist-confirmation.html' }
 ];
 

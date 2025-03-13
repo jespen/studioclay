@@ -3,19 +3,27 @@ const nextConfig = {
   reactStrictMode: true,
   images: {
     domains: ['images.unsplash.com'],
-    unoptimized: true,
+    // Only unoptimize images for static exports
+    unoptimized: process.env.VERCEL !== 'true',
   },
   eslint: {
     // Disable ESLint during production builds
     ignoreDuringBuilds: true,
   },
-  // Enable trailing slashes for consistent routing
-  trailingSlash: true,
-  // Enable static exports for the build process
-  output: 'export',
-  // Disable basePath and assetPrefix for Vercel deployment
-  basePath: '',
-  assetPrefix: '',
+  // Conditionally apply static export settings
+  ...(process.env.VERCEL === 'true' 
+    ? {
+        // Vercel-specific settings
+        trailingSlash: true,
+      }
+    : {
+        // Settings for non-Vercel environments (static export)
+        output: 'export',
+        trailingSlash: true,
+        basePath: '',
+        assetPrefix: '',
+      }
+  ),
   // Ensure we don't show waitlist-confirmation as index
   skipTrailingSlashRedirect: true,
   // Generate all static pages

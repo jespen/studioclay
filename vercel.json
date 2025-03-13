@@ -3,5 +3,11 @@
   "trailingSlash": true,
   "redirects": [
     { "source": "/(.*)", "has": [{ "type": "host", "value": "studioclay.se" }], "permanent": false, "destination": "https://www.studioclay.se/$1" }
+  ],
+  "rewrites": [
+    { "source": "/contact", "destination": "/contact.html" },
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/admin/dashboard", "destination": "/admin/dashboard.html" },
+    { "source": "/waitlist-confirmation", "destination": "/waitlist-confirmation.html" }
   ]
 } 
