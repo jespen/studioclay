@@ -77,7 +77,7 @@ const Navbar = () => {
             onClick={(e) => scrollToSection('home', e)}
           >
             <Image 
-              src="/gallery/logo.jpeg"
+              src="/gallery/logo2.jpeg"
               alt="Studio Clay Logo"
               width={40}
               height={40}
