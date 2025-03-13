@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 
+// Configure the route for static export
+export const dynamic = 'force-static';
+export const revalidate = 0;
+
 export async function GET() {
   return NextResponse.json({
     supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'present' : 'missing',
