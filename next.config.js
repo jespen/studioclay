@@ -9,14 +9,13 @@ const nextConfig = {
     // Disable ESLint during production builds
     ignoreDuringBuilds: true,
   },
-  // Disable default basePath
-  basePath: '',
-  // Make sure assets have proper paths
-  assetPrefix: '',
   // Enable trailing slashes for consistent routing
   trailingSlash: true,
   // Enable static exports for the build process
-  output: 'export'
+  output: 'export',
+  // Disable basePath and assetPrefix for Vercel deployment
+  basePath: '',
+  assetPrefix: ''
 };
 
 module.exports = nextConfig; 

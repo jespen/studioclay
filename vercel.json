@@ -1,12 +1,4 @@
 {
-  "version": 2,
-  "buildCommand": "next build",
-  "outputDirectory": "out",
   "cleanUrls": true,
-  "trailingSlash": true,
-  "rewrites": [
-    { "source": "/", "destination": "/" },
-    { "source": "/contact", "destination": "/contact" }
-  ]
-
+  "trailingSlash": true
 } 
