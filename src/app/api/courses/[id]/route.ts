@@ -7,13 +7,17 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+interface RouteContext {
+  params: Promise<{ id: string }>;
+}
+
 export async function GET(
   request: Request,
-  context: { params: { id: string } }
+  context: RouteContext
 ) {
   try {
-    // Properly await and extract the ID parameter in Next.js 13+
-    const id = await Promise.resolve(context.params.id);
+    const resolvedParams = await context.params;
+    const id = resolvedParams.id;
     console.log('API: Fetching course instance with ID:', id);
     
     // Fetch the course instance with its template
@@ -70,10 +74,11 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  context: { params: { id: string } }
+  context: RouteContext
 ) {
   try {
-    const id = await Promise.resolve(context.params.id);
+    const resolvedParams = await context.params;
+    const id = resolvedParams.id;
     console.log('PATCH request for course instance ID:', id);
     
     if (!id) {
@@ -195,10 +200,11 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  context: RouteContext
 ) {
-  const { id } = params;
   try {
+    const resolvedParams = await context.params;
+    const id = resolvedParams.id;
     console.log('DELETE request for course instance ID:', id);
     
     if (!id) {
