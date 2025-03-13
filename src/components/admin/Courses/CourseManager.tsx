@@ -358,7 +358,7 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
             </SectionContainer>
             
             {/* Debug information - moved to the end */}
-            <div style={{ 
+            {/* <div style={{ 
               background: '#f0f0f0', 
               padding: '10px', 
               marginTop: '30px',
@@ -388,7 +388,7 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
                   </li>
                 ))}
               </ul>
-            </div>
+            </div> */}
           </>
         )}
       </main>

@@ -6,6 +6,7 @@ import SendIcon from '@mui/icons-material/Send';
 import Image from 'next/image';
 import emailjs from '@emailjs/browser';
 import { emailConfig } from '../config/email';
+import Link from 'next/link';
 
 /*
  * EmailJS Setup Instructions:
@@ -26,6 +27,8 @@ const Kontakt = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone: '',
+    eventType: '',
     message: '',
   });
 
@@ -84,13 +87,23 @@ const Kontakt = () => {
       sender_email: formData.email,
       reply_to: formData.email,
       
+      // For the phone number
+      phone: formData.phone,
+      phone_number: formData.phone,
+      sender_phone: formData.phone,
+      
+      // For the event type
+      event_type: formData.eventType,
+      eventType: formData.eventType,
+      type: formData.eventType,
+      
       // For the message
-      message: formData.message,
-      content: formData.message,
-      body: formData.message,
+      message: `Event typ: ${formData.eventType}\nTelefon: ${formData.phone}\n\nMeddelande:\n${formData.message}`,
+      content: `Event typ: ${formData.eventType}\nTelefon: ${formData.phone}\n\nMeddelande:\n${formData.message}`,
+      body: `Event typ: ${formData.eventType}\nTelefon: ${formData.phone}\n\nMeddelande:\n${formData.message}`,
       
       // Additional context
-      subject: 'Nytt meddelande från Studio Clay webbformulär'
+      subject: 'Ny eventförfrågan från Studio Clay webbformulär'
     };
     
     // Log the parameters being sent for debugging
@@ -109,7 +122,7 @@ const Kontakt = () => {
         console.log('Email sent successfully:', response);
         setIsSubmitting(false);
         setSubmitted(true);
-        setFormData({ name: '', email: '', message: '' });
+        setFormData({ name: '', email: '', phone: '', eventType: '', message: '' });
         
         // Reset success message after 5 seconds
         setTimeout(() => {
@@ -143,12 +156,14 @@ const Kontakt = () => {
   };
 
   return (
-    <section className="py-16 md:py-24 pb-48" id="kontakt">
+    <section className="py-16 md:py-24" id="kontakt">
       <div className="container-custom mb-12">
         <div className="text-center mb-20">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Kontakta Oss</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Skräddarsy ditt event</h2>
           <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Redo att starta ditt nästa projekt? Kontakta oss idag för en konsultation.
+            Låt oss skapa en unik keramikupplevelse tillsammans! Oavsett om det gäller företagsevent, 
+            privata bokningar, specialkurser eller möhippa - vi anpassar varje tillfälle efter era önskemål 
+            och behov. Kontakta oss för att diskutera hur vi kan göra ert event minnesvärt.
           </p>
         </div>
 
@@ -175,10 +190,6 @@ const Kontakt = () => {
 
           <Grid item xs={12} md={6}>
             <Box sx={{ maxWidth: '90%', mx: 'auto' }}>
-              <Typography variant="h5" component="h3" sx={{ fontWeight: 600, mb: 3 }}>
-                Skicka ett Meddelande
-              </Typography>
-              
               {submitted ? (
                 <Paper 
                   elevation={2} 
@@ -191,11 +202,25 @@ const Kontakt = () => {
                   }}
                 >
                   <Typography variant="h6" sx={{ mb: 1, fontWeight: 500 }}>
-                    Tack!
+                    Tack för din förfrågan!
                   </Typography>
                   <Typography variant="body1" color="text.secondary">
-                    Ditt meddelande har skickats. Vi återkommer till dig så snart som möjligt.
+                    Vi återkommer till dig så snart som möjligt.
                   </Typography>
+                  <Button
+                    component={Link}
+                    href="/"
+                    variant="contained"
+                    sx={{ 
+                      mt: 3,
+                      bgcolor: '#547264', 
+                      '&:hover': {
+                        bgcolor: '#3f5a4b'
+                      }
+                    }}
+                  >
+                    Tillbaka till startsidan
+                  </Button>
                 </Paper>
               ) : (
                 <Paper elevation={2} sx={{ p: 3, borderRadius: 2, mb: 8 }}>
@@ -229,19 +254,45 @@ const Kontakt = () => {
                       variant="outlined"
                       size="small"
                     />
+
+                    <TextField
+                      fullWidth
+                      required
+                      id="phone"
+                      name="phone"
+                      label="Ditt Telefonnummer"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      variant="outlined"
+                      size="small"
+                    />
+
+                    <TextField
+                      fullWidth
+                      required
+                      id="eventType"
+                      name="eventType"
+                      label="Typ av Event"
+                      value={formData.eventType}
+                      onChange={handleChange}
+                      variant="outlined"
+                      size="small"
+                      placeholder="T.ex. Företagsevent, Privat bokning, Möhippa"
+                    />
                     
                     <TextField
                       fullWidth
                       required
                       id="message"
                       name="message"
-                      label="Ditt Meddelande"
+                      label="Övriga kommentarer"
                       value={formData.message}
                       onChange={handleChange}
                       multiline
                       rows={4}
                       variant="outlined"
                       size="small"
+                      placeholder="Berätta mer om dina önskemål och förväntningar"
                     />
                     
                     <Button
@@ -260,7 +311,7 @@ const Kontakt = () => {
                         }
                       }}
                     >
-                      {isSubmitting ? 'Skickar...' : 'Skicka Meddelande'}
+                      {isSubmitting ? 'Skickar...' : 'Kontakta mig'}
                     </Button>
                   </Box>
                 </Paper>

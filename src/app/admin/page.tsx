@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase, type Session } from '@/utils/supabase';
 import Image from 'next/image';
 import Link from 'next/link';
+import styles from './admin.module.css';
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('');
@@ -164,139 +165,142 @@ export default function AdminLogin() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center">
+    <div className={styles.loginContainer}>
+      <div className={styles.formContainer}>
+        <div className={styles.headerSection}>
           <Link href="/">
-            <div className="mx-auto h-24 w-24 relative">
-              <Image
-                src="/logo.svg" 
-                alt="Studio Clay Logo"
-                width={100}
-                height={100}
-                priority
-              />
+            <div className="mx-auto mb-6">
+              <h1 className="text-3xl font-bold text-[#547264]">Studio Clay</h1>
             </div>
           </Link>
-          <h2 className="mt-6 text-3xl font-bold tracking-tight text-gray-900">
-            Admin Login
+          <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+            Admin Inloggning
           </h2>
-          {isLocalAuth && (
-            <p className="mt-2 text-sm text-gray-500">
-              Using local authentication system
+          {/* {isLocalAuth && (
+            <p className="text-sm text-gray-500">
+              Använder lokalt autentiseringssystem
             </p>
           )}
           {!isLocalAuth && connectionVerified && (
-            <p className="mt-2 text-sm text-green-500">
-              Using Supabase authentication
+            <p className="text-sm text-green-500">
+              Använder Supabase autentisering
             </p>
-          )}
+          )} */}
         </div>
         
-        {/* Show login success message and dashboard button */}
         {loginSuccess ? (
-          <div className="mt-8 bg-white shadow-md rounded-lg p-6 text-center">
-            <div className="text-green-600 text-xl font-bold mb-3">✓ Login Successful!</div>
-            <p className="mb-4 text-gray-700">You can now access the admin dashboard.</p>
+          <div className="text-center">
+            <div className="text-green-600 text-xl font-semibold mb-3">✓ Inloggningen lyckades!</div>
+            <p className="mb-6 text-gray-600">Du kan nu komma åt admin-panelen.</p>
             <a 
               href={`/admin/dashboard?source=local&ts=${Date.now()}`}
-              className="block w-full bg-indigo-600 text-white py-3 px-4 rounded-md hover:bg-indigo-700 font-medium"
+              className={styles.submitButton}
             >
-              Go to Dashboard →
+              Gå till Dashboard →
             </a>
           </div>
         ) : (
-          <form className="mt-8 space-y-6" onSubmit={handleSignIn}>
-            <div className="-space-y-px rounded-md shadow-sm">
-              <div>
-                <label htmlFor="email-address" className="sr-only">
-                  Email address
-                </label>
+          <form onSubmit={handleSignIn} className="space-y-6">
+            <div className="space-y-6">
+              {/* Email Input */}
+              <div className={styles.materialInput}>
                 <input
                   id="email-address"
                   name="email"
                   type="email"
                   autoComplete="email"
                   required
-                  className="relative block w-full rounded-t-md border-0 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                  placeholder="Email address"
+                  className="peer"
+                  placeholder=" "
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
-              </div>
-              <div>
-                <label htmlFor="password" className="sr-only">
-                  Password
+                <label htmlFor="email-address">
+                  E-postadress
                 </label>
+              </div>
+
+              {/* Password Input */}
+              <div className={styles.materialInput}>
                 <input
                   id="password"
                   name="password"
                   type="password"
                   autoComplete="current-password"
                   required
-                  className="relative block w-full rounded-b-md border-0 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                  placeholder="Password"
+                  className="peer"
+                  placeholder=" "
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+                <label htmlFor="password">
+                  Lösenord
+                </label>
               </div>
             </div>
 
-            {error && (
-              <div className="text-red-500 text-sm text-center">{error}</div>
+            {/* {error && (
+              <div className={styles.errorMessage}>{error}</div>
             )}
             
             {debugInfo && (
-              <div className="text-gray-500 text-xs mt-2 p-2 bg-gray-100 rounded">
-                <p>Debug Info (remove in production):</p>
+              <div className={styles.debugInfo}>
+                <p className="font-medium mb-1">Debug Info (ta bort i produktion):</p>
                 <div 
                   className="whitespace-pre-wrap break-all"
                   dangerouslySetInnerHTML={{ __html: debugInfo }}
                 />
               </div>
-            )}
+            )} */}
 
             <div>
               <button
                 type="submit"
                 disabled={loading}
-                className="group relative flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-70"
+                className={styles.submitButton}
               >
-                {loading ? 'Signing in...' : 'Sign in'}
+                {loading ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Loggar in...
+                  </span>
+                ) : 'Logga in'}
               </button>
             </div>
 
-            {/* Debug Tools - Remove in production */}
-            <div className="mt-4 border-t border-gray-200 pt-4">
-              <p className="text-xs text-gray-500 mb-2">Troubleshooting Options:</p>
-              <div className="flex space-x-2">
+            {/* Debug Tools */}
+            <div className={styles.debugSection}>
+              <p className="text-xs text-gray-500 mb-3 text-center font-medium">Felsökningsalternativ</p>
+              <div className={styles.debugButtons}>
                 <button
                   type="button"
                   disabled={loading}
                   onClick={async () => {
                     if (!email || !password) {
-                      setError('Email and password are required');
+                      setError('E-post och lösenord krävs');
                       return;
                     }
                     setLoading(true);
                     try {
-                      // Test Supabase auth directly
                       const response = await fetch('/api/auth/supabase-login-test', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({email, password: password.trim()})
                       });
                       const result = await response.json();
-                      setDebugInfo(`Supabase Auth Test Result: ${JSON.stringify(result, null, 2)}`);
+                      setDebugInfo(`Supabase Auth Test Resultat: ${JSON.stringify(result, null, 2)}`);
                     } catch (err: any) {
-                      setDebugInfo(`Supabase Auth Test Error: ${err.message}`);
+                      setDebugInfo(`Supabase Auth Test Fel: ${err.message}`);
                     } finally {
                       setLoading(false);
                     }
                   }}
-                  className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded"
+                  className={`${styles.debugButton} ${styles.debugButtonBlue}`}
                 >
-                  Test Supabase Auth
+                  Testa Supabase Auth
                 </button>
                 
                 <button
@@ -304,15 +308,14 @@ export default function AdminLogin() {
                   disabled={loading}
                   onClick={async () => {
                     if (!email || !password) {
-                      setError('Email and password are required');
+                      setError('E-post och lösenord krävs');
                       return;
                     }
-                    // Test local auth directly
                     await tryLocalAuth();
                   }}
-                  className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded"
+                  className={`${styles.debugButton} ${styles.debugButtonGreen}`}
                 >
-                  Test Local Auth
+                  Testa Lokal Auth
                 </button>
               </div>
             </div>

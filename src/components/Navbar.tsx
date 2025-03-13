@@ -63,7 +63,7 @@ const Navbar = () => {
     { id: 'services', label: 'Övriga kurser' },
     { id: 'presentkort', label: 'Presentkort' },
     { id: 'works', label: 'Portfolio' },
-    { id: 'kontakt', label: 'Kontakt' },
+    { id: 'kontakt', label: 'Kontakt', href: '/contact' },
   ];
 
   return (
@@ -77,7 +77,7 @@ const Navbar = () => {
             onClick={(e) => scrollToSection('home', e)}
           >
             <Image 
-              src="/gallery/logo.tiff"
+              src="/gallery/logo.jpeg"
               alt="Studio Clay Logo"
               width={40}
               height={40}
@@ -92,9 +92,9 @@ const Navbar = () => {
               {navigationLinks.map((link) => (
                 <a
                   key={link.id}
-                  href={`#${link.id}`}
+                  href={link.href || `#${link.id}`}
                   className={`${styles.navLink} ${activeSection === link.id ? styles.activeLink : ''}`}
-                  onClick={(e) => scrollToSection(link.id, e)}
+                  onClick={(e) => link.href ? null : scrollToSection(link.id, e)}
                 >
                   {link.label}
                 </a>
@@ -129,9 +129,15 @@ const Navbar = () => {
               {navigationLinks.map((link) => (
                 <a
                   key={link.id}
-                  href={`#${link.id}`}
+                  href={link.href || `#${link.id}`}
                   className={`${styles.mobileNavLink} ${activeSection === link.id ? styles.activeLink : ''}`}
-                  onClick={(e) => scrollToSection(link.id, e)}
+                  onClick={(e) => {
+                    if (link.href) {
+                      closeMenu();
+                    } else {
+                      scrollToSection(link.id, e);
+                    }
+                  }}
                 >
                   {link.label}
                 </a>

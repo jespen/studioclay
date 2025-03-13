@@ -36,12 +36,12 @@ export const emailConfig = {
   
   // Replace with your EmailJS service ID from Email Services > [Your Service]
   // Example: serviceId: "service_abc123",
-  serviceId: "service_jvmjaj6",
+  serviceId: "service_w9z50hz",
   
   // Replace with your EmailJS template ID from Email Templates > [Your Template]
   // Example: templateId: "template_xyz789",
   templateId: "template_jfc0wcs",
   
   // The recipient email address - already set correctly
-  recipientEmail: "evabjorkhtc@gmail.com"
+  recipientEmail: "eva@studioclay.se"
 }; 
