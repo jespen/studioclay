@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
+interface RouteContext {
+  params: Promise<{ id: string }>;
+}
+
 // Update a booking
 export async function PATCH(
   request: Request,
-  context: { params: { id: string } }
+  context: RouteContext
 ) {
   try {
-    // Properly await and extract the ID parameter in Next.js 13+
-    const id = await Promise.resolve(context.params.id);
+    const resolvedParams = await context.params;
+    const id = resolvedParams.id;
     console.log('API: Updating booking with ID:', id);
     
     // Get the update data from the request
@@ -132,10 +136,11 @@ export async function PATCH(
 // Delete a booking
 export async function DELETE(
   request: Request,
-  context: { params: { id: string } }
+  context: RouteContext
 ) {
   try {
-    const id = await Promise.resolve(context.params.id);
+    const resolvedParams = await context.params;
+    const id = resolvedParams.id;
     console.log('API: Processing booking cancellation for ID:', id);
     
     // First, get the booking details
