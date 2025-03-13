@@ -196,7 +196,7 @@ export default function AdminLogin() {
               href={`/admin/dashboard?source=local&ts=${Date.now()}`}
               className={styles.submitButton}
             >
-              Gå till Dashboard →
+              Gå till Dashboard test →
             </a>
           </div>
         ) : (
