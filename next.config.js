@@ -4,37 +4,35 @@ const nextConfig = {
   images: {
     domains: ['images.unsplash.com'],
     // Only unoptimize images for static exports
-    unoptimized: process.env.VERCEL !== 'true',
+    unoptimized: process.env.VERCEL !== 'true' && process.env.NODE_ENV !== 'development',
   },
   eslint: {
     // Disable ESLint during production builds
     ignoreDuringBuilds: true,
   },
   // Conditionally apply static export settings
-  ...(process.env.VERCEL === 'true' 
+  ...(process.env.VERCEL === 'true'
     ? {
         // Vercel-specific settings
         trailingSlash: true,
       }
-    : {
-        // Settings for non-Vercel environments (static export)
-        output: 'export',
-        trailingSlash: true,
-        basePath: '',
-        assetPrefix: '',
-      }
+    : process.env.NODE_ENV === 'development'
+      ? {
+          // Development settings (no static export)
+          trailingSlash: true,
+        }
+      : {
+          // Production settings for non-Vercel environments (static export)
+          output: 'export',
+          trailingSlash: true,
+          basePath: '',
+          assetPrefix: '',
+          // Disable middleware in static export mode
+          skipMiddlewareUrlNormalize: true,
+        }
   ),
   // Ensure we don't show waitlist-confirmation as index
   skipTrailingSlashRedirect: true,
-  // Generate all static pages
-  generateStaticParams: async () => {
-    return {
-      '/': { page: '/' },
-      '/admin': { page: '/admin' },
-      '/admin/dashboard': { page: '/admin/dashboard' },
-      '/waitlist-confirmation': { page: '/waitlist-confirmation' }
-    }
-  }
 };
 
 module.exports = nextConfig; 

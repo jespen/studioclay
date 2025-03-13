@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// This middleware is disabled in static export mode through config
 export function middleware(request: NextRequest) {
-  console.log('Middleware running on path:', request.nextUrl.pathname);
-  
-  // Check if we're in a static export context
-  const isStaticExport = process.env.NEXT_RUNTIME !== 'nodejs';
-  console.log('Is static export:', isStaticExport);
-  
-  // If we're in a static export, simply pass through all requests
-  if (isStaticExport) {
+  // In development mode with static export, we should never reach here
+  // If we do, just pass through
+  if (process.env.NODE_ENV === 'development' && 
+      (process.env.NEXT_PUBLIC_OUTPUT_MODE === 'export' || 
+       process.env.NEXT_RUNTIME !== 'nodejs')) {
     return NextResponse.next();
   }
+  
+  // Only runs on non-static Vercel deployment or dev without static export
   
   // Add cache-control headers in development mode
   const response = NextResponse.next();
@@ -27,11 +27,6 @@ export function middleware(request: NextRequest) {
     response.headers.set('Expires', '0');
   }
 
-  // Ensure root path shows homepage
-  if (request.nextUrl.pathname === '/') {
-    return response;
-  }
-  
   // Only run admin authentication on admin dashboard routes
   if (request.nextUrl.pathname.startsWith('/admin/dashboard')) {
     console.log('Checking session for dashboard access');
@@ -41,20 +36,12 @@ export function middleware(request: NextRequest) {
     const activeSessionCookie = request.cookies.get('admin-session-active')?.value;
     const userEmailCookie = request.cookies.get('admin-user')?.value;
     
-    console.log('Session data cookie exists:', !!sessionDataCookie);
-    console.log('Active session cookie exists:', !!activeSessionCookie);
-    console.log('User email cookie exists:', !!userEmailCookie);
-    
     // Allow access if ANY of these cookies exist (being more lenient)
     if (sessionDataCookie || activeSessionCookie || userEmailCookie) {
-      console.log('Found at least one valid session cookie, allowing access');
       return response;
     }
     
     // If we get here, no valid session found, redirect to login
-    console.log('No valid session, redirecting to login');
-    
-    // Store the original url as a query parameter to redirect back after login
     const url = new URL('/admin', request.url);
     url.searchParams.set('redirect', 'dashboard');
     
