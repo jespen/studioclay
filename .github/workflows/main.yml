@@ -10,6 +10,19 @@ jobs:
     steps:
       - name: 🚚 Get latest code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for debugging
+
+      - name: 🔍 Git Debug Info
+        run: |
+          echo "Git Configuration:"
+          git config --list
+          echo "\nGit Status:"
+          git status
+          echo "\nGit Remote:"
+          git remote -v
+          echo "\nCurrent Branch:"
+          git branch --show-current
 
       - name: 🔧 Setup Node.js
         uses: actions/setup-node@v3
@@ -20,12 +33,19 @@ jobs:
         run: |
           npm install
           echo "Dependencies installed successfully"
+          echo "Node version: $(node -v)"
+          echo "NPM version: $(npm -v)"
 
       - name: 🏗️ Build
         run: |
           npm run build
           echo "Build completed successfully"
+          echo "Checking build output:"
           ls -la out || echo "No out directory found"
+          if [ -d "out" ]; then
+            echo "Contents of out directory:"
+            ls -la out
+          fi
 
       - name: 🔍 Debug Info
         run: |
@@ -34,6 +54,9 @@ jobs:
           ls -la
           echo "Out directory contents:"
           ls -la out || echo "No out directory found"
+          echo "Checking for critical files:"
+          ls -la out/index.html || echo "index.html not found"
+          ls -la out/.htaccess || echo ".htaccess not found"
 
       - name: 📂 Sync files
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
@@ -68,3 +91,12 @@ jobs:
           state-name: .ftp-deploy-sync-state.json
           dry-run: false
           log-level: verbose
+          timeout: 300000  # 5 minutes timeout
+
+      - name: 🔍 Post-Deploy Check
+        run: |
+          echo "Checking deployment status..."
+          curl -I https://studioclay.se || echo "Site not accessible"
+          echo "Checking for critical files on server..."
+          curl -I https://studioclay.se/index.html || echo "index.html not accessible"
+          curl -I https://studioclay.se/.htaccess || echo ".htaccess not accessible"
