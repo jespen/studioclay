@@ -17,10 +17,23 @@ jobs:
           node-version: '18'
 
       - name: 📦 Install dependencies
-        run: npm install
+        run: |
+          npm install
+          echo "Dependencies installed successfully"
 
       - name: 🏗️ Build
-        run: npm run build
+        run: |
+          npm run build
+          echo "Build completed successfully"
+          ls -la out || echo "No out directory found"
+
+      - name: 🔍 Debug Info
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo "Out directory contents:"
+          ls -la out || echo "No out directory found"
 
       - name: 📂 Sync files
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
@@ -51,3 +64,7 @@ jobs:
             **/tailwind.config.js
             **/postcss.config.js
             **/.eslintrc.json
+          local-dir: ./out/
+          state-name: .ftp-deploy-sync-state.json
+          dry-run: false
+          log-level: verbose
