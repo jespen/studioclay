@@ -1,8 +1,11 @@
 {
-  "routes": [
-    { "src": "/", "dest": "/" },
-    { "src": "/contact", "dest": "/contact" },
-    { "handle": "filesystem" }
-  ],
-  "cleanUrls": true
+  "version": 2,
+  "buildCommand": "next build",
+  "outputDirectory": "out",
+  "cleanUrls": true,
+  "trailingSlash": true,
+  "rewrites": [
+    { "source": "/", "destination": "/" },
+    { "source": "/contact", "destination": "/contact" }
+  ]
 } 
