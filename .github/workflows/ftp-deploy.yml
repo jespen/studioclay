@@ -40,18 +40,13 @@ jobs:
         cat .env.production
       
     - name: 🏗️ Build project
-      env:
-        NODE_ENV: production
-        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        NEXT_PUBLIC_API_URL: https://studioclay.se/api
       run: |
         echo "Starting build..."
-        echo "Checking environment variables during build..."
-        echo "NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:+present}"
-        echo "NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:+present}"
-        echo "NODE_ENV: $NODE_ENV"
+        NEXT_PUBLIC_SUPABASE_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" \
+        NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+        SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+        NEXT_PUBLIC_API_URL="https://studioclay.se/api" \
+        NODE_ENV=production \
         npm run build
         echo "Build completed"
       
