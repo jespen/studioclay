@@ -1,4 +1,11 @@
 {
+  "version": 2,
+  "buildCommand": "next build",
+  "outputDirectory": "out",
+  "github": {
+    "enabled": true,
+    "silent": false
+  },
   "routes": [
     { "src": "/", "dest": "/" },
     { "src": "/contact", "dest": "/contact" },
