@@ -1,24 +1,13 @@
 import { NextResponse } from 'next/server';
 
+// Configure the route for static export
 export const dynamic = 'force-static';
+export const revalidate = 0;
 
-import { getInstructors } from '@/lib/supabaseAdmin';
-
-export async function GET(request: Request) {
-  try {
-    // Get instructors from Supabase
-    const instructors = await getInstructors();
-    
-    // Return the instructors as JSON
-    return NextResponse.json({ 
-      instructors,
-      count: instructors.length
-    });
-  } catch (error) {
-    console.error('Error fetching instructors:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch instructors' }, 
-      { status: 500 }
-    );
-  }
+export async function GET() {
+  // Since we're using static exports, we'll handle instructors on the client side
+  return NextResponse.json({
+    message: 'Instructors are handled on the client side',
+    status: 'success'
+  });
 } 
