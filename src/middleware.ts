@@ -17,6 +17,11 @@ export function middleware(request: NextRequest) {
     response.headers.set('Pragma', 'no-cache');
     response.headers.set('Expires', '0');
   }
+
+  // Ensure root path shows homepage
+  if (request.nextUrl.pathname === '/') {
+    return response;
+  }
   
   // Only run admin authentication on admin dashboard routes
   if (request.nextUrl.pathname.startsWith('/admin/dashboard')) {
@@ -51,7 +56,7 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
-// Configure the middleware to run on all paths
+// Configure the middleware to run on all paths except static files
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:jpg|jpeg|gif|png|svg|ico|webp)$).*)'],
 }; 
