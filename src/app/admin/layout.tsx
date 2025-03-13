@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { generateStaticParams } from './static';
 
 export const metadata: Metadata = {
   title: 'Admin - Studio Clay',
@@ -9,14 +10,12 @@ export const metadata: Metadata = {
   },
 };
 
+export { generateStaticParams };
+
 export default function AdminLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
-  return (
-    <div className="admin-section">
-      {children}
-    </div>
-  );
+}) {
+  return <>{children}</>;
 } 

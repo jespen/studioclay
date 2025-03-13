@@ -7,7 +7,7 @@
     "dev:clean": "rm -rf .next && next dev",
     "dev:reset": "pkill -f 'node.*next' || true && rm -rf .next node_modules/.cache && npm run dev",
     "build": "next build",
-    "postbuild": "node scripts/flatten-build.js",
+    "postbuild": "node scripts/flatten-build.js && node scripts/generate-pages.js",
     "export": "next build && node scripts/flatten-build.js && node scripts/backup-site.js",
     "backup": "node scripts/backup-site.js",
     "start": "next start",

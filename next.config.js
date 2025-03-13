@@ -17,7 +17,16 @@ const nextConfig = {
   basePath: '',
   assetPrefix: '',
   // Ensure we don't show waitlist-confirmation as index
-  skipTrailingSlashRedirect: true
+  skipTrailingSlashRedirect: true,
+  // Generate all static pages
+  generateStaticParams: async () => {
+    return {
+      '/': { page: '/' },
+      '/admin': { page: '/admin' },
+      '/admin/dashboard': { page: '/admin/dashboard' },
+      '/waitlist-confirmation': { page: '/waitlist-confirmation' }
+    }
+  }
 };
 
 module.exports = nextConfig; 
