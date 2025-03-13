@@ -16,16 +16,7 @@ const nextConfig = {
   // Enable trailing slashes for consistent routing
   trailingSlash: true,
   // Enable static exports for the build process
-  output: 'export',
-  // Configure static paths
-  exportPathMap: async function() {
-    return {
-      '/': { page: '/' },
-      '/contact': { page: '/contact' },
-      '/admin': { page: '/admin' },
-      '/admin/dashboard': { page: '/admin/dashboard' }
-    }
-  }
+  output: 'export'
 };
 
 module.exports = nextConfig; 
