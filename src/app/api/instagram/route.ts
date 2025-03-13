@@ -3,7 +3,7 @@ import { cache } from 'react';
 
 // Add these lines to make the route compatible with static export
 export const dynamic = 'force-static';
-export const revalidate = false;
+export const revalidate = 0;
 
 // Cache the Instagram data for 1 hour
 const CACHE_TIME = 60 * 60 * 1000; // 1 hour in milliseconds
@@ -277,38 +277,5 @@ const fetchInstagramPosts = cache(async (accessToken: string) => {
 });
 
 export async function GET() {
-  // Get the token from environment variables
-  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
-  
-  if (!accessToken) {
-    console.error('Instagram access token not configured');
-    // Return mock data if no token is configured
-    return NextResponse.json({ posts: mockInstagramPosts });
-  }
-  
-  console.log('Instagram access token found, length:', accessToken.length);
-  
-  try {
-    // Get Facebook user information to understand the context
-    console.log('\n=== STARTING INSTAGRAM API REQUEST ===');
-    console.log('First, getting Facebook user information...');
-    const meUrl = `https://graph.facebook.com/v18.0/me?fields=id,name,email&access_token=${accessToken}`;
-    
-    try {
-      const meResponse = await fetch(meUrl);
-      const meData = await meResponse.json();
-      console.log('Facebook user information:', JSON.stringify(meData, null, 2));
-    } catch (meError) {
-      console.error('Error fetching Facebook user information:', meError);
-    }
-    
-    console.log('\nAttempting to connect to Instagram API...');
-    const instagramPosts = await fetchInstagramPosts(accessToken);
-    console.log(`Returning ${instagramPosts.length} Instagram posts`);
-    return NextResponse.json({ posts: instagramPosts });
-  } catch (error: any) {
-    console.error('Error in Instagram API route:', error);
-    // Return mock data on error
-    return NextResponse.json({ posts: mockInstagramPosts });
-  }
+  return NextResponse.json({ data: mockInstagramPosts });
 }
