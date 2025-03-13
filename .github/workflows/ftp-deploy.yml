@@ -33,9 +33,21 @@ jobs:
     - name: 🔍 Debug environment variables
       run: |
         echo "Checking environment variables..."
-        echo "NEXT_PUBLIC_SUPABASE_URL exists: $([[ -n ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }} ]] && echo 'yes' || echo 'no')"
-        echo "NEXT_PUBLIC_SUPABASE_ANON_KEY exists: $([[ -n ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }} ]] && echo 'yes' || echo 'no')"
-        echo "SUPABASE_SERVICE_ROLE_KEY exists: $([[ -n ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }} ]] && echo 'yes' || echo 'no')"
+        if [ -n "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" ]; then
+          echo "NEXT_PUBLIC_SUPABASE_URL is set"
+        else
+          echo "NEXT_PUBLIC_SUPABASE_URL is not set"
+        fi
+        if [ -n "${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" ]; then
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY is set"
+        else
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY is not set"
+        fi
+        if [ -n "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
+          echo "SUPABASE_SERVICE_ROLE_KEY is set"
+        else
+          echo "SUPABASE_SERVICE_ROLE_KEY is not set"
+        fi
         echo "Contents of .env.production:"
         cat .env.production
       
