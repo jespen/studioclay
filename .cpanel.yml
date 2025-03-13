@@ -2,7 +2,7 @@
 deployment:
   tasks:
     # Set correct paths
-    - export DEPLOYPATH=0143-D0EB/home/gyckh2yxxvf4/public_html
+    - export DEPLOYPATH=/home/gyckh2yxxvf4/public_html
     - export BACKUPPATH=/home/gyckh2yxxvf4/site_backups
     - export LOGPATH=/home/gyckh2yxxvf4/deployment_logs
     
