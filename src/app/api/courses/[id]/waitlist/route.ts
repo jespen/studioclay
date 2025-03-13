@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
+interface RouteContext {
+  params: Promise<{ id: string }>;
+}
+
 export async function GET(
   request: Request,
-  context: { params: { id: string } }
+  context: RouteContext
 ) {
   try {
-    // Properly await and extract the ID parameter in Next.js 13+
-    const id = await Promise.resolve(context.params.id);
+    const resolvedParams = await context.params;
+    const id = resolvedParams.id;
     console.log('API: Fetching waitlist for course:', id);
     
     // Fetch all waitlist entries for this course
