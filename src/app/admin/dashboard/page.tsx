@@ -5,6 +5,11 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabase';
 import AdminDashboard from '../../../components/admin/Dashboard/AdminDashboard';
 
+// Add static generation support for static exports
+export function generateStaticParams() {
+  return [];
+}
+
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);

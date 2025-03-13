@@ -1,4 +1,7 @@
 {
   "cleanUrls": true,
-  "trailingSlash": true
+  "trailingSlash": true,
+  "redirects": [
+    { "source": "/(.*)", "has": [{ "type": "host", "value": "studioclay.se" }], "permanent": false, "destination": "https://www.studioclay.se/$1" }
+  ]
 } 

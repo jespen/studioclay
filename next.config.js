@@ -15,7 +15,9 @@ const nextConfig = {
   output: 'export',
   // Disable basePath and assetPrefix for Vercel deployment
   basePath: '',
-  assetPrefix: ''
+  assetPrefix: '',
+  // Ensure we don't show waitlist-confirmation as index
+  skipTrailingSlashRedirect: true
 };
 
 module.exports = nextConfig; 
