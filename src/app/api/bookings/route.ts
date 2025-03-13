@@ -1,14 +1,10 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 
 // Configure the route for static export
 export const dynamic = 'force-static';
 export const revalidate = 0;
 
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
-
-export async function POST(request: NextRequest) {
-  // Since we're using static exports, we'll handle bookings on the client side
+export async function POST() {
   return NextResponse.json({
     message: 'Bookings are handled on the client side',
     status: 'success'
