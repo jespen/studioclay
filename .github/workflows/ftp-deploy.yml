@@ -33,20 +33,28 @@ jobs:
     - name: 🔍 Debug environment variables
       run: |
         echo "Checking environment variables..."
-        echo "NEXT_PUBLIC_SUPABASE_URL length: ${#NEXT_PUBLIC_SUPABASE_URL}"
-        echo "NEXT_PUBLIC_SUPABASE_ANON_KEY length: ${#NEXT_PUBLIC_SUPABASE_ANON_KEY}"
-        echo "SUPABASE_SERVICE_ROLE_KEY length: ${#SUPABASE_SERVICE_ROLE_KEY}"
+        echo "NEXT_PUBLIC_SUPABASE_URL exists: $([[ -n ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }} ]] && echo 'yes' || echo 'no')"
+        echo "NEXT_PUBLIC_SUPABASE_ANON_KEY exists: $([[ -n ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }} ]] && echo 'yes' || echo 'no')"
+        echo "SUPABASE_SERVICE_ROLE_KEY exists: $([[ -n ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }} ]] && echo 'yes' || echo 'no')"
         echo "Contents of .env.production:"
         cat .env.production
       
     - name: 🏗️ Build project
       run: |
         echo "Starting build..."
-        NEXT_PUBLIC_SUPABASE_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" \
-        NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
-        SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-        NEXT_PUBLIC_API_URL="https://studioclay.se/api" \
-        NODE_ENV=production \
+        echo "Setting environment variables..."
+        export NEXT_PUBLIC_SUPABASE_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
+        export NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}"
+        export SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+        export NEXT_PUBLIC_API_URL="https://studioclay.se/api"
+        export NODE_ENV=production
+        
+        echo "Verifying environment variables..."
+        echo "NEXT_PUBLIC_SUPABASE_URL length: ${#NEXT_PUBLIC_SUPABASE_URL}"
+        echo "NEXT_PUBLIC_SUPABASE_ANON_KEY length: ${#NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+        echo "SUPABASE_SERVICE_ROLE_KEY length: ${#SUPABASE_SERVICE_ROLE_KEY}"
+        
+        echo "Running build..."
         npm run build
         echo "Build completed"
       
