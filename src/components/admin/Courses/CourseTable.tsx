@@ -59,7 +59,7 @@ export const CourseTable: React.FC<CourseTableProps> = ({
               <td className={styles.tableCell}>
                 <div>
                   <h3 className={styles.courseTitle}>{course.title}</h3>
-                  <p className={styles.courseDescription}>{course.description}</p>
+                  <p className={styles.courseDescription}>{course.template?.description || 'Ingen beskrivning tillgänglig'}</p>
                 </div>
               </td>
               <td className={styles.tableCell}>
