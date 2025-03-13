@@ -47,3 +47,6 @@ next-env.d.ts
 
 # backup zip files
 /backups/*.zip
+
+# supabase
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVndXdsZ3BubW5ycXBlZW1nd295Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MTUxMjcwMCwiZXhwIjoyMDU3MDg4NzAwfQ.zypnulQIUHZ0hdKycfHGpgCAPLytTAcaqk-F2L4Mheg
