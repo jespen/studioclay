@@ -7,11 +7,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import styles from './admin.module.css';
 
-// Add static generation support for static exports
-export function generateStaticParams() {
-  return [];
-}
-
 export default function AdminLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
