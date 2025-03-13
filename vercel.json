@@ -2,14 +2,11 @@
   "version": 2,
   "buildCommand": "next build",
   "outputDirectory": "out",
-  "github": {
-    "enabled": true,
-    "silent": false
-  },
-  "routes": [
-    { "src": "/", "dest": "/" },
-    { "src": "/contact", "dest": "/contact" },
-    { "handle": "filesystem" }
-  ],
-  "cleanUrls": true
+  "cleanUrls": true,
+  "trailingSlash": true,
+  "rewrites": [
+    { "source": "/", "destination": "/" },
+    { "source": "/contact", "destination": "/contact" }
+  ]
+
 } 
