@@ -191,7 +191,7 @@ export default function AdminLogin() {
         {loginSuccess ? (
           <div className="text-center">
             <div className="text-green-600 text-xl font-semibold mb-3">✓ Inloggningen lyckades!</div>
-            <p className="mb-6 text-gray-600">Du kan nu komma åt admin-panelen.</p>
+            <p className="mb-6 text-gray-600">Du kan nu komma åt admin-panelen. Test</p>
             <a 
               href={`/admin/dashboard?source=local&ts=${Date.now()}`}
               className={styles.submitButton}
