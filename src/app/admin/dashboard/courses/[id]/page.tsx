@@ -1,14 +1,15 @@
 import CourseManagementPage from '@/components/admin/Courses/CourseManagementPage';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
   searchParams: { [key: string]: string | string[] | undefined };
 }
 
 export default async function CoursePage({ params }: PageProps) {
-  const courseId = params.id;
+  const resolvedParams = await params;
+  const courseId = resolvedParams.id;
   
   return <CourseManagementPage courseId={courseId} />;
 } 
