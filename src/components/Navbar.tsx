@@ -58,12 +58,12 @@ const Navbar = () => {
   }, []);
 
   const navigationLinks = [
-    { id: 'home', label: 'Hem' },   
-    { id: 'courses', label: 'Kurser' },
-    { id: 'services', label: 'Övriga kurser' },
-    { id: 'presentkort', label: 'Presentkort' },
-    { id: 'works', label: 'Portfolio' },
-    { id: 'kontakt', label: 'Kontakt', href: '/contact' },
+    { id: 'home', label: 'Hem', isAnchor: true },   
+    { id: 'courses', label: 'Kurser', isAnchor: true },
+    { id: 'services', label: 'Övriga kurser', isAnchor: true },
+    { id: 'presentkort', label: 'Presentkort', isAnchor: true },
+    { id: 'works', label: 'Portfolio', isAnchor: true },
+    { id: 'kontakt', label: 'Kontakt', href: '/contact', isAnchor: false },
   ];
 
   return (
@@ -90,14 +90,25 @@ const Navbar = () => {
           <div className={styles.navigation}>
             <div className={styles.navList}>
               {navigationLinks.map((link) => (
-                <a
-                  key={link.id}
-                  href={link.href || `#${link.id}`}
-                  className={`${styles.navLink} ${activeSection === link.id ? styles.activeLink : ''}`}
-                  onClick={(e) => link.href ? null : scrollToSection(link.id, e)}
-                >
-                  {link.label}
-                </a>
+                link.isAnchor ? (
+                  <a
+                    key={link.id}
+                    href={`#${link.id}`}
+                    className={`${styles.navLink} ${activeSection === link.id ? styles.activeLink : ''}`}
+                    onClick={(e) => scrollToSection(link.id, e)}
+                  >
+                    {link.label}
+                  </a>
+                ) : (
+                  <Link
+                    key={link.id}
+                    href={link.href || '/'}
+                    className={`${styles.navLink} ${activeSection === link.id ? styles.activeLink : ''}`}
+                    onClick={closeMenu}
+                  >
+                    {link.label}
+                  </Link>
+                )
               ))}
             </div>
           </div>
@@ -127,20 +138,25 @@ const Navbar = () => {
           <div className={styles.container}>
             <div className={styles.mobileNavList}>
               {navigationLinks.map((link) => (
-                <a
-                  key={link.id}
-                  href={link.href || `#${link.id}`}
-                  className={`${styles.mobileNavLink} ${activeSection === link.id ? styles.activeLink : ''}`}
-                  onClick={(e) => {
-                    if (link.href) {
-                      closeMenu();
-                    } else {
-                      scrollToSection(link.id, e);
-                    }
-                  }}
-                >
-                  {link.label}
-                </a>
+                link.isAnchor ? (
+                  <a
+                    key={link.id}
+                    href={`#${link.id}`}
+                    className={`${styles.mobileNavLink} ${activeSection === link.id ? styles.activeLink : ''}`}
+                    onClick={(e) => scrollToSection(link.id, e)}
+                  >
+                    {link.label}
+                  </a>
+                ) : (
+                  <Link
+                    key={link.id}
+                    href={link.href || '/'}
+                    className={`${styles.mobileNavLink} ${activeSection === link.id ? styles.activeLink : ''}`}
+                    onClick={closeMenu}
+                  >
+                    {link.label}
+                  </Link>
+                )
               ))}
             </div>
           </div>
