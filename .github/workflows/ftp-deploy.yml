@@ -23,33 +23,33 @@ jobs:
       
     - name: 📝 Create .env.production file
       run: |
-        echo "NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" > .env.production
+        echo "Creating .env.production file..."
+        echo "NEXT_PUBLIC_API_URL=https://studioclay.se/api" > .env.production
         echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env.production
         echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" >> .env.production
         echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env.production
+        echo "Environment file created"
         
     - name: 🔍 Debug environment variables
       run: |
         echo "Checking environment variables..."
-        if [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then
-          echo "NEXT_PUBLIC_SUPABASE_URL is set"
-        else
-          echo "NEXT_PUBLIC_SUPABASE_URL is not set"
-        fi
-        if [ -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY is set"
-        else
-          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY is not set"
-        fi
+        echo "NEXT_PUBLIC_SUPABASE_URL length: ${#NEXT_PUBLIC_SUPABASE_URL}"
+        echo "NEXT_PUBLIC_SUPABASE_ANON_KEY length: ${#NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+        echo "SUPABASE_SERVICE_ROLE_KEY length: ${#SUPABASE_SERVICE_ROLE_KEY}"
+        echo "Contents of .env.production:"
+        cat .env.production
       
     - name: 🏗️ Build project
       env:
         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        NEXT_PUBLIC_API_URL: https://studioclay.se/api
       run: |
         echo "Starting build..."
+        echo "Checking environment variables during build..."
+        echo "NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:+present}"
+        echo "NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:+present}"
         npm run build
         echo "Build completed"
       
