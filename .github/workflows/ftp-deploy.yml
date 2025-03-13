@@ -27,6 +27,20 @@ jobs:
         echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env.production
         echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" >> .env.production
         echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env.production
+        
+    - name: 🔍 Debug environment variables
+      run: |
+        echo "Checking environment variables..."
+        if [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+          echo "NEXT_PUBLIC_SUPABASE_URL is set"
+        else
+          echo "NEXT_PUBLIC_SUPABASE_URL is not set"
+        fi
+        if [ -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY is set"
+        else
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY is not set"
+        fi
       
     - name: 🏗️ Build project
       env:
@@ -34,7 +48,10 @@ jobs:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
-      run: npm run build
+      run: |
+        echo "Starting build..."
+        npm run build
+        echo "Build completed"
       
     - name: 📂 Sync files
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
