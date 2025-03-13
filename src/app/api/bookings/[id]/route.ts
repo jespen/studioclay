@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 // Configure the route for static export
 export const dynamic = 'force-static';
@@ -17,7 +18,10 @@ interface RouteContext {
 }
 
 // Update a booking
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   // Since we're using static exports, we'll handle bookings on the client side
   return NextResponse.json({
     message: 'Bookings are handled on the client side',
@@ -26,7 +30,10 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 // Delete a booking
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   // Since we're using static exports, we'll handle bookings on the client side
   return NextResponse.json({
     message: 'Bookings are handled on the client side',
