@@ -1,6 +1,3 @@
--- First, create a backup of the courses table
-CREATE TABLE courses_backup AS SELECT * FROM courses;
-
 -- Insert existing courses into course_templates
 INSERT INTO course_templates (
   id,

@@ -83,11 +83,7 @@ export const CourseTable: React.FC<CourseTableProps> = ({
                   {onPublish && variant !== 'past' && (
                     <button
                       className={`${styles.actionButton} ${course.is_published ? styles.unpublishButton : styles.publishButton}`}
-                      onClick={() => {
-                        console.log('Publish button clicked for course:', course);
-                        console.log('Course ID:', course.id);
-                        onPublish(course);
-                      }}
+                      onClick={() => onPublish(course)}
                     >
                       {course.is_published ? 'Avpublicera' : 'Publicera'}
                     </button>

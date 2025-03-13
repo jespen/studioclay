@@ -37,23 +37,17 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
       }
       
       const data = await response.json();
-      console.log('Received courses data:', data);
-      console.log('Raw API response:', JSON.stringify(data));
       
       // Extract courses array from the response
       if (data && Array.isArray(data.courses)) {
-        console.log('Setting courses from data.courses:', data.courses);
         setCourses(data.courses);
       } else if (Array.isArray(data)) {
-        console.log('Setting courses from data array:', data);
         setCourses(data);
       } else {
-        console.error('Unexpected API response format:', data);
         setCourses([]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -62,16 +56,9 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
   // Function to toggle course publish status
   async function handlePublishToggle(course: Course) {
     try {
-      console.log('Toggling publish status for course:', course);
-      
-      // Make sure we're using the instance ID
       if (!course.id) {
-        console.error('Invalid course object - missing instance ID:', course);
         throw new Error('Course instance ID is required');
       }
-      
-      console.log('Course instance ID:', course.id);
-      console.log('API URL:', `/api/courses/${course.id}`);
       
       const response = await fetch(`/api/courses/${course.id}`, {
         method: 'PATCH',
@@ -84,14 +71,12 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         const errorMessage = errorData?.error || `Failed to update course: ${response.status}`;
-        console.error('Error details:', errorData);
         throw new Error(errorMessage);
       }
 
       await fetchCourses(); // Refresh the courses list
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      console.error('Error toggling publish status:', err);
       alert(`Kunde inte ändra publiceringsstatus: ${err instanceof Error ? err.message : 'Okänt fel'}`);
     }
   }
@@ -99,30 +84,24 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
   // Function to delete a course
   async function handleDeleteCourse(courseId: string) {
     try {
-      console.log(`Attempting to delete course with ID: ${courseId}`);
-      
       const response = await fetch(`/api/courses/${courseId}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        console.error('Delete course error response:', response.status, errorData);
         throw new Error(`Failed to delete course: ${response.status}${errorData ? ' - ' + JSON.stringify(errorData) : ''}`);
       }
 
-      console.log(`Successfully deleted course with ID: ${courseId}`);
       await fetchCourses(); // Refresh the courses list
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      console.error('Error in handleDeleteCourse:', err);
       alert(`Kunde inte ta bort kursen: ${err instanceof Error ? err.message : 'Okänt fel'}`);
     }
   }
 
   // Function to handle editing a course
   function handleEditCourse(course: Course) {
-    console.log('Navigating to edit page for course:', course);
     router.push(`/admin/dashboard/courses/${course.id}`);
   }
 
@@ -135,9 +114,6 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
   // Function to handle saving a course
   async function handleSaveCourse(courseData: Partial<Course>) {
     try {
-      console.log('Saving course with data:', courseData);
-      
-      // If we have an ID, we're updating an existing course
       if (courseData.id) {
         const response = await fetch(`/api/courses/${courseData.id}`, {
           method: 'PATCH',
@@ -150,7 +126,7 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
             end_date: courseData.end_date,
             max_participants: courseData.max_participants,
             is_published: courseData.is_published,
-            template: courseData.template // Include template updates
+            template: courseData.template
           }),
         });
 
@@ -158,22 +134,7 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
           const errorData = await response.json().catch(() => null);
           throw new Error(`Failed to save course: ${response.status}${errorData ? ' - ' + JSON.stringify(errorData) : ''}`);
         }
-      } else if (courseData.template_id) {
-        // Creating a new instance of an existing template
-        const response = await fetch('/api/courses', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(courseData),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
-          throw new Error(`Failed to save course: ${response.status}${errorData ? ' - ' + JSON.stringify(errorData) : ''}`);
-        }
       } else {
-        // Creating a completely new course with a new template
         const response = await fetch('/api/courses', {
           method: 'POST',
           headers: {
@@ -192,7 +153,6 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
       setShowForm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      console.error('Error saving course:', err);
       alert(`Kunde inte spara kursen: ${err instanceof Error ? err.message : 'Okänt fel'}`);
     }
   }
@@ -206,51 +166,25 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
   useEffect(() => {
     if (courses.length > 0) {
       const now = new Date();
-      let allCourses = [...courses];
+      const allCourses = maxCourses ? courses.slice(0, maxCourses) : courses;
       
-      console.log('All courses from API:', allCourses);
-      console.log('maxCourses parameter:', maxCourses);
+      const activeCourses = allCourses.filter(course => {
+        const endDate = course.end_date ? new Date(course.end_date) : null;
+        return endDate && endDate > now;
+      });
       
-      // Filter out any courses without an ID
-      allCourses = allCourses.filter(course => course && course.id);
+      const pastCourses = allCourses.filter(course => {
+        const endDate = course.end_date ? new Date(course.end_date) : null;
+        return endDate && endDate <= now;
+      });
       
-      // Apply maxCourses limit if specified
-      let limitedCourses = [...allCourses];
-      if (maxCourses && maxCourses > 0) {
-        console.log(`Limiting to ${maxCourses} courses`);
-        limitedCourses = allCourses.slice(0, maxCourses);
-        console.log('Courses after limiting:', limitedCourses);
-      } else {
-        console.log('No course limit applied');
-      }
-      
-      console.log('Current date for filtering:', now.toISOString());
-      
-      // First, separate courses by date (past vs. active)
-      const pastCourses = limitedCourses.filter(course => 
-        course.end_date && new Date(course.end_date) < now
-      );
-      
-      const activeCourses = limitedCourses.filter(course => 
-        !course.end_date || new Date(course.end_date) >= now
-      );
-      
-      console.log('Past courses:', pastCourses);
-      console.log('Active courses:', activeCourses);
-      
-      // Then, for active courses, separate by published status
-      const publishedActiveCourses = activeCourses.filter(course => course.is_published);
-      const unpublishedActiveCourses = activeCourses.filter(course => !course.is_published);
-      
-      // Set the state variables
-      setPublishedActiveCourses(publishedActiveCourses);
-      setUnpublishedActiveCourses(unpublishedActiveCourses);
-      setPastCourses(pastCourses); // All past courses go to "Tidigare kurser" regardless of published status
+      setPublishedActiveCourses(activeCourses.filter(course => course.is_published));
+      setUnpublishedActiveCourses(activeCourses.filter(course => !course.is_published));
+      setPastCourses(pastCourses);
       
       // Automatically unpublish past courses that are still marked as published
       pastCourses.forEach(async (course) => {
         if (course.is_published) {
-          console.log(`Auto-unpublishing past course: ${course.title} (ID: ${course.id})`);
           try {
             const response = await fetch(`/api/courses/${course.id}`, {
               method: 'PATCH',
@@ -262,8 +196,6 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
             
             if (!response.ok) {
               console.error(`Failed to auto-unpublish course ${course.id}: ${response.statusText}`);
-            } else {
-              console.log(`Successfully auto-unpublished course: ${course.title}`);
             }
           } catch (error) {
             console.error(`Error auto-unpublishing course ${course.id}:`, error);
@@ -277,16 +209,6 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
           fetchCourses();
         }, 1000);
       }
-
-      console.log('=== COURSE DEBUG INFO ===');
-      console.log(`All courses: ${allCourses.length}`);
-      console.log(`Limited courses: ${limitedCourses.length}`);
-      console.log(`Active courses: ${activeCourses.length}`);
-      console.log(`Published active courses: ${publishedActiveCourses.length}`);
-      console.log(`Unpublished active courses: ${unpublishedActiveCourses.length}`);
-      console.log(`Past courses: ${pastCourses.length}`);
-      console.log('Unpublished active courses details:', unpublishedActiveCourses);
-      console.log('=== END DEBUG INFO ===');
     }
   }, [courses, maxCourses]);
 
@@ -356,39 +278,6 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
                 onDelete={handleDeleteCourse}
               />
             </SectionContainer>
-            
-            {/* Debug information - moved to the end */}
-            {/* <div style={{ 
-              background: '#f0f0f0', 
-              padding: '10px', 
-              marginTop: '30px',
-              marginBottom: '20px', 
-              border: '1px solid #ccc',
-              borderRadius: '4px'
-            }}>
-              <h3>Debug Information</h3>
-              <p>All courses: {courses.length}</p>
-              <p>Active courses: {publishedActiveCourses.length + unpublishedActiveCourses.length}</p>
-              <p>Published active courses: {publishedActiveCourses.length}</p>
-              <p>Unpublished active courses: {unpublishedActiveCourses.length}</p>
-              <p>Past courses: {pastCourses.length}</p>
-              <h4>Unpublished Active Courses:</h4>
-              <ul>
-                {unpublishedActiveCourses.map(course => (
-                  <li key={course.id}>
-                    {course.title} - End date: {course.end_date} - Published: {course.is_published ? 'Yes' : 'No'}
-                  </li>
-                ))}
-              </ul>
-              <h4>Past Courses:</h4>
-              <ul>
-                {pastCourses.map(course => (
-                  <li key={course.id}>
-                    {course.title} - End date: {course.end_date} - Published: {course.is_published ? 'Yes' : 'No'}
-                  </li>
-                ))}
-              </ul>
-            </div> */}
           </>
         )}
       </main>

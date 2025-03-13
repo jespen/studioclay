@@ -28,16 +28,13 @@ SELECT
   is_published,
   created_at,
   updated_at
-FROM courses_backup;
+FROM courses;
 
 -- Update course_instances to link to templates
 UPDATE course_instances
-SET template_id = courses_backup.id
-FROM courses_backup
-WHERE course_instances.id = courses_backup.id;
-
--- Drop the backup table
-DROP TABLE courses_backup;
+SET template_id = courses.id
+FROM courses
+WHERE course_instances.id = courses.id;
 
 -- Create a sample course template if none exist
 INSERT INTO course_templates (
