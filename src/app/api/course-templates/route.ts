@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-static';
+
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 // GET all course templates

@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-static';
+
 import { createClient } from '@supabase/supabase-js';
 
 export async function GET() {

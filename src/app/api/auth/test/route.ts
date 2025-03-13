@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-static';
+
 import { NextResponse } from 'next/server';
 import dns from 'dns';
 import { promisify } from 'util';

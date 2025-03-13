@@ -15,6 +15,8 @@ const nextConfig = {
   assetPrefix: '',
   // Disable subfolders for routing
   trailingSlash: true,
+  // Enable static exports for the build process
+  output: 'export',
 };
 
 module.exports = nextConfig; 

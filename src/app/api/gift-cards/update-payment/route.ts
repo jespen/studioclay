@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-static';
+
 import { createClient } from '@supabase/supabase-js';
 
 // Create a Supabase client with admin privileges

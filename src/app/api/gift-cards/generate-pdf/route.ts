@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-static';
+
 import { jsPDF } from 'jspdf';
 
 export async function POST(request: NextRequest) {

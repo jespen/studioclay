@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-static';
+
 import crypto from 'crypto';
 
 // This is a simplified auth system for development use

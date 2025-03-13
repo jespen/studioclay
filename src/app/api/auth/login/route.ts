@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-static';
+
 import { NextResponse } from 'next/server';
 
 // Create a Supabase server-side client (using server environment variables)

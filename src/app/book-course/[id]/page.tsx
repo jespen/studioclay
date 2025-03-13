@@ -1,5 +1,11 @@
 import BookingForm from '@/components/BookingForm';
 
+export function generateStaticParams() {
+  // This is a placeholder function to satisfy static export requirements
+  // In a real app, you would generate all possible parameter values
+  return [{ id: 'placeholder' }];
+}
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }

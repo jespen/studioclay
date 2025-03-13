@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-static';
+
 import dns from 'dns';
 import { promisify } from 'util';
 

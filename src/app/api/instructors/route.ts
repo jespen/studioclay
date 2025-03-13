@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-static';
+
 import { getInstructors } from '@/lib/supabaseAdmin';
 
 export async function GET(request: Request) {
