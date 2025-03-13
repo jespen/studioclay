@@ -20,7 +20,7 @@ interface RouteContext {
 // Update a booking
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   // Since we're using static exports, we'll handle bookings on the client side
   return NextResponse.json({
@@ -32,7 +32,7 @@ export async function PATCH(
 // Delete a booking
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   // Since we're using static exports, we'll handle bookings on the client side
   return NextResponse.json({
