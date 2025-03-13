@@ -13,10 +13,19 @@ const nextConfig = {
   basePath: '',
   // Make sure assets have proper paths
   assetPrefix: '',
-  // Disable subfolders for routing
+  // Enable trailing slashes for consistent routing
   trailingSlash: true,
   // Enable static exports for the build process
   output: 'export',
+  // Configure static paths
+  exportPathMap: async function() {
+    return {
+      '/': { page: '/' },
+      '/contact': { page: '/contact' },
+      '/admin': { page: '/admin' },
+      '/admin/dashboard': { page: '/admin/dashboard' }
+    }
+  }
 };
 
 module.exports = nextConfig; 
