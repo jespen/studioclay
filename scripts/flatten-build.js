@@ -87,31 +87,43 @@ fs.rmSync(outDir, { recursive: true, force: true });
 fs.renameSync(tempDir, outDir);
 
 // Create a .htaccess file to handle routing correctly
-const htaccessContent = `# Ensure proper handling of files
+const htaccessContent = `# Enable rewrite engine
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
   
-  # If the request is not for an existing file, directory or symbolic link,
-  # serve the requested HTML file or index.html
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteCond %{REQUEST_FILENAME} !-l
-  RewriteCond %{REQUEST_URI} !\\.[a-zA-Z0-9]{2,4}$
-  RewriteRule (.*) $1.html [L]
+  # Force HTTPS
+  RewriteCond %{HTTPS} off
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
   
-  # If the .html version doesn't exist either, serve index.html
+  # Handle specific routes first - direct to specific HTML files
+  RewriteRule ^admin/?$ /admin.html [L]
+  RewriteRule ^admin/dashboard/?$ /admin/dashboard.html [L]
+  RewriteRule ^contact/?$ /contact.html [L]
+  RewriteRule ^waitlist-confirmation/?$ /waitlist-confirmation.html [L]
+  
+  # If the request is not for an existing file or directory
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteCond %{REQUEST_FILENAME} !-l
+  RewriteCond %{REQUEST_URI} !^/(_next|images|static)/
+  RewriteCond %{REQUEST_URI} !\\.(css|js|jpg|jpeg|png|gif|ico|svg|woff2?)$ [NC]
+  RewriteRule ^([^/]+)/?$ /$1.html [L]
+  
+  # If nothing else matches, try index.html
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /index.html [L]
 </IfModule>
+
+# Set default index
+DirectoryIndex index.html
 
 # Set correct MIME types
 <IfModule mod_mime.c>
   AddType application/javascript .js
   AddType text/css .css
   AddType image/svg+xml .svg
+  AddType text/html .html
 </IfModule>
 
 # Enable CORS for font files
@@ -125,7 +137,7 @@ const htaccessContent = `# Ensure proper handling of files
 <IfModule mod_expires.c>
   ExpiresActive On
   ExpiresDefault "access plus 1 month"
-  ExpiresByType text/html "access plus 1 hour"
+  ExpiresByType text/html "access plus 0 seconds"
   ExpiresByType text/css "access plus 1 week"
   ExpiresByType application/javascript "access plus 1 week"
   ExpiresByType image/png "access plus 1 month"
@@ -136,6 +148,15 @@ const htaccessContent = `# Ensure proper handling of files
   ExpiresByType font/woff "access plus 1 month"
   ExpiresByType font/woff2 "access plus 1 month"
 </IfModule>
+
+# Prevent directory listing
+Options -Indexes
+
+# Set default character set
+AddDefaultCharset UTF-8
+
+# Disable MultiViews to prevent Apache from trying to rewrite URLs
+Options -MultiViews
 `;
 
 // Write the .htaccess file
