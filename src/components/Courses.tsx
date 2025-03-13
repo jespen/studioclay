@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import styles from '@/styles/Courses.module.css';
+import { supabase } from '@/utils/supabase';
 
 // Define the course type based on the API response
 interface ApiCourse {
@@ -253,93 +254,47 @@ const Courses = () => {
     const fetchCourses = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch('/api/courses/?published=true');
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch courses: ${response.status} ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        
-        if (!data.courses || !Array.isArray(data.courses)) {
-          throw new Error('Invalid response format');
-        }
-        
-        // Convert API courses to display courses
-        const displayCourses = data.courses.map(mapApiCourseToDisplayCourse);
-        
-        // Categorize courses
-        const tryOnCourses: DisplayCourse[] = [];
-        const otherCourses: DisplayCourse[] = [];
-        
-        displayCourses.forEach((course: DisplayCourse) => {
-          // If course is fully booked, show "Fullbokad" instead of "Populär"
-          if (course.isFullyBooked) {
-            course.isPopular = true; // Use the popular tag to show "Fullbokad"
-          } else {
-            // Otherwise, mark some courses as popular (e.g., every second course)
-            course.isPopular = course.id.charCodeAt(0) % 2 === 0;
-          }
-          
-          if (course.name.toLowerCase().includes('prova')) {
-            tryOnCourses.push(course);
-          } else {
-            otherCourses.push(course);
-          }
-        });
-        
-        setTryCourses(tryOnCourses);
-        setLongerCourses(otherCourses);
         setError(null);
+
+        // Fetch courses directly from Supabase
+        const { data: courses, error } = await supabase
+          .from('course_instances')
+          .select(`
+            *,
+            template:course_templates (
+              category:categories (
+                name
+              )
+            )
+          `)
+          .eq('is_published', true)
+          .order('start_date', { ascending: true });
+
+        if (error) {
+          throw error;
+        }
+
+        // Map courses to display format
+        const displayCourses = courses.map(mapApiCourseToDisplayCourse);
+
+        // Split courses into try-on and longer courses
+        const tryOn = displayCourses.filter(course => 
+          course.name.toLowerCase().includes('prova')
+        );
+        const longer = displayCourses.filter(course => 
+          !course.name.toLowerCase().includes('prova')
+        );
+
+        setTryCourses(tryOn);
+        setLongerCourses(longer);
       } catch (err: any) {
         console.error('Error fetching courses:', err);
-        setError('Failed to load courses. Please try again later.');
-        
-        // Fallback to sample data if API fails
-        setTryCourses([
-          {
-            id: '1',
-            name: 'Prova-på',
-            price: '800',
-            frequency: 'kr',
-            sessionCount: '',
-            description: 'Perfekt för nybörjare som vill prova på drejning för första gången.',
-            isPopular: false,
-            isFullyBooked: false,
-            features: tryOnFeatures,
-            buttonText: 'Boka kurs',
-            buttonLink: '/book-course/1',
-            isSecondary: false,
-            startDate: '2025-03-27T11:30:00+00:00',
-            endDate: '2025-03-27T13:30:00+00:00',
-            availableSpots: null,
-          },
-        ]);
-        
-        setLongerCourses([
-          {
-            id: '2',
-            name: 'Helgkurs',
-            price: '3000',
-            frequency: 'kr',
-            sessionCount: '',
-            description: 'Drejning, med inslag av korta förevisningsdrejningar som inspiration och tips för eget drejande.',
-            isPopular: true,
-            isFullyBooked: false,
-            features: helgkursFeatures,
-            buttonText: 'Boka kurs',
-            buttonLink: '/book-course/2',
-            isSecondary: false,
-            startDate: '2025-03-22T09:00:00+00:00',
-            endDate: '2025-03-23T16:00:00+00:00',
-            availableSpots: null,
-          },
-        ]);
+        setError(err.message || 'Failed to load courses');
       } finally {
         setIsLoading(false);
       }
     };
-    
+
     fetchCourses();
   }, []);
 
@@ -575,4 +530,4 @@ const Courses = () => {
   );
 };
 
-export default Courses; 
+export default Courses;

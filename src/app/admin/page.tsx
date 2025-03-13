@@ -51,30 +51,42 @@ export default function AdminLogin() {
     if (isLocalAuth) return;
     
     // Check if user is already logged in
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('Session check error:', error);
-        setDebugInfo(`Session check error: ${error.message}`);
-        return;
+    const checkSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Session check error:', error);
+          setDebugInfo(`Session check error: ${error.message}`);
+          return;
+        }
+        
+        setSession(session);
+        if (session) {
+          router.push('/admin/dashboard');
+        }
+      } catch (err: any) {
+        console.error('Error checking session:', err);
+        setDebugInfo(`Error checking session: ${err.message || 'Unknown error'}`);
       }
-      
-      setSession(session);
-      if (session) {
-        router.push('/admin/dashboard');
-      }
-    });
+    };
+
+    checkSession();
 
     // Set up auth state listener
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event);
       setSession(session);
       if (session) {
         router.push('/admin/dashboard');
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [router, isLocalAuth]);
 
   async function handleSignIn(e: React.FormEvent) {
