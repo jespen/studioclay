@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Studio Clay | Creative Design Studio v1.0",
+  title: "Studio Clay | Creative Design Studio - Test Deploy",
   description: "Studio Clay is a creative design studio specializing in branding, web design, and digital experiences.",
 };
 
