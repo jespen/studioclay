@@ -6,11 +6,16 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+interface RouteContext {
+  params: Promise<{ id: string }>;
+}
+
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: RouteContext
 ) {
-  const id = await context.params.id;
+  const resolvedParams = await context.params;
+  const id = resolvedParams.id;
   try {
     console.log('API: Fetching course template with ID:', id);
     
@@ -46,9 +51,10 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  context: { params: { id: string } }
+  context: RouteContext
 ) {
-  const id = await context.params.id;
+  const resolvedParams = await context.params;
+  const id = resolvedParams.id;
   try {
     console.log('PATCH request for course template ID:', id);
     
@@ -118,9 +124,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  context: { params: { id: string } }
+  context: RouteContext
 ) {
-  const id = await context.params.id;
+  const resolvedParams = await context.params;
+  const id = resolvedParams.id;
   try {
     console.log('DELETE request for course template ID:', id);
     
