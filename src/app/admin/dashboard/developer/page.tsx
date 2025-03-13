@@ -123,7 +123,7 @@ export default function DeveloperPage() {
                     <p><strong>Cookie Names:</strong> {debugInfo.sessionInfo.cookieNames.join(', ')}</p>
                   </div>
                 ) : (
-                  <p>No session information available at this time</p>
+                  <p>No session information available at this dfd time</p>
                 )}
               </div>
             </div>
