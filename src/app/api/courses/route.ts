@@ -1,44 +1,38 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
-
-// Configure the route for static export
-export const dynamic = 'force-static';
-export const revalidate = 0;
+import { supabaseAdmin, getCourses } from '@/lib/supabaseAdmin';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const published = searchParams.get('published') || 'all';
-
-    // Fetch courses from Supabase
-    const { data: courses, error } = await supabaseAdmin
-      .from('course_instances')
-      .select(`
-        *,
-        template:course_templates (
-          category:categories (
-            name
-          )
-        )
-      `)
-      .order('start_date', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching courses:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const publishedParam = searchParams.get('published');
+    
+    // Convert the string parameter to boolean or undefined
+    let published: boolean | undefined;
+    if (publishedParam === 'true') published = true;
+    if (publishedParam === 'false') published = false;
+    
+    console.log('API Route: Fetching courses with published:', published);
+    
+    const courses = await getCourses({ published });
+    
+    console.log('API Route: Fetched courses count:', courses.length);
+    if (courses.length > 0) {
+      console.log('API Route: First course sample:', {
+        id: courses[0].id,
+        title: courses[0].title,
+        template_id: courses[0].template_id,
+        category: courses[0].category?.name,
+        instructor: courses[0].instructor?.name,
+        start_date: courses[0].start_date,
+        max_participants: courses[0].max_participants,
+        current_participants: courses[0].current_participants,
+        availableSpots: courses[0].availableSpots
+      });
     }
 
-    // Filter courses based on published parameter
-    let filteredCourses = courses;
-    if (published === 'true') {
-      filteredCourses = courses.filter(course => course.is_published);
-    } else if (published === 'false') {
-      filteredCourses = courses.filter(course => !course.is_published);
-    }
-
-    return NextResponse.json({ courses: filteredCourses });
+    return NextResponse.json({ courses });
   } catch (error) {
-    console.error('Error in courses API:', error);
+    console.error('API Route Error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch courses' },
       { status: 500 }
@@ -49,19 +43,69 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    
-    const { data, error } = await supabaseAdmin
+    console.log('Creating new course with body:', body);
+
+    // First create the course template
+    const { data: template, error: templateError } = await supabaseAdmin
+      .from('course_templates')
+      .insert([{
+        title: body.title,
+        description: body.description,
+        price: body.price,
+        currency: body.currency,
+        category_id: body.category_id,
+        instructor_id: body.instructor_id,
+        is_published: body.is_published,
+        max_participants: body.max_participants, // Move this to template
+        location: body.location
+      }])
+      .select(`
+        *,
+        category:categories (*),
+        instructor:instructors (*)
+      `)
+      .single();
+
+    if (templateError) {
+      console.error('Error creating course template:', templateError);
+      return NextResponse.json({ error: templateError.message }, { status: 500 });
+    }
+
+    console.log('Created template:', template);
+
+    // Then create the course instance
+    const { data: instance, error: instanceError } = await supabaseAdmin
       .from('course_instances')
-      .insert([body])
+      .insert([{
+        template_id: template.id,
+        current_participants: 0,
+        max_participants: body.max_participants,
+        start_date: body.start_date,
+        end_date: body.end_date,
+        status: 'scheduled'
+      }])
       .select()
       .single();
 
-    if (error) {
-      console.error('Error creating course:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (instanceError) {
+      console.error('Error creating course instance:', instanceError);
+      return NextResponse.json({ error: instanceError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ course: data });
+    console.log('Created instance:', instance);
+
+    const processedCourse = {
+      ...template,
+      ...instance,
+      template_id: template.id,
+      category: template.category || null,
+      instructor: template.instructor || null,
+      availableSpots: instance.max_participants
+    };
+
+    console.log('Final processed course:', processedCourse);
+
+    return NextResponse.json({ course: processedCourse });
   } catch (error) {
     console.error('Error in courses API:', error);
     return NextResponse.json(

@@ -1,11 +1,48 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Check for required environment variables
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  console.error('Missing required environment variable: NEXT_PUBLIC_SUPABASE_URL');
+}
+
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('Missing required environment variable: SUPABASE_SERVICE_ROLE_KEY');
+}
+
 // Initialize Supabase client with admin privileges
 // This should only be used server-side in API routes
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    },
+    db: {
+      schema: 'public'
+    }
+  }
 );
+
+// Test the connection
+async function testConnection() {
+  try {
+    const { data, error } = await supabaseAdmin.from('course_instances').select('count').limit(1);
+    if (error) {
+      console.error('Supabase connection test failed:', error);
+    } else {
+      console.log('Supabase connection test successful');
+    }
+  } catch (err) {
+    console.error('Error testing Supabase connection:', err);
+  }
+}
+
+// Run the test in development
+if (process.env.NODE_ENV === 'development') {
+  testConnection();
+}
 
 export { supabaseAdmin };
 
@@ -113,64 +150,182 @@ export async function getInstructors() {
 
 // Courses
 export async function getCourses({ published }: { published?: boolean | undefined } = {}) {
-  const query = supabaseAdmin
+  console.log('supabaseAdmin: Starting getCourses with published:', published);
+  
+  // First get all instances
+  const { data: instances, error: instancesError } = await supabaseAdmin
     .from('course_instances')
+    .select('*')
+    .order('start_date', { ascending: true });
+    
+  if (instancesError) {
+    console.error('supabaseAdmin: Error fetching instances:', instancesError);
+    throw instancesError;
+  }
+
+  console.log('supabaseAdmin: Found instances:', instances?.length || 0);
+  
+  if (!instances?.length) {
+    console.log('supabaseAdmin: No instances found, returning empty array');
+    return [];
+  }
+
+  // Get unique template IDs
+  const templateIds = [...new Set(instances.map(i => i.template_id))];
+  console.log('supabaseAdmin: Unique template IDs:', templateIds);
+
+  // Then get all templates with their relationships
+  const { data: templates, error: templatesError } = await supabaseAdmin
+    .from('course_templates')
     .select(`
       *,
-      template:course_templates(
-        *,
-        category:categories(*),
-        instructor:instructors(*)
-      )
+      category:categories (*),
+      instructor:instructors (*)
     `)
-    .order('start_date');
+    .in('id', templateIds);
     
-  // Only filter by is_published if the published parameter is explicitly set
-  if (published !== undefined) {
-    query.eq('is_published', published);
+  if (templatesError) {
+    console.error('supabaseAdmin: Error fetching templates:', templatesError);
+    throw templatesError;
   }
+
+  console.log('supabaseAdmin: Found templates:', templates?.length || 0);
   
-  const { data, error } = await query;
-  if (error) throw error;
-  
-  // Process instances to include template data
-  const processedData = (data || []).map(instance => ({
-    ...instance,
-    ...instance.template,
-    template_id: instance.template?.id,
-    availableSpots: instance.max_participants !== null 
-      ? instance.max_participants - (instance.current_participants || 0)
-      : null
-  }));
+  if (!templates?.length) {
+    console.log('supabaseAdmin: No templates found, returning empty array');
+    return [];
+  }
+
+  // Create a map of templates for easy lookup
+  const templateMap = new Map(templates.map(t => [t.id, t]));
+
+  // Process and combine the data
+  const processedData = instances.map(instance => {
+    const template = templateMap.get(instance.template_id);
+    if (!template) {
+      console.warn('supabaseAdmin: No template found for instance:', instance.id);
+      return null;
+    }
+
+    // Filter based on published parameter
+    if (published !== undefined) {
+      if (published && !template.is_published) {
+        console.log('supabaseAdmin: Filtering out unpublished course:', template.id);
+        return null;
+      }
+      if (!published && template.is_published) {
+        console.log('supabaseAdmin: Filtering out published course:', template.id);
+        return null;
+      }
+    }
+
+    const processedCourse = {
+      ...template,
+      ...instance,
+      template_id: template.id,
+      category: template.category || null,
+      instructor: template.instructor || null,
+      availableSpots: instance.max_participants !== null 
+        ? instance.max_participants - (instance.current_participants || 0)
+        : null
+    };
+
+    return processedCourse;
+  }).filter(Boolean);
+
+  console.log('supabaseAdmin: Processed courses count:', processedData.length);
+  if (processedData.length > 0) {
+    console.log('supabaseAdmin: First processed course:', {
+      id: processedData[0].id,
+      title: processedData[0].title,
+      template_id: processedData[0].template_id,
+      is_published: processedData[0].is_published,
+      start_date: processedData[0].start_date
+    });
+  }
   
   return processedData;
 }
 
 export async function getCourse(id: string) {
-  const { data, error } = await supabaseAdmin
+  console.log('supabaseAdmin: Getting course with id:', id);
+
+  // First get the instance
+  const { data: instance, error: instanceError } = await supabaseAdmin
     .from('course_instances')
-    .select(`
-      *,
-      template:course_templates(
-        *,
-        category:categories(*),
-        instructor:instructors(*)
-      )
-    `)
+    .select('*')
     .eq('id', id)
     .single();
     
-  if (error) throw error;
+  if (instanceError) {
+    console.error('supabaseAdmin: Error fetching course instance:', instanceError);
+    throw instanceError;
+  }
+
+  if (!instance) {
+    console.error('supabaseAdmin: No course instance found with id:', id);
+    throw new Error('Course instance not found');
+  }
+
+  console.log('supabaseAdmin: Found instance:', {
+    id: instance.id,
+    template_id: instance.template_id,
+    max_participants: instance.max_participants,
+    current_participants: instance.current_participants
+  });
+
+  // Then get the template with its relationships
+  const { data: template, error: templateError } = await supabaseAdmin
+    .from('course_templates')
+    .select(`
+      *,
+      category:categories (*),
+      instructor:instructors (*)
+    `)
+    .eq('id', instance.template_id)
+    .single();
+    
+  if (templateError) {
+    console.error('supabaseAdmin: Error fetching course template:', templateError);
+    throw templateError;
+  }
+
+  if (!template) {
+    console.error('supabaseAdmin: No template found for instance:', instance.id);
+    throw new Error('Course template not found');
+  }
+
+  console.log('supabaseAdmin: Found template:', {
+    id: template.id,
+    title: template.title,
+    is_published: template.is_published,
+    category: template.category?.name,
+    instructor: template.instructor?.name
+  });
   
-  // Process instance to include template data
+  // Process and combine the data
   const processedData = {
-    ...data,
-    ...data.template,
-    template_id: data.template?.id,
-    availableSpots: data.max_participants !== null 
-      ? data.max_participants - (data.current_participants || 0)
+    ...template,
+    ...instance,
+    template_id: template.id,
+    category: template.category || null,
+    instructor: template.instructor || null,
+    availableSpots: instance.max_participants !== null 
+      ? instance.max_participants - (instance.current_participants || 0)
       : null
   };
+
+  console.log('supabaseAdmin: Processed course data:', {
+    id: processedData.id,
+    title: processedData.title,
+    template_id: processedData.template_id,
+    category: processedData.category?.name,
+    instructor: processedData.instructor?.name,
+    start_date: processedData.start_date,
+    max_participants: processedData.max_participants,
+    current_participants: processedData.current_participants,
+    availableSpots: processedData.availableSpots
+  });
   
   return processedData;
 }

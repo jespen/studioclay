@@ -110,9 +110,11 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
           .from('course_instances')
           .select(`
             *,
-            course_template:course_templates(*),
-            category:categories(*),
-            instructor:instructors(*)
+            template:course_templates (
+              *,
+              category:categories (*),
+              instructor:instructors (*)
+            )
           `)
           .eq('id', courseId)
           .single();
@@ -126,9 +128,18 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
           console.error('Client: Course data is missing');
           throw new Error('Course not found');
         }
+
+        // Process the data to match the expected structure
+        const processedCourse = {
+          ...courseData,
+          ...courseData.template,
+          template_id: courseData.template?.id,
+          category: courseData.template?.category || null,
+          instructor: courseData.template?.instructor || null
+        };
         
-        console.log('Client: Course data received:', courseData);
-        setCourse(courseData);
+        console.log('Client: Course data received:', processedCourse);
+        setCourse(processedCourse);
         setError(null);
       } catch (err: any) {
         console.error('Client: Error fetching course:', err);
@@ -165,31 +176,32 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
         customer_email: formData.email,
         customer_phone: formData.phone,
         number_of_participants: parseInt(formData.number_of_participants.toString()),
-        created_at: new Date().toISOString(),
-        status: 'waiting',
-        message: formData.message || null,
+        message: formData.message || null
       };
       
-      console.log('Submitting waitlist data:', waitlistData);
+      console.log('Client: Submitting waitlist data:', waitlistData);
       
-      const { data, error } = await supabase
-        .from('waitlist')
-        .insert([waitlistData])
-        .select()
-        .single();
+      const response = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(waitlistData),
+      });
       
-      if (error) {
-        console.error('Error submitting waitlist form:', error);
-        throw new Error(error.message);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to join waitlist');
       }
       
-      console.log('Waitlist entry created:', data);
+      console.log('Client: Waitlist entry created:', result.data);
       setSuccess(true);
       
       // Redirect to confirmation page
       router.push('/waitlist-confirmation');
     } catch (err: any) {
-      console.error('Error submitting waitlist form:', err);
+      console.error('Client: Error submitting waitlist form:', err);
       setError(err.message || 'Failed to join waitlist. Please try again later.');
       setSuccess(false);
     } finally {
@@ -236,7 +248,7 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
         <Link href="/" className={styles.backLink}>
           ← Tillbaka till kurser
         </Link>
-        <h1>Väntelista: {course.title}</h1>
+        <h1>Väntelista: {course.template?.title || course.title}</h1>
         <p className={styles.courseDate}>
           {getDateDisplay(course.start_date, course.end_date)}
         </p>

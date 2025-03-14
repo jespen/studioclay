@@ -22,10 +22,16 @@ CREATE INDEX IF NOT EXISTS waitlist_created_at_idx ON waitlist(created_at);
 -- Add RLS policies
 ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS insert_waitlist ON waitlist;
+DROP POLICY IF EXISTS select_waitlist ON waitlist;
+DROP POLICY IF EXISTS update_waitlist ON waitlist;
+DROP POLICY IF EXISTS delete_waitlist ON waitlist;
+
 -- Policy for inserting waitlist entries (anyone can add themselves to the waitlist)
 CREATE POLICY insert_waitlist ON waitlist
   FOR INSERT
-  TO authenticated, anon
+  TO public
   WITH CHECK (true);
 
 -- Policy for viewing waitlist entries (only admins can view)
