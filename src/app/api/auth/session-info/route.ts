@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Configure the route for static export
-export const dynamic = 'force-static';
-export const revalidate = 0;
+// Removed static export flag
 
 export async function GET(request: NextRequest) {
   // Since we're using static exports, we'll handle session info on the client side

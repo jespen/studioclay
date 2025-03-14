@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { generateStaticParams } from './static';
 
 export const metadata: Metadata = {
   title: 'Admin - Studio Clay',
@@ -9,8 +8,6 @@ export const metadata: Metadata = {
     follow: false,
   },
 };
-
-export { generateStaticParams };
 
 export default function AdminLayout({
   children,

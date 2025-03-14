@@ -1,14 +1,6 @@
 import { NextResponse } from 'next/server';
 
-// Configure the route for static export
-export const dynamic = 'force-static';
-export const revalidate = 0;
-
-export function generateStaticParams() {
-  // This is a placeholder function to satisfy static export requirements
-  // In a real app, you would generate all possible parameter values
-  return [{ id: 'placeholder' }];
-}
+// Removed static export flag
 
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -25,4 +17,6 @@ export async function GET(
     message: 'Waitlist operations are handled on the client side',
     status: 'success'
   });
-} 
+}
+
+export const dynamic = 'force-dynamic'; 

@@ -72,7 +72,14 @@ studioclay/
 
 ## Deployment
 
-The site can be deployed to platforms like Vercel, Netlify, or any other service that supports Next.js:
+The site is deployed on Vercel, which provides automatic deployments, preview environments, and serverless functions support for Next.js applications:
+
+1. Connect the GitHub repository to Vercel
+2. Vercel will automatically detect the Next.js project and apply optimal settings
+3. Configure environment variables in the Vercel dashboard
+4. Push changes to the main branch to trigger automatic deployments
+
+For local deployments or manual builds:
 
 ```bash
 npm run build

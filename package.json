@@ -7,13 +7,8 @@
     "dev:clean": "rm -rf .next && next dev",
     "dev:reset": "pkill -f 'node.*next' || true && rm -rf .next node_modules/.cache && npm run dev",
     "build": "next build",
-    "postbuild": "if [ \"$VERCEL\" != \"true\" ]; then node scripts/flatten-build.js && node scripts/generate-pages.js; fi",
-    "export": "next build && node scripts/flatten-build.js && node scripts/backup-site.js",
-    "backup": "node scripts/backup-site.js",
     "start": "next start",
     "lint": "next lint",
-    "verify": "node scripts/verify-build.js",
-    "prepare-git": "npm run build && npm run verify",
     "instagram:check": "node scripts/instagram-tools.js check",
     "instagram:refresh": "node scripts/instagram-tools.js refresh",
     "instagram:details": "node scripts/instagram-tools.js details"

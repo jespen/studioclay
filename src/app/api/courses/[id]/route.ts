@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, getCourse } from '@/lib/supabaseAdmin';
 
-// Configure the route for static export
+// Dynamic API route for course details
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
-export function generateStaticParams() {
-  // This is a placeholder function to satisfy static export requirements
-  // In a real app, you would generate all possible parameter values
-  return [{ id: 'placeholder' }];
-}
 
 interface RouteContext {
   params: { id: string };

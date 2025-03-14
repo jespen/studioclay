@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 
-// Configure the route for static export
-export const dynamic = 'force-static';
-export const revalidate = 0;
+// Dynamic API route for authentication
+export const dynamic = 'force-dynamic';
 
 import crypto from 'crypto';
 
@@ -25,10 +24,20 @@ const ADMIN_USERS = [
   }
 ];
 
-export async function POST() {
-  // Since we're using static exports, we'll handle local login on the client side
-  return NextResponse.json({
-    message: 'Local login is handled on the client side',
-    status: 'success'
-  });
+// Handle local login requests
+export async function POST(request: Request) {
+  try {
+    const data = await request.json();
+    // Implement server-side authentication logic
+    return NextResponse.json({
+      message: 'Login processed',
+      status: 'success',
+      token: generateSessionToken()
+    });
+  } catch (error) {
+    return NextResponse.json({
+      message: 'Invalid request',
+      status: 'error'
+    }, { status: 400 });
+  }
 } 

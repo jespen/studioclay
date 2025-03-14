@@ -1,18 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// This middleware is disabled in static export mode through config
 export function middleware(request: NextRequest) {
-  // In development mode with static export, we should never reach here
-  // If we do, just pass through
-  if (process.env.NODE_ENV === 'development' && 
-      (process.env.NEXT_PUBLIC_OUTPUT_MODE === 'export' || 
-       process.env.NEXT_RUNTIME !== 'nodejs')) {
-    return NextResponse.next();
-  }
-  
-  // Only runs on non-static Vercel deployment or dev without static export
-  
   // Add cache-control headers in development mode
   const response = NextResponse.next();
   

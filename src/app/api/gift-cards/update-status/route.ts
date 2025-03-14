@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Configure the route for static export
-export const dynamic = 'force-static';
-export const revalidate = 0;
+// Removed static export flag
 
 import { createClient } from '@supabase/supabase-js';
 

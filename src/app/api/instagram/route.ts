@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cache } from 'react';
 
-// Add these lines to make the route compatible with static export
-export const dynamic = 'force-static';
-export const revalidate = 0;
-
 // Cache the Instagram data for 1 hour
 const CACHE_TIME = 60 * 60 * 1000; // 1 hour in milliseconds
 let cachedData: any = null;

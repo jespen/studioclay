@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 
-// Configure the route for static export
-export const dynamic = 'force-static';
-export const revalidate = 0;
+// Dynamic API route for authentication
+export const dynamic = 'force-dynamic';
 
 export async function POST() {
-  // Since we're using static exports, we'll handle logout on the client side
+  // Handle logout on the server-side
   return NextResponse.json({
-    message: 'Logout is handled on the client side',
+    message: 'Logout processed successfully',
     status: 'success'
   });
-} 
+}
+
+// Handle logout requests 

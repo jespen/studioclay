@@ -2,7 +2,7 @@ name: 🚀 Deploy website on push
 on:
   push:
     branches:
-      - main  # Körs när du pushar till main-branchen
+      - main  # Runs when you push to the main branch
 jobs:
   web-deploy:
     name: 🎉 Deploy
@@ -40,63 +40,24 @@ jobs:
         run: |
           npm run build
           echo "Build completed successfully"
-          echo "Checking build output:"
-          ls -la out || echo "No out directory found"
-          if [ -d "out" ]; then
-            echo "Contents of out directory:"
-            ls -la out
-          fi
 
       - name: 🔍 Debug Info
         run: |
           echo "Current directory: $(pwd)"
           echo "Directory contents:"
           ls -la
-          echo "Out directory contents:"
-          ls -la out || echo "No out directory found"
           echo "Checking for critical files:"
-          ls -la out/index.html || echo "index.html not found"
-          ls -la out/.htaccess || echo ".htaccess not found"
+          ls -la .vercel || echo "No .vercel directory found"
 
-      - name: 📂 Sync files
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: 21
-          server-dir: /public_html/
-          dangerous-clean-slate: true
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/node_modules/**
-            **/.env*
-            **/.env*/**
-            **/.next/**
-            **/backups/**
-            **/scripts/**
-            **/src/**
-            **/.github/**
-            **/.gitignore
-            **/package.json
-            **/package-lock.json
-            **/README.md
-            **/tsconfig.json
-            **/next.config.js
-            **/tailwind.config.js
-            **/postcss.config.js
-            **/.eslintrc.json
-          local-dir: ./out/
-          state-name: .ftp-deploy-sync-state.json
-          dry-run: false
-          log-level: verbose
-          timeout: 300000  # 5 minutes timeout
+      - name: 🚀 Deploy to Vercel
+        run: |
+          echo "This workflow is for informational purposes only."
+          echo "The actual deployment is handled automatically by Vercel integration with GitHub."
+          echo "Vercel automatically deploys when changes are pushed to the main branch."
 
       - name: 🔍 Post-Deploy Check
         run: |
           echo "Checking deployment status..."
           curl -I https://studioclay.se || echo "Site not accessible"
-          echo "Checking for critical files on server..."
-          curl -I https://studioclay.se/index.html || echo "index.html not accessible"
-          curl -I https://studioclay.se/.htaccess || echo ".htaccess not accessible"
+          echo "Checking for critical routes on server..."
+          curl -I https://studioclay.se/api/test-env || echo "API route not accessible"
