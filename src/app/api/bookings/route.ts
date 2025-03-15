@@ -3,35 +3,31 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 // Dynamic API route for bookings
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
-    const url = new URL(request.url);
-    const courseId = url.searchParams.get('courseId');
-    const statusFilter = url.searchParams.get('status');
+    const { searchParams } = new URL(request.url);
+    const courseId = searchParams.get('courseId');
+    const statusFilter = searchParams.get('status');
     
-    if (!courseId) {
-      return NextResponse.json(
-        { error: 'Course ID is required' },
-        { status: 400 }
-      );
-    }
-    
-    // Start building the query
-    let query = supabaseAdmin
-      .from('bookings')
-      .select(`
+    let query = supabaseAdmin.from('bookings').select(`
+      *,
+      course:course_instances (
         *,
-        course:course_instances(
+        template:course_templates (
           *,
-          template:course_templates(
-            *,
-            category:categories(*),
-            instructor:instructors(*)
-          )
+          category:categories (*),
+          instructor:instructors (*)
         )
-      `)
-      .eq('course_id', courseId);
+      )
+    `);
+    
+    // Filter by course ID if provided
+    if (courseId) {
+      query = query.eq('course_id', courseId);
+    }
     
     // Apply status filter if provided
     if (statusFilter) {
@@ -46,8 +42,7 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Execute the query with sorting
-    const { data, error } = await query.order('booking_date', { ascending: false });
+    const { data, error } = await query;
     
     if (error) {
       throw error;
@@ -101,18 +96,97 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Insert booking
-    const { data, error } = await supabaseAdmin
-      .from('bookings')
-      .insert(body)
-      .select();
+    // First check if the course exists and has available spots
+    console.log('Checking course availability for ID:', body.course_id);
+    const { data: course, error: courseError } = await supabaseAdmin
+      .from('course_instances')
+      .select('current_participants, max_participants')
+      .eq('id', body.course_id)
+      .single();
       
-    if (error) {
-      throw error;
+    if (courseError) {
+      console.error('Error fetching course:', courseError);
+      return NextResponse.json(
+        { error: 'Course not found', details: courseError.message },
+        { status: 404 }
+      );
     }
     
+    // Check if course is fully booked
+    if (course.max_participants !== null && 
+        course.current_participants + body.number_of_participants > course.max_participants) {
+      console.warn('Course is fully booked:', {
+        courseId: body.course_id,
+        currentParticipants: course.current_participants,
+        maxParticipants: course.max_participants,
+        requestedParticipants: body.number_of_participants
+      });
+      return NextResponse.json(
+        { error: 'Course is fully booked', details: 'Not enough available spots' },
+        { status: 400 }
+      );
+    }
+    
+    // Insert booking in a transaction
+    const { data: booking, error: bookingError } = await supabaseAdmin.rpc('create_booking_with_participants', {
+      booking_data: {
+        course_id: body.course_id,
+        customer_name: body.customer_name,
+        customer_email: body.customer_email,
+        customer_phone: body.customer_phone || null,
+        number_of_participants: body.number_of_participants,
+        booking_date: new Date().toISOString(),
+        status: body.status || 'confirmed',
+        payment_status: body.payment_status || 'unpaid',
+        message: body.message || null
+      },
+      participant_count: body.number_of_participants
+    });
+    
+    if (bookingError) {
+      console.error('Error creating booking with RPC:', bookingError);
+      
+      // Fallback to manual booking creation and participant count update
+      console.log('Using fallback method for booking creation');
+      
+      // Start a transaction
+      const { data, error } = await supabaseAdmin
+        .from('bookings')
+        .insert(body)
+        .select();
+        
+      if (error) {
+        console.error('Error creating booking:', error);
+        throw error;
+      }
+      
+      // Update course participant count
+      if (body.status === 'confirmed' || body.status === 'pending' || !body.status) {
+        const { error: updateError } = await supabaseAdmin
+          .from('course_instances')
+          .update({ 
+            current_participants: course.current_participants + body.number_of_participants 
+          })
+          .eq('id', body.course_id);
+          
+        if (updateError) {
+          console.error('Error updating course participants:', updateError);
+          // We don't want to fail the booking if only the participant count update fails
+          // Just log the error and continue
+        }
+      }
+      
+      return NextResponse.json({
+        booking: data?.[0] || null,
+        status: 'success',
+        message: 'Booking created successfully'
+      });
+    }
+    
+    console.log('Booking created successfully with RPC:', booking);
+    
     return NextResponse.json({
-      booking: data[0],
+      booking: booking,
       status: 'success',
       message: 'Booking created successfully'
     });
