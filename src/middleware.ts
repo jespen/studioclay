@@ -5,6 +5,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 // Define public paths that don't require authentication
 const publicPaths = [
   '/',
+  '/admin',
   '/login',
   '/register',
   '/courses',
@@ -85,7 +86,7 @@ export async function middleware(request: NextRequest) {
   // For protected pages, redirect to login if not authenticated
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
-    const redirectUrl = new URL('/login', request.url);
+    const redirectUrl = new URL('/admin', request.url);
     redirectUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(redirectUrl);
   }

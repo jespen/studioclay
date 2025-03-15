@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabaseAdmin, getCourses } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -21,45 +21,20 @@ export async function GET() {
   try {
     console.log('Public courses API: Starting fetch');
     
-    // Get current date to filter out past courses
-    const now = new Date().toISOString();
+    // Get published courses using the same function as admin API
+    const courses = await getCourses({ published: true });
     
-    // Fetch published courses from Supabase with proper filtering
-    const { data: courses, error } = await supabaseAdmin
-      .from('course_instances')
-      .select(`
-        *,
-        template:course_templates (
-          *,
-          category:categories (
-            name
-          )
-        )
-      `)
-      .eq('is_published', true)  // Only published courses
-      .gte('start_date', now)    // Only future courses
-      .order('start_date', { ascending: true });
-
-    if (error) {
-      console.error('Public API Error:', error);
-      return new NextResponse(JSON.stringify({ 
-        error: 'Database error', 
-        details: error.message 
-      }), {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-        }
-      });
-    }
-
-    console.log(`Public API Success: Found ${courses?.length || 0} courses`);
+    // Filter to include only future courses
+    const now = new Date();
+    const futureCourses = courses.filter(course => {
+      const startDate = course.start_date ? new Date(course.start_date) : null;
+      return startDate && startDate >= now;
+    });
+    
+    console.log(`Public API Success: Found ${futureCourses.length} future published courses out of ${courses.length} total published courses`);
     
     return new NextResponse(JSON.stringify({ 
-      courses: courses || [],
+      courses: futureCourses,
       timestamp: new Date().toISOString()
     }), {
       status: 200,

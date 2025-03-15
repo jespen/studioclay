@@ -135,7 +135,15 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    if (name === 'number_of_participants') {
+      // Convert to number and ensure it's at least 1
+      const parsedValue = parseInt(value, 10);
+      const numValue = !isNaN(parsedValue) ? Math.max(1, parsedValue) : 1;
+      setFormData((prev) => ({ ...prev, [name]: numValue }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -144,6 +152,13 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
     try {
       setSubmitting(true);
       setSubmitError(null);
+      
+      // Ensure number_of_participants is a number
+      const numberOfParticipants = parseInt(formData.number_of_participants.toString(), 10);
+      
+      if (isNaN(numberOfParticipants) || numberOfParticipants < 1) {
+        throw new Error('Antal deltagare måste vara minst 1');
+      }
       
       // Use API endpoint instead of direct Supabase access
       const response = await fetch('/api/waitlist', {
@@ -156,13 +171,14 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
           customer_name: formData.name,
           customer_email: formData.email,
           customer_phone: formData.phone,
-          number_of_participants: formData.number_of_participants,
+          number_of_participants: numberOfParticipants,
           message: formData.message,
         }),
       });
       
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Waitlist API error:', errorData);
         throw new Error(errorData.error || 'Failed to join waitlist');
       }
       
@@ -177,7 +193,7 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
       });
     } catch (err) {
       console.error('Error submitting form:', err);
-      setSubmitError('Det gick inte att anmäla sig till väntelistan. Försök igen senare.');
+      setSubmitError(err instanceof Error ? err.message : 'Det gick inte att anmäla sig till väntelistan. Försök igen senare.');
     } finally {
       setSubmitting(false);
     }
