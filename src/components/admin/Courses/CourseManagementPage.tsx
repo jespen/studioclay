@@ -35,7 +35,15 @@ export default function CourseManagementPage({ courseId }: CourseManagementPageP
           throw new Error(errorData.error || 'Failed to fetch course');
         }
         const courseData = await courseResponse.json();
-        setCourse(courseData.course);
+        
+        // Check if the course data is properly structured
+        if (courseData.course) {
+          setCourse(courseData.course);
+          console.log('Course data loaded successfully:', courseData.course);
+        } else {
+          console.error('Invalid course data format:', courseData);
+          setError('Course data not in expected format');
+        }
         
         // Fetch bookings
         const bookingsResponse = await fetch(`/api/courses/${courseId}/bookings`);

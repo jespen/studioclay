@@ -293,11 +293,18 @@
 }
 
 .editButton {
-  background-color: #6b7280;
+  padding: 0.5rem 1rem;
+  background-color: var(--primary-color, #547264);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
 
 .editButton:hover {
-  background-color: #4b5563;
+  background-color: var(--primary-dark, #3f574a);
 }
 
 .publishButton {
@@ -423,7 +430,7 @@
 
 .tableWrapper {
   overflow-x: auto;
-  max-width: 100%;
+  width: 100%;
 }
 
 .pdfButton {

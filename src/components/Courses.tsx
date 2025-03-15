@@ -24,7 +24,10 @@ interface ApiCourse {
   is_published: boolean;
   created_at: string;
   updated_at: string;
-  template?: { category?: { name: string } };
+  template?: { 
+    category?: { name: string };
+    price?: number;
+  };
 }
 
 // Define our display course type
@@ -231,10 +234,16 @@ const Courses = () => {
     // Get the category name from the template if available
     const displayName = course.template?.category?.name || course.title;
     
+    // For debugging price
+    console.log(`Course ${course.id} - ${displayName}:`, { 
+      directPrice: course.price,
+      templatePrice: course.template?.price
+    });
+    
     return {
       id: course.id,
       name: displayName,
-      price: course.price ? course.price.toString() : '0',
+      price: course.price ? course.price.toString() : (course.template?.price ? course.template.price.toString() : '0'),
       frequency: course.currency || 'kr',
       sessionCount: getSessionCount(displayName, course.start_date, course.end_date),
       description: course.description || '',
@@ -264,6 +273,7 @@ const Courses = () => {
           .select(`
             *,
             template:course_templates (
+              *,
               category:categories (
                 name
               )

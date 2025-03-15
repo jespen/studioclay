@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import AdminHeader from '../../../../components/admin/Dashboard/AdminHeader';
 import styles from '../../dashboard/courses/courses.module.css';
+import { useRouter } from 'next/navigation';
 
 interface SessionInfo {
   sessionExists: boolean;
@@ -11,6 +12,23 @@ interface SessionInfo {
   userEmail: string | null;
   cookieCount: number;
   cookieNames: string[];
+  hasSupabaseAuth?: boolean;
+  supabaseCookies?: string[];
+}
+
+interface Course {
+  id: string;
+  title: string;
+  category?: string;
+  instructor?: string;
+  start_date?: string;
+  end_date?: string;
+  is_published?: boolean;
+  max_participants?: number;
+  current_participants?: number;
+  availableSpots?: number;
+  template?: any;
+  template_id?: string;
 }
 
 interface DebugInfo {
@@ -22,13 +40,16 @@ interface DebugInfo {
     buildTime: string;
   } | null;
   apiResponse?: any;
+  courses?: Course[];
 }
 
 export default function DeveloperPage() {
+  const router = useRouter();
   const [debugInfo, setDebugInfo] = useState<DebugInfo>({
     lastApiCalls: [],
     sessionInfo: null,
-    systemInfo: null
+    systemInfo: null,
+    courses: []
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,13 +62,14 @@ export default function DeveloperPage() {
         
         // Fetch session info
         const sessionResponse = await fetch('/api/auth/session-info');
-        let sessionInfo;
+        let sessionData = null;
         
         if (sessionResponse.ok) {
-          sessionInfo = await sessionResponse.json();
+          const responseData = await sessionResponse.json();
+          console.log('Session info response:', responseData);
+          sessionData = responseData.sessionInfo || null;
         } else {
           console.error('Failed to fetch session info:', sessionResponse.status);
-          sessionInfo = null;
         }
         
         // Get system info
@@ -64,22 +86,33 @@ export default function DeveloperPage() {
           `GET /api/auth/supabase-auth-test/ - ${new Date(Date.now() - 120000).toISOString()}`
         ];
         
-        // Fetch a recent API response
+        // Fetch courses
         const coursesResponse = await fetch('/api/courses/?published=all');
         let apiResponse;
+        let courses: Course[] = [];
         
         if (coursesResponse.ok) {
           apiResponse = await coursesResponse.json();
+          
+          // Extract courses array from the response
+          if (apiResponse && Array.isArray(apiResponse.courses)) {
+            courses = apiResponse.courses;
+          } else if (Array.isArray(apiResponse)) {
+            courses = apiResponse;
+          }
+          
+          console.log('Fetched courses for developer page:', courses.length);
         } else {
           console.error('Failed to fetch courses:', coursesResponse.status);
           apiResponse = null;
         }
         
         setDebugInfo({
-          sessionInfo,
+          sessionInfo: sessionData,
           systemInfo,
           lastApiCalls,
-          apiResponse
+          apiResponse,
+          courses
         });
         
       } catch (err) {
@@ -92,6 +125,18 @@ export default function DeveloperPage() {
     
     fetchDebugInfo();
   }, []);
+
+  // Helper function to safely access arrays with a fallback
+  const safeJoin = (arr?: any[] | null, separator = ', ') => {
+    if (!arr || !Array.isArray(arr)) return 'None';
+    return arr.length > 0 ? arr.join(separator) : 'None';
+  };
+
+  // Handle editing a course
+  const handleEditCourse = (courseId: string) => {
+    console.log('Navigating to edit course:', courseId);
+    router.push(`/admin/dashboard/courses/${courseId}`);
+  };
 
   return (
     <div className={styles.pageContainer}>
@@ -119,11 +164,58 @@ export default function DeveloperPage() {
                     <p><strong>Active Session:</strong> {debugInfo.sessionInfo.activeSessionExists ? 'Yes' : 'No'}</p>
                     <p><strong>User Email Cookie:</strong> {debugInfo.sessionInfo.userEmailExists ? 'Yes' : 'No'}</p>
                     <p><strong>User Email:</strong> {debugInfo.sessionInfo.userEmail || 'Not available'}</p>
-                    <p><strong>Cookie Count:</strong> {debugInfo.sessionInfo.cookieCount}</p>
-                    <p><strong>Cookie Names:</strong> {debugInfo.sessionInfo.cookieNames.join(', ')}</p>
+                    <p><strong>Cookie Count:</strong> {debugInfo.sessionInfo.cookieCount || 0}</p>
+                    <p><strong>Cookie Names:</strong> {safeJoin(debugInfo.sessionInfo.cookieNames)}</p>
+                    <p><strong>Has Supabase Auth:</strong> {debugInfo.sessionInfo.hasSupabaseAuth ? 'Yes' : 'No'}</p>
+                    <p><strong>Supabase Cookies:</strong> {safeJoin(debugInfo.sessionInfo.supabaseCookies)}</p>
                   </div>
                 ) : (
-                  <p>No session information available at this dfd time</p>
+                  <p>No session information available at this time</p>
+                )}
+              </div>
+            </div>
+            
+            <div className={styles.sectionContainer}>
+              <div className={styles.sectionHeader}>
+                <h2 className={styles.sectionTitle}>Available Courses</h2>
+              </div>
+              <div style={{ padding: '1rem' }}>
+                {debugInfo.courses && debugInfo.courses.length > 0 ? (
+                  <div className={styles.tableWrapper}>
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>Title</th>
+                          <th>Category</th>
+                          <th>Published</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {debugInfo.courses.map((course) => (
+                          <tr key={course.id}>
+                            <td><code>{course.id}</code></td>
+                            <td>{course.title}</td>
+                            <td>{typeof course.category === 'object' && course.category !== null 
+                                 ? (course.category as any).name || 'N/A' 
+                                 : course.category || 'N/A'}</td>
+                            <td>{course.is_published ? 'Yes' : 'No'}</td>
+                            <td>
+                              <button 
+                                className={styles.editButton}
+                                onClick={() => handleEditCourse(course.id)}
+                              >
+                                Edit
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p>No courses available</p>
                 )}
               </div>
             </div>
@@ -166,7 +258,7 @@ export default function DeveloperPage() {
             
             <div className={styles.sectionContainer}>
               <div className={styles.sectionHeader}>
-                <h2 className={styles.sectionTitle}>Latest API Response</h2>
+                <h2 className={styles.sectionTitle}>API Response Details</h2>
               </div>
               <div style={{ padding: '1rem' }}>
                 {debugInfo.apiResponse ? (
@@ -177,7 +269,20 @@ export default function DeveloperPage() {
                     borderRadius: '0.25rem',
                     fontSize: '0.85rem' 
                   }}>
-                    {JSON.stringify(debugInfo.apiResponse, null, 2)}
+                    {typeof debugInfo.apiResponse === 'object' 
+                      ? JSON.stringify(debugInfo.apiResponse, (key, value) => {
+                          // Handle circular references and non-stringifiable objects
+                          if (typeof value === 'object' && value !== null) {
+                            try {
+                              JSON.stringify(value);
+                              return value;
+                            } catch (err) {
+                              return `[Object: ${Object.keys(value).join(', ')}]`;
+                            }
+                          }
+                          return value;
+                        }, 2)
+                      : String(debugInfo.apiResponse)}
                   </pre>
                 ) : (
                   <p>No API response data available</p>

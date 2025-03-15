@@ -4,18 +4,32 @@ import { supabaseAdmin, getCourse } from '@/lib/supabaseAdmin';
 // Dynamic API route for course details
 export const dynamic = 'force-dynamic';
 
-interface RouteContext {
-  params: { id: string };
-}
-
 export async function GET(
   request: NextRequest,
-  context: RouteContext
+  context: { params: { id: string } }
 ) {
   try {
-    console.log('API Route: Fetching course with id:', context.params.id);
+    // Wait for params to be fully resolved before using them
+    const params = await Promise.resolve(context.params);
+    console.log('API Route: Fetching course with id:', params.id);
     
-    const course = await getCourse(context.params.id);
+    if (!params.id) {
+      console.error('API Route Error: Missing course ID');
+      return NextResponse.json(
+        { error: 'Course ID is required' },
+        { status: 400 }
+      );
+    }
+    
+    const course = await getCourse(params.id);
+    
+    if (!course) {
+      console.error('API Route Error: Course not found with ID:', params.id);
+      return NextResponse.json(
+        { error: 'Course not found' },
+        { status: 404 }
+      );
+    }
     
     console.log('API Route: Successfully fetched course:', {
       id: course.id,
@@ -27,7 +41,7 @@ export async function GET(
   } catch (error) {
     console.error('API Route Error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch course' },
+      { error: 'Failed to fetch course', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
@@ -35,26 +49,57 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  context: RouteContext
+  context: { params: { id: string } }
 ) {
   try {
+    // Wait for params to be fully resolved before using them
+    const params = await Promise.resolve(context.params);
+    const { id } = params;
+    
+    if (!id) {
+      console.error('API Route Error: Missing course ID for update');
+      return NextResponse.json(
+        { error: 'Course ID is required' },
+        { status: 400 }
+      );
+    }
+    
+    console.log('Updating course with ID:', id);
+    
     const body = await request.json();
-    console.log('Updating course:', context.params.id, body);
+    console.log('Update payload:', body);
 
     const { data, error } = await supabaseAdmin
       .from('course_instances')
       .update(body)
-      .eq('id', context.params.id)
+      .eq('id', id)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error updating course:', error);
+      throw error;
+    }
+
+    if (!data) {
+      console.error('No data returned after course update, course might not exist');
+      return NextResponse.json(
+        { error: 'Course not found or could not be updated' },
+        { status: 404 }
+      );
+    }
+
+    console.log('Course successfully updated:', {
+      id: data.id,
+      title: data.title,
+      template_id: data.template_id
+    });
 
     return NextResponse.json({ course: data });
   } catch (error) {
     console.error('Error updating course:', error);
     return NextResponse.json(
-      { error: 'Failed to update course' },
+      { error: 'Failed to update course', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
@@ -62,23 +107,39 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  context: RouteContext
+  context: { params: { id: string } }
 ) {
   try {
-    console.log('Deleting course:', context.params.id);
+    // Wait for params to be fully resolved before using them
+    const params = await Promise.resolve(context.params);
+    const { id } = params;
+    
+    if (!id) {
+      console.error('API Route Error: Missing course ID for deletion');
+      return NextResponse.json(
+        { error: 'Course ID is required' },
+        { status: 400 }
+      );
+    }
+    
+    console.log('Deleting course with ID:', id);
 
     const { error } = await supabaseAdmin
       .from('course_instances')
       .delete()
-      .eq('id', context.params.id);
+      .eq('id', id);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error deleting course:', error);
+      throw error;
+    }
 
+    console.log('Course successfully deleted:', id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting course:', error);
     return NextResponse.json(
-      { error: 'Failed to delete course' },
+      { error: 'Failed to delete course', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

@@ -16,7 +16,6 @@ export default function AdminLogin() {
   const [session, setSession] = useState<Session | null>(null);
   const [connectionVerified, setConnectionVerified] = useState(false);
   const [isLocalAuth, setIsLocalAuth] = useState(false);
-  const [loginSuccess, setLoginSuccess] = useState(false);
   const router = useRouter();
 
   // Verify connection to Supabase at startup
@@ -46,6 +45,35 @@ export default function AdminLogin() {
     verifyConnection();
   }, []);
 
+  // Function to set server-side cookies after successful authentication
+  async function setAuthCookies(userEmail: string) {
+    try {
+      console.log('Setting auth cookies for:', userEmail);
+      const response = await fetch('/api/auth/set-auth-cookie', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          email: userEmail
+        }),
+        credentials: 'same-origin'
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to set auth cookies:', await response.text());
+        return false;
+      }
+      
+      const result = await response.json();
+      console.log('Auth cookie result:', result);
+      return result.success;
+    } catch (error) {
+      console.error('Error setting auth cookies:', error);
+      return false;
+    }
+  }
+
   useEffect(() => {
     // Skip Supabase session check if using local auth
     if (isLocalAuth) return;
@@ -53,7 +81,7 @@ export default function AdminLogin() {
     // Check if user is already logged in
     const checkSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Session check error:', error);
@@ -61,9 +89,21 @@ export default function AdminLogin() {
           return;
         }
         
-        setSession(session);
-        if (session) {
-          router.push('/admin/dashboard');
+        setSession(data.session);
+        if (data.session) {
+          console.log('Login page: Found existing session, setting cookies');
+          
+          // Set server-side cookies that middleware can detect
+          const email = data.session.user.email;
+          if (email) {
+            await setAuthCookies(email);
+          }
+          
+          // Set a short timeout to ensure that cookies are set before navigation
+          setTimeout(() => {
+            // Use direct navigation for more reliable redirection
+            window.location.href = '/admin/dashboard';
+          }, 100);
         }
       } catch (err: any) {
         console.error('Error checking session:', err);
@@ -79,8 +119,20 @@ export default function AdminLogin() {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event);
       setSession(session);
-      if (session) {
-        router.push('/admin/dashboard');
+      if (session && event === 'SIGNED_IN') {
+        console.log('New sign in detected, setting cookies');
+        
+        // Set server-side cookies that middleware can detect
+        const email = session.user.email;
+        if (email) {
+          await setAuthCookies(email);
+        }
+        
+        // Set a short timeout to ensure that cookies are set before navigation
+        setTimeout(() => {
+          // Use direct navigation for more reliable redirection
+          window.location.href = '/admin/dashboard';
+        }, 300);
       }
     });
 
@@ -98,7 +150,7 @@ export default function AdminLogin() {
     try {
       console.log('Attempting to sign in with:', email);
       
-      // Try Supabase authentication first, since it's working
+      // Try Supabase authentication first
       setDebugInfo('Trying Supabase authentication...');
       
       // Use Supabase client-side auth
@@ -115,10 +167,18 @@ export default function AdminLogin() {
         await tryLocalAuth();
       } else {
         console.log('Supabase sign in successful:', data);
-        setDebugInfo('Supabase login successful! Redirecting...');
+        setDebugInfo('Supabase login successful! Setting cookies and redirecting...');
         
-        // Simple direct navigation - should work for Supabase auth
-        window.location.href = `/admin/dashboard?source=supabase&ts=${Date.now()}`;
+        // Set server-side cookies that middleware can detect
+        if (data.user?.email) {
+          await setAuthCookies(data.user.email);
+        }
+        
+        // Give Supabase time to set cookies before navigating
+        setTimeout(() => {
+          // Use direct navigation instead of Next.js router for auth redirects
+          window.location.href = '/admin/dashboard';
+        }, 500);
       }
     } catch (err: any) {
       console.error('Login error:', err);
@@ -126,13 +186,14 @@ export default function AdminLogin() {
       
       // Try local auth as fallback for any errors
       await tryLocalAuth();
+    } finally {
+      setLoading(false);
     }
   }
   
   async function tryLocalAuth() {
     try {
       setDebugInfo('Using local authentication...');
-      setLoading(true);
       
       // Trim password to avoid whitespace issues
       const trimmedPassword = password.trim();
@@ -147,6 +208,7 @@ export default function AdminLogin() {
           email, 
           password: trimmedPassword
         }),
+        credentials: 'same-origin' // Important for cookies
       });
       
       // Log the HTTP status
@@ -158,21 +220,21 @@ export default function AdminLogin() {
       if (!response.ok) {
         console.error('Local auth error:', result);
         setDebugInfo(`API response: ${JSON.stringify(result)}`);
-        
         throw new Error(result.error || 'Authentication failed');
       }
       
       console.log('Local authentication successful:', result);
-      setDebugInfo('Login successful! Please click the button below to continue.');
+      setDebugInfo('Login successful! Redirecting to dashboard...');
       
-      // Set success state to show the dashboard button
-      setLoginSuccess(true);
-      setLoading(false);
+      // Set a short timeout to ensure cookies are saved before redirect
+      setTimeout(() => {
+        // Use direct navigation instead of router for more reliable redirection
+        window.location.href = '/admin/dashboard';
+      }, 300);
     } catch (error: any) {
       console.error('Local auth request error:', error);
       setError(error.message || 'An error occurred during sign in');
       setDebugInfo(`Login failed: ${error.message}`);
-      setLoading(false);
     }
   }
 
@@ -188,102 +250,71 @@ export default function AdminLogin() {
           <h2 className="text-2xl font-semibold text-gray-900 mb-2">
             Admin Inloggning
           </h2>
-          {/* {isLocalAuth && (
-            <p className="text-sm text-gray-500">
-              Använder lokalt autentiseringssystem
-            </p>
-          )}
-          {!isLocalAuth && connectionVerified && (
-            <p className="text-sm text-green-500">
-              Använder Supabase autentisering
-            </p>
-          )} */}
         </div>
         
-        {loginSuccess ? (
-          <div className="text-center">
-            <div className="text-green-600 text-xl font-semibold mb-3">✓ Inloggningen lyckades!</div>
-            <p className="mb-6 text-gray-600">Du kan nu komma åt admin-panelen. Test</p>
-            <a 
-              href={`/admin/dashboard?source=local&ts=${Date.now()}`}
+        <form onSubmit={handleSignIn} className="space-y-6">
+          <div className="space-y-6">
+            {/* Email Input */}
+            <div className={styles.materialInput}>
+              <input
+                id="email-address"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                className="peer"
+                placeholder=" "
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <label htmlFor="email-address">
+                E-postadress
+              </label>
+            </div>
+
+            {/* Password Input */}
+            <div className={styles.materialInput}>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                className="peer"
+                placeholder=" "
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <label htmlFor="password">
+                Lösenord
+              </label>
+            </div>
+          </div>
+
+          {error && (
+            <div className={styles.errorMessage}>{error}</div>
+          )}
+
+          <div>
+            <button
+              type="submit"
+              disabled={loading}
               className={styles.submitButton}
             >
-              Gå till Dashboard test →
-            </a>
+              {loading ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Loggar in...
+                </span>
+              ) : 'Logga in'}
+            </button>
           </div>
-        ) : (
-          <form onSubmit={handleSignIn} className="space-y-6">
-            <div className="space-y-6">
-              {/* Email Input */}
-              <div className={styles.materialInput}>
-                <input
-                  id="email-address"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="peer"
-                  placeholder=" "
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <label htmlFor="email-address">
-                  E-postadress
-                </label>
-              </div>
 
-              {/* Password Input */}
-              <div className={styles.materialInput}>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  className="peer"
-                  placeholder=" "
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <label htmlFor="password">
-                  Lösenord
-                </label>
-              </div>
-            </div>
-
-            {/* {error && (
-              <div className={styles.errorMessage}>{error}</div>
-            )}
-            
-            {debugInfo && (
-              <div className={styles.debugInfo}>
-                <p className="font-medium mb-1">Debug Info (ta bort i produktion):</p>
-                <div 
-                  className="whitespace-pre-wrap break-all"
-                  dangerouslySetInnerHTML={{ __html: debugInfo }}
-                />
-              </div>
-            )} */}
-
-            <div>
-              <button
-                type="submit"
-                disabled={loading}
-                className={styles.submitButton}
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Loggar in...
-                  </span>
-                ) : 'Logga in'}
-              </button>
-            </div>
-
-            {/* Debug Tools */}
+          {/* Debug Tools - Only show in development */}
+          {process.env.NODE_ENV === 'development' && (
             <div className={styles.debugSection}>
               <p className="text-xs text-gray-500 mb-3 text-center font-medium">Felsökningsalternativ</p>
               <div className={styles.debugButtons}>
@@ -330,9 +361,19 @@ export default function AdminLogin() {
                   Testa Lokal Auth
                 </button>
               </div>
+              
+              {debugInfo && (
+                <div className={styles.debugInfo}>
+                  <p className="font-medium mb-1">Debug Info:</p>
+                  <div 
+                    className="whitespace-pre-wrap break-all"
+                    dangerouslySetInnerHTML={{ __html: debugInfo }}
+                  />
+                </div>
+              )}
             </div>
-          </form>
-        )}
+          )}
+        </form>
       </div>
     </div>
   );

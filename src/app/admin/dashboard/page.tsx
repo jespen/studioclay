@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabase';
 import AdminDashboard from '../../../components/admin/Dashboard/AdminDashboard';
@@ -16,39 +16,85 @@ export default function DashboardPage() {
     const checkAuth = async () => {
       try {
         setLoading(true);
+        console.log('DashboardPage: Checking authentication status');
         
-        // Get user email from cookie for quicker display
+        // Try to get user from cookies first for fast rendering
         const userEmail = document.cookie
           .split(';')
           .find(c => c.trim().startsWith('admin-user='));
         
         if (userEmail) {
           const email = decodeURIComponent(userEmail.split('=')[1]);
+          console.log('DashboardPage: Found admin-user cookie with email:', email);
           setUser({ email });
+          setLoading(false);
+          return; // Success with cookie auth
         }
 
-        // Verify session is still valid
-        const { data, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          throw new Error(error.message);
-        }
-        
-        if (!data.session) {
-          // If no session found but we have cookies, likely using local auth
-          const activeSessionCookie = document.cookie
-            .split(';')
-            .find(c => c.trim().startsWith('admin-session-active='));
-            
-          if (!activeSessionCookie) {
-            throw new Error('No active session found');
+        // Then verify with Supabase if no cookie found
+        try {
+          console.log('DashboardPage: Checking Supabase session');
+          const { data, error } = await supabase.auth.getSession();
+          
+          if (!error && data.session) {
+            console.log('DashboardPage: Found valid Supabase session for user:', data.session.user.email);
+            setUser(data.session.user);
+            setLoading(false);
+            return; // Successfully authenticated with Supabase
+          } else if (error) {
+            console.error('DashboardPage: Supabase session error:', error);
+          } else {
+            console.log('DashboardPage: No Supabase session found');
           }
-        } else if (data.session.user) {
-          setUser(data.session.user);
+        } catch (supabaseError) {
+          console.error('DashboardPage: Supabase auth error:', supabaseError);
         }
+
+        // Check if browser has local storage Supabase session
+        try {
+          // Check for Supabase cookies as a last resort
+          const hasSupabaseCookies = document.cookie
+            .split(';')
+            .some(c => c.trim().startsWith('sb-'));
+            
+          if (hasSupabaseCookies) {
+            console.log('DashboardPage: Found Supabase cookies, trying to refresh session');
+            
+            // Try to refresh the session
+            const { data, error } = await supabase.auth.refreshSession();
+            if (!error && data.session) {
+              console.log('DashboardPage: Successfully refreshed Supabase session');
+              setUser(data.session.user);
+              setLoading(false);
+              return;
+            }
+          }
+          
+          const savedSession = localStorage.getItem('supabase.auth.token');
+          if (savedSession) {
+            console.log('DashboardPage: Found Supabase session in localStorage');
+            
+            // Try to refresh the session
+            const { data, error } = await supabase.auth.refreshSession();
+            if (!error && data.session) {
+              console.log('DashboardPage: Successfully refreshed Supabase session');
+              setUser(data.session.user);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (localStorageError) {
+          console.error('DashboardPage: Local storage error:', localStorageError);
+        }
+
+        // If we got here, no valid auth was found
+        console.error('DashboardPage: No valid authentication found, redirecting to login');
+        throw new Error('No active session found');
+        
       } catch (err) {
-        console.error('Authentication error:', err);
+        console.error('DashboardPage: Authentication error:', err);
         setError(err instanceof Error ? err.message : 'Authentication error');
+        
         // Redirect to login on auth error
         router.push('/admin');
       } finally {
@@ -61,17 +107,29 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="loading-container">
-        <p>Laddar dashboard...</p>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#547264]"></div>
+          <p className="mt-2 text-gray-600">Laddar dashboard...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="error-container">
-        <p>Error: {error}</p>
-        <button onClick={() => router.push('/admin')}>Gå till inloggning</button>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center p-6 bg-white rounded-lg shadow-lg max-w-md">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold mb-2">Inloggningsproblem</h2>
+          <p className="text-gray-600 mb-4">Det gick inte att verifiera din inloggning: {error}</p>
+          <button 
+            onClick={() => router.push('/admin')}
+            className="px-4 py-2 bg-[#547264] text-white rounded hover:bg-[#3e5549] transition-colors"
+          >
+            Gå till inloggning
+          </button>
+        </div>
       </div>
     );
   }

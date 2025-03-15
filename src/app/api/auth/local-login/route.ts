@@ -27,17 +27,61 @@ const ADMIN_USERS = [
 // Handle local login requests
 export async function POST(request: Request) {
   try {
-    const data = await request.json();
-    // Implement server-side authentication logic
-    return NextResponse.json({
-      message: 'Login processed',
-      status: 'success',
-      token: generateSessionToken()
+    const { email, password } = await request.json();
+
+    // Validate credentials
+    const user = ADMIN_USERS.find(u => u.email === email && u.password === password);
+    
+    if (!user) {
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid email or password'
+      }, { status: 401 });
+    }
+
+    // Generate session token
+    const sessionToken = generateSessionToken();
+
+    // Create response with success
+    const response = NextResponse.json({
+      success: true,
+      message: 'Login successful',
+      user: {
+        email: user.email
+      }
     });
+
+    // Set session cookies
+    response.cookies.set('admin-session', sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 // 24 hours
+    });
+
+    response.cookies.set('admin-session-active', 'true', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 // 24 hours
+    });
+
+    response.cookies.set('admin-user', encodeURIComponent(user.email), {
+      httpOnly: false, // We need this on the client
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 // 24 hours
+    });
+
+    return response;
   } catch (error) {
+    console.error('Login error:', error);
     return NextResponse.json({
-      message: 'Invalid request',
-      status: 'error'
-    }, { status: 400 });
+      success: false,
+      error: 'An error occurred during login'
+    }, { status: 500 });
   }
 } 

@@ -45,19 +45,25 @@ export async function POST(request: Request) {
     const body = await request.json();
     console.log('Creating new course with body:', body);
 
+    // Extract template data from the request
+    const templateData = body.template || {};
+    
+    // Ensure price is a number with default value to prevent null constraint violation
+    const price = templateData.price || 0;
+
     // First create the course template
     const { data: template, error: templateError } = await supabaseAdmin
       .from('course_templates')
       .insert([{
-        title: body.title,
-        description: body.description,
-        price: body.price,
-        currency: body.currency,
-        category_id: body.category_id,
-        instructor_id: body.instructor_id,
-        is_published: body.is_published,
-        max_participants: body.max_participants, // Move this to template
-        location: body.location
+        title: templateData.title || body.title,
+        description: templateData.description || body.description,
+        price: price,
+        currency: templateData.currency || 'SEK',
+        category_id: templateData.category_id,
+        instructor_id: templateData.instructor_id,
+        is_published: body.is_published !== undefined ? body.is_published : false,
+        max_participants: body.max_participants || templateData.max_participants,
+        location: templateData.location || 'Studio Clay'
       }])
       .select(`
         *,
@@ -79,7 +85,7 @@ export async function POST(request: Request) {
       .insert([{
         template_id: template.id,
         current_participants: 0,
-        max_participants: body.max_participants,
+        max_participants: body.max_participants || templateData.max_participants,
         start_date: body.start_date,
         end_date: body.end_date,
         status: 'scheduled'
