@@ -1,29 +1,20 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Export middleware function for Next.js
+// TEMPORARILY DISABLED - Only logging, no redirects
 export function middleware(request: NextRequest) {
-  // Add console logs for debugging
+  // Just log and pass through all requests
   const url = request.nextUrl.clone();
-  console.log('==== MIDDLEWARE ====');
-  console.log('URL:', url.pathname);
+  console.log('==== MIDDLEWARE TEMPORARILY DISABLED ====');
+  console.log('URL (passing through):', url.pathname);
   
-  // Temporarily simplify - only protect /admin/dashboard without redirecting
-  if (url.pathname.startsWith('/admin/dashboard')) {
-    // For now, just proceed without authentication checks
-    console.log('Protected route detected, temporarily allowing access');
-    const response = NextResponse.next();
-    response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
-    return response;
-  }
-
-  // For all other routes
+  // Always proceed without any redirects
   return NextResponse.next();
 }
 
-// Configure the middleware to run on specific paths
+// Limited matcher to exclude API routes entirely
 export const config = {
   matcher: [
-    '/admin/:path*'
+    // Empty array to effectively disable middleware until fixed
   ]
 }; 
