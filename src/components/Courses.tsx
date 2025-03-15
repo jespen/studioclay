@@ -48,11 +48,7 @@ interface DisplayCourse {
   availableSpots: number | null;
 }
 
-interface CoursesProps {
-  usePublicApi?: boolean;
-}
-
-const Courses = ({ usePublicApi = true }: CoursesProps) => {
+const Courses = () => {
   const [tryCourses, setTryCourses] = useState<DisplayCourse[]>([]);
   const [longerCourses, setLongerCourses] = useState<DisplayCourse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -156,8 +152,8 @@ const Courses = ({ usePublicApi = true }: CoursesProps) => {
     setIsLoading(true);
     setError(null);
     try {
-      // Use the appropriate API endpoint based on the prop
-      const apiUrl = usePublicApi ? '/api/courses/public' : '/api/courses/?published=true';
+      // Always use the admin API endpoint that works
+      const apiUrl = '/api/courses/?published=true';
       console.log(`Fetching courses from: ${apiUrl}`);
       
       const response = await fetch(apiUrl, {
@@ -205,7 +201,7 @@ const Courses = ({ usePublicApi = true }: CoursesProps) => {
 
   useEffect(() => {
     fetchCourses();
-  }, [usePublicApi]);
+  }, []);
 
   return (
     <section id="courses" className={styles.section}>
