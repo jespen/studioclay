@@ -23,8 +23,11 @@ export function middleware(request: NextRequest) {
   console.log('Has admin-session cookie:', !!adminSessionCookie);
   console.log('Has admin-session-active cookie:', !!adminSessionActiveCookie);
   
-  // If accessing any admin route (not just dashboard), enforce authentication
-  if (url.pathname.startsWith('/admin') && url.pathname !== '/admin' && !url.pathname.includes('/api/')) {
+  // The login page is at /admin exactly
+  const isLoginPage = url.pathname === '/admin';
+  
+  // If accessing any admin route (except the login page itself), enforce authentication
+  if (url.pathname.startsWith('/admin') && !isLoginPage && !url.pathname.includes('/api/')) {
     console.log('Protected route detected, checking authentication');
 
     // Check for admin session cookie (our custom cookie)
@@ -60,6 +63,25 @@ export function middleware(request: NextRequest) {
     const response = NextResponse.next();
     response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
     return response;
+  }
+
+  // For the login page itself, we should check if the user is already authenticated
+  // If they are, redirect them to the dashboard instead of showing login again
+  if (isLoginPage) {
+    const hasAdminSession = !!adminSessionCookie && 
+      !!adminSessionActiveCookie && 
+      adminSessionCookie.value.length > 0 && 
+      adminSessionActiveCookie.value === 'true';
+    
+    const hasSupabaseCookies = supabaseCookies.length >= 3;
+    
+    // If user is already authenticated, redirect to dashboard
+    if (hasAdminSession || hasSupabaseCookies) {
+      console.log('User already authenticated, redirecting to dashboard');
+      const response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
+      response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
+      return response;
+    }
   }
 
   // For all other routes
