@@ -16,6 +16,9 @@ const publicPaths = [
   '/api/checkout',
   '/api/webhooks',
   '/api/admin',
+  '/api/auth/set-auth-cookie',
+  '/api/auth/supabase-auth-test',
+  '/api/auth/local-login',
 ];
 
 export async function middleware(request: NextRequest) {
@@ -62,7 +65,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/course/') ||
     pathname.startsWith('/api/webhooks/') ||
     pathname.startsWith('/api/admin/') ||
-    pathname.startsWith('/api/checkout/')
+    pathname.startsWith('/api/checkout/') ||
+    pathname.startsWith('/api/auth/')
   );
 
   // Skip auth check for public paths

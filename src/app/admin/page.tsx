@@ -78,6 +78,17 @@ export default function AdminLogin() {
     // Skip Supabase session check if using local auth
     if (isLocalAuth) return;
     
+    // Add redirect attempt tracking to prevent loops
+    const redirectAttempts = parseInt(localStorage.getItem('redirectAttempts') || '0', 10);
+    const maxAttempts = 3;
+    
+    if (redirectAttempts >= maxAttempts) {
+      console.log('Too many redirect attempts, resetting count and staying on login page');
+      localStorage.setItem('redirectAttempts', '0');
+      setDebugInfo('Login redirect loop detected. Please try logging in again.');
+      return;
+    }
+    
     // Check if user is already logged in
     const checkSession = async () => {
       try {
@@ -96,14 +107,22 @@ export default function AdminLogin() {
           // Set server-side cookies that middleware can detect
           const email = data.session.user.email;
           if (email) {
-            await setAuthCookies(email);
+            const success = await setAuthCookies(email);
+            if (!success) {
+              console.error('Failed to set auth cookies');
+              setDebugInfo('Failed to set authentication cookies');
+              return;
+            }
           }
+          
+          // Increment redirect attempt counter
+          localStorage.setItem('redirectAttempts', (redirectAttempts + 1).toString());
           
           // Set a short timeout to ensure that cookies are set before navigation
           setTimeout(() => {
             // Use direct navigation for more reliable redirection
             window.location.href = '/admin/dashboard';
-          }, 100);
+          }, 500);
         }
       } catch (err: any) {
         console.error('Error checking session:', err);
@@ -122,17 +141,26 @@ export default function AdminLogin() {
       if (session && event === 'SIGNED_IN') {
         console.log('New sign in detected, setting cookies');
         
+        // Increment redirect attempt counter
+        const currentAttempts = parseInt(localStorage.getItem('redirectAttempts') || '0', 10);
+        localStorage.setItem('redirectAttempts', (currentAttempts + 1).toString());
+        
         // Set server-side cookies that middleware can detect
         const email = session.user.email;
         if (email) {
-          await setAuthCookies(email);
+          const success = await setAuthCookies(email);
+          if (!success) {
+            console.error('Failed to set auth cookies after sign in');
+            setDebugInfo('Failed to set authentication cookies');
+            return;
+          }
         }
         
         // Set a short timeout to ensure that cookies are set before navigation
         setTimeout(() => {
           // Use direct navigation for more reliable redirection
           window.location.href = '/admin/dashboard';
-        }, 300);
+        }, 500);
       }
     });
 
