@@ -7,22 +7,12 @@ import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 interface AdminHeaderProps {
   title: string;
   subtitle?: string;
+  userEmail?: string;
 }
 
-export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle }) => {
+export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userEmail }) => {
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  // Get the user email from the cookie
-  useEffect(() => {
-    const cookies = document.cookie.split(';');
-    const userCookie = cookies.find(cookie => cookie.trim().startsWith('admin-user='));
-    if (userCookie) {
-      const email = userCookie.split('=')[1];
-      setUserEmail(decodeURIComponent(email));
-    }
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -45,17 +35,23 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle }) => 
         throw new Error(`Logout failed: ${response.status}`);
       }
 
-      // Clear all client-side cookies
-      const clearCookie = (name: string) => {
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; secure; samesite=lax`;
-      };
+      // Manually clear cookies in the browser too (belt and suspenders approach)
+      document.cookie = 'admin-session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+      document.cookie = 'admin-session-active=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+      document.cookie = 'admin-user=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
       
-      clearCookie('admin-session');
-      clearCookie('admin-session-active');
-      clearCookie('admin-user');
+      // Find and clear any Supabase cookies
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.startsWith('sb-')) {
+          const name = cookie.split('=')[0];
+          document.cookie = `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
+        }
+      }
 
       // Small delay to ensure cookies are cleared
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       // Force a complete page reload and redirect
       window.location.href = '/admin?ts=' + Date.now();

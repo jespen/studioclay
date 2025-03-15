@@ -12,17 +12,11 @@ export const SectionContainer: React.FC<SectionContainerProps> = ({
   children, 
   variant = 'default' 
 }) => {
-  const containerClassName = variant === 'draft' 
-    ? `${styles.sectionContainer} ${styles.draftContainer}`
-    : variant === 'past'
-      ? `${styles.sectionContainer} ${styles.pastContainer}`
-      : styles.sectionContainer;
+  const containerClassName = styles.sectionContainer;
 
-  const headerClassName = variant === 'draft'
-    ? `${styles.sectionHeader} ${styles.draftHeader}`
-    : variant === 'past'
-      ? `${styles.sectionHeader} ${styles.pastHeader}`
-      : styles.sectionHeader;
+  const headerClassName = variant === 'past'
+    ? `${styles.sectionHeader} ${styles.pastHeader}`
+    : styles.sectionHeader;
 
   return (
     <div className={containerClassName}>

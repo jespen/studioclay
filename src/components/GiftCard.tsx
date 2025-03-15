@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import styles from '@/styles/GiftCard.module.css';
 import Link from 'next/link';
-import { supabaseClient } from '@/lib/supabase';
 
 interface CardType {
   id: string;
@@ -77,20 +76,6 @@ const GiftCard = () => {
     setIsSubmitting(true);
     
     try {
-      // Test Supabase connectivity first with a simpler query
-      console.log('Testing Supabase connectivity...');
-      const { data: testData, error: testError } = await supabaseClient
-        .from('gift_cards')
-        .select('id')
-        .limit(1);
-        
-      if (testError) {
-        console.error('Supabase connectivity test failed:', testError);
-        throw new Error(`Supabase connection error: ${testError.message}`);
-      } else {
-        console.log('Supabase connectivity test succeeded:', testData);
-      }
-      
       // Calculate expiration date (1 year from now)
       const expiresAt = new Date();
       expiresAt.setFullYear(expiresAt.getFullYear() + 1);
@@ -114,21 +99,8 @@ const GiftCard = () => {
         message: formData.message
       });
       
-      // Log Supabase connection state without accessing protected properties
-      console.log('Supabase client initialized:', !!supabaseClient);
-      
-      // Save to Supabase without using Promise.race (which could be causing issues)
-      console.log('Sending insert request to Supabase...');
-      
-      // Create a simple gift card object with generated code
-      const generateUniqueCode = () => {
-        // Generate a random code - in production this should be more sophisticated
-        const random = Math.random().toString(36).substring(2, 10).toUpperCase();
-        return `GC-${random}`;
-      };
-      
+      // Create a gift card object
       const giftCardData = {
-        code: generateUniqueCode(), // Explicitly provide code to avoid ambiguity
         amount: amountValue,
         type: cardType,
         sender_name: formData.senderName,
@@ -136,34 +108,24 @@ const GiftCard = () => {
         recipient_name: formData.recipientName,
         recipient_email: formData.recipientEmail,
         message: formData.message,
-        status: 'active', // Explicitly set status
-        remaining_balance: amountValue, // Set initial remaining balance
-        is_emailed: false,
-        is_printed: false,
-        is_paid: false, // Default to unpaid
-        expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString() // 1 year from now
       };
       
-      console.log('Gift card data being sent:', giftCardData);
+      // Use server API endpoint instead of direct Supabase access
+      const response = await fetch('/api/gift-cards/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(giftCardData),
+      });
       
-      // Insert without select to avoid ambiguous column reference
-      const { error } = await supabaseClient
-        .from('gift_cards')
-        .insert([giftCardData]);
-      
-      console.log('Received response from Supabase:', { error });
-      
-      if (error) {
-        console.error('Supabase error details:', error);
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-        console.error('Error details:', error.details);
-        // Check if the error is related to RLS
-        if (error.code === '42501') {
-          console.error('This appears to be a permissions error. RLS might be blocking the insert.');
-        }
-        throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create gift card');
       }
+      
+      const result = await response.json();
+      console.log('Gift card created successfully:', result);
       
       // Success! Show confirmation message
       alert(`Presentkortsköp genomfört! Ditt presentkort har skapats.`);

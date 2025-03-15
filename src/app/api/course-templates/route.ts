@@ -1,17 +1,72 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-// GET all course templates
-export async function GET() {
-  // This is a server-side API route that will be hosted on Vercel
-  // Return empty data for now - this will be implemented with real data
-  return NextResponse.json({ templates: [] });
+// Dynamic API route for course templates
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
+  // Server-side implementation of course templates retrieval
+  try {
+    // Get query parameters
+    const searchParams = new URL(request.url).searchParams;
+    const isActive = searchParams.get('active');
+    
+    let query = supabaseAdmin
+      .from('course_templates')
+      .select('*')
+      .order('title');
+    
+    // Filter by active status if specified
+    if (isActive !== null) {
+      const activeBoolean = isActive === 'true';
+      query = query.eq('is_active', activeBoolean);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    
+    console.log(`API: Fetched ${data.length} course templates`);
+    
+    return NextResponse.json({ templates: data });
+  } catch (error) {
+    console.error('Error fetching course templates:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch course templates', details: error instanceof Error ? error.message : String(error) }, 
+      { status: 500 }
+    );
+  }
 }
 
-// POST to create a new course template
-export async function POST() {
-  // This is a server-side API route that will be hosted on Vercel
-  // Return success for now - this will be implemented with real data
-  return NextResponse.json({ success: true });
-}
-
-export const dynamic = 'force-dynamic'; 
+export async function POST(request: NextRequest) {
+  // Server-side implementation of course template creation
+  try {
+    const templateData = await request.json();
+    
+    // Validate required fields
+    if (!templateData.title) {
+      return NextResponse.json(
+        { error: 'Title is required' }, 
+        { status: 400 }
+      );
+    }
+    
+    const { data, error } = await supabaseAdmin
+      .from('course_templates')
+      .insert(templateData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    console.log('API: Successfully created course template:', data.id);
+    
+    return NextResponse.json({ template: data }, { status: 201 });
+  } catch (error) {
+    console.error('Error creating course template:', error);
+    return NextResponse.json(
+      { error: 'Failed to create course template', details: error instanceof Error ? error.message : String(error) }, 
+      { status: 500 }
+    );
+  }
+} 

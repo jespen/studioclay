@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabase';
 import AdminDashboard from '../../../components/admin/Dashboard/AdminDashboard';
 
 export default function DashboardPage() {
@@ -18,79 +17,23 @@ export default function DashboardPage() {
         setLoading(true);
         console.log('DashboardPage: Checking authentication status');
         
-        // Try to get user from cookies first for fast rendering
-        const userEmail = document.cookie
-          .split(';')
-          .find(c => c.trim().startsWith('admin-user='));
+        // Use the session-info API route to check authentication
+        const response = await fetch('/api/auth/session-info');
         
-        if (userEmail) {
-          const email = decodeURIComponent(userEmail.split('=')[1]);
-          console.log('DashboardPage: Found admin-user cookie with email:', email);
-          setUser({ email });
-          setLoading(false);
-          return; // Success with cookie auth
+        if (!response.ok) {
+          console.error('DashboardPage: Error fetching session info:', response.status);
+          throw new Error('Could not authenticate');
         }
-
-        // Then verify with Supabase if no cookie found
-        try {
-          console.log('DashboardPage: Checking Supabase session');
-          const { data, error } = await supabase.auth.getSession();
-          
-          if (!error && data.session) {
-            console.log('DashboardPage: Found valid Supabase session for user:', data.session.user.email);
-            setUser(data.session.user);
-            setLoading(false);
-            return; // Successfully authenticated with Supabase
-          } else if (error) {
-            console.error('DashboardPage: Supabase session error:', error);
-          } else {
-            console.log('DashboardPage: No Supabase session found');
-          }
-        } catch (supabaseError) {
-          console.error('DashboardPage: Supabase auth error:', supabaseError);
-        }
-
-        // Check if browser has local storage Supabase session
-        try {
-          // Check for Supabase cookies as a last resort
-          const hasSupabaseCookies = document.cookie
-            .split(';')
-            .some(c => c.trim().startsWith('sb-'));
-            
-          if (hasSupabaseCookies) {
-            console.log('DashboardPage: Found Supabase cookies, trying to refresh session');
-            
-            // Try to refresh the session
-            const { data, error } = await supabase.auth.refreshSession();
-            if (!error && data.session) {
-              console.log('DashboardPage: Successfully refreshed Supabase session');
-              setUser(data.session.user);
-              setLoading(false);
-              return;
-            }
-          }
-          
-          const savedSession = localStorage.getItem('supabase.auth.token');
-          if (savedSession) {
-            console.log('DashboardPage: Found Supabase session in localStorage');
-            
-            // Try to refresh the session
-            const { data, error } = await supabase.auth.refreshSession();
-            if (!error && data.session) {
-              console.log('DashboardPage: Successfully refreshed Supabase session');
-              setUser(data.session.user);
-              setLoading(false);
-              return;
-            }
-          }
-        } catch (localStorageError) {
-          console.error('DashboardPage: Local storage error:', localStorageError);
-        }
-
-        // If we got here, no valid auth was found
-        console.error('DashboardPage: No valid authentication found, redirecting to login');
-        throw new Error('No active session found');
         
+        const data = await response.json();
+        
+        if (data.sessionInfo && data.sessionInfo.activeSessionExists && data.sessionInfo.userEmail) {
+          console.log('DashboardPage: Found active session for user:', data.sessionInfo.userEmail);
+          setUser({ email: data.sessionInfo.userEmail });
+        } else {
+          console.error('DashboardPage: No valid authentication found, redirecting to login');
+          throw new Error('No active session found');
+        }
       } catch (err) {
         console.error('DashboardPage: Authentication error:', err);
         setError(err instanceof Error ? err.message : 'Authentication error');

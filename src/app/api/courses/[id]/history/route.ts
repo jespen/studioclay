@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 
-// Removed static export flag
+// Dynamic API route
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  // Since we're using static exports, we'll handle booking history on the client side
+  // We no longer need booking history as we use the status field to track lifecycle
   return NextResponse.json({
-    message: 'Booking history is handled on the client side',
+    message: 'Booking history has been replaced by the status field on bookings. Use the bookings API with status filter to get cancelled bookings.',
     status: 'success'
   });
 } 

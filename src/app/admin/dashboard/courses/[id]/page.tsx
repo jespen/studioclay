@@ -8,8 +8,8 @@ interface PageProps {
 }
 
 export default async function CoursePage({ params }: PageProps) {
-  // Ensure params are properly awaited before using them
-  const courseId = params.id;
+  // Ensure params are properly awaited
+  const { id: courseId } = params;
   
   console.log('Course Edit Page: Rendering for course ID:', courseId);
   

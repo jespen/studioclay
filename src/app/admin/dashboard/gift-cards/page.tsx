@@ -6,16 +6,27 @@ import GiftCardManager from '@/components/admin/GiftCards/GiftCardManager';
 import styles from '../courses/courses.module.css';
 
 export default function GiftCardsPage() {
-  const [userName, setUserName] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get the user email from the cookie
-    const cookies = document.cookie.split(';');
-    const userCookie = cookies.find(cookie => cookie.trim().startsWith('admin-user='));
-    if (userCookie) {
-      const email = userCookie.split('=')[1];
-      setUserName(decodeURIComponent(email));
+    async function fetchUserInfo() {
+      try {
+        const response = await fetch('/api/auth/session-info');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.sessionInfo && data.sessionInfo.userEmail) {
+            setUserName(data.sessionInfo.userEmail);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user info:', error);
+      } finally {
+        setLoading(false);
+      }
     }
+
+    fetchUserInfo();
   }, []);
 
   return (
@@ -23,10 +34,15 @@ export default function GiftCardsPage() {
       <AdminHeader 
         title="Presentkort" 
         subtitle={userName ? `Välkommen, ${userName}` : 'Välkommen'} 
+        userEmail={userName}
       />
       
       <main className={styles.mainContent}>
-        <GiftCardManager showHeader={true} />
+        {loading ? (
+          <div className={styles.loadingSpinner}>Laddar...</div>
+        ) : (
+          <GiftCardManager showHeader={true} />
+        )}
       </main>
     </div>
   );

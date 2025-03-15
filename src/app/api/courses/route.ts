@@ -84,11 +84,13 @@ export async function POST(request: Request) {
       .from('course_instances')
       .insert([{
         template_id: template.id,
+        title: templateData.title || body.title,
         current_participants: 0,
         max_participants: body.max_participants || templateData.max_participants,
         start_date: body.start_date,
         end_date: body.end_date,
-        status: 'scheduled'
+        status: 'scheduled',
+        is_published: body.is_published !== undefined ? body.is_published : false
       }])
       .select()
       .single();

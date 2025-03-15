@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Paper,
   Table,
@@ -27,21 +27,31 @@ import {
   Select,
   MenuItem,
   Grid,
-  SelectChangeEvent
+  SelectChangeEvent,
+  Tabs,
+  Tab
 } from '@mui/material';
-import EmailIcon from '@mui/icons-material/Email';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import PendingIcon from '@mui/icons-material/Pending';
-import CancelIcon from '@mui/icons-material/Cancel';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Check as CheckIcon, Close as CloseIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import { styled } from '@mui/system';
 import type { Booking } from '@/lib/supabaseAdmin';
+
+// Styled components
+const StyledTableContainer = styled(TableContainer)({
+  marginTop: '1rem',
+  maxHeight: '60vh',
+  overflowY: 'auto',
+});
+
+const StyledTableCell = styled(TableCell)({
+  fontWeight: 'bold',
+});
 
 interface BookingsListProps {
   courseId: string;
   onBookingUpdate?: () => void;
 }
+
+type StatusFilter = 'all' | 'active' | 'cancelled';
 
 export default function BookingsList({ courseId, onBookingUpdate }: BookingsListProps) {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -49,10 +59,11 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   
-  // Delete dialog state
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
+  // Delete (now cancel) dialog state
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
   
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -61,57 +72,23 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
   
   // Primary color from globals.css
   const primaryColor = '#547264';
-  
-  const supabase = createClientComponentClient();
 
   useEffect(() => {
     fetchBookings();
-  }, [courseId]);
+  }, [courseId, statusFilter]);
   
   const fetchBookings = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('bookings')
-        .select(`
-          *,
-          course:course_instances(
-            *,
-            template:course_templates(
-              *,
-              category:categories(*),
-              instructor:instructors(*)
-            )
-          )
-        `)
-        .eq('course_id', courseId)
-        .order('booking_date', { ascending: false });
+      const response = await fetch(`/api/bookings?courseId=${courseId}&status=${statusFilter}`);
       
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to fetch bookings: ${response.status}`);
+      }
       
-      // Process the data to maintain backward compatibility
-      const processedData = (data || []).map((booking: Booking) => {
-        if (booking.course) {
-          const template = booking.course.template;
-          booking.course = {
-            id: booking.course.id,
-            template_id: template?.id || booking.course.template_id,
-            current_participants: booking.course.current_participants || 0,
-            max_participants: template?.max_participants || booking.course.max_participants || 0,
-            start_date: booking.course.start_date,
-            end_date: booking.course.end_date,
-            status: booking.course.status,
-            created_at: booking.course.created_at,
-            updated_at: booking.course.updated_at,
-            template,
-            instructor: booking.course.instructor,
-            category: booking.course.category
-          };
-        }
-        return booking;
-      });
-      
-      setBookings(processedData);
+      const data = await response.json();
+      setBookings(data.bookings || []);
       setError(null);
     } catch (err) {
       console.error('Error fetching bookings:', err);
@@ -130,69 +107,40 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
     setPage(0);
   };
 
-  // Handle opening the delete confirmation dialog
-  const handleDeleteClick = (booking: Booking) => {
-    setBookingToDelete(booking);
-    setDeleteDialogOpen(true);
+  const handleStatusFilterChange = (event: React.SyntheticEvent, newValue: StatusFilter) => {
+    setStatusFilter(newValue);
+    setPage(0); // Reset to first page when filter changes
   };
 
-  // Handle delete confirmation
-  const handleDeleteConfirm = async () => {
-    if (!bookingToDelete) return;
+  // Handle opening the cancel confirmation dialog
+  const handleCancelClick = (booking: Booking) => {
+    setBookingToCancel(booking);
+    setCancelDialogOpen(true);
+  };
+
+  // Handle cancel confirmation
+  const handleCancelConfirm = async () => {
+    if (!bookingToCancel) return;
     
     try {
-      // First, create history record
-      const historyData = {
-        original_booking_id: bookingToDelete.id,
-        course_id: bookingToDelete.course_id,
-        customer_name: bookingToDelete.customer_name,
-        customer_email: bookingToDelete.customer_email,
-        customer_phone: bookingToDelete.customer_phone,
-        number_of_participants: bookingToDelete.number_of_participants,
-        original_booking_date: bookingToDelete.booking_date,
-        cancellation_date: new Date().toISOString(),
-        history_type: 'cancelled',
-        message: bookingToDelete.message
-      };
-
-      const { error: historyError } = await supabase
-        .from('booking_history')
-        .insert(historyData);
-
-      if (historyError) throw historyError;
-      
-      // Then delete the booking
-      const { error: deleteError } = await supabase
-        .from('bookings')
-        .delete()
-        .eq('id', bookingToDelete.id);
-
-      if (deleteError) throw deleteError;
-      
-      // Update course participants count
-      if (bookingToDelete.course_id) {
-        const { data: course, error: courseError } = await supabase
-          .from('course_instances')
-          .select('current_participants')
-          .eq('id', bookingToDelete.course_id)
-          .single();
-        
-        if (!courseError && course) {
-          await supabase
-            .from('course_instances')
-            .update({
-              current_participants: Math.max(0, course.current_participants - bookingToDelete.number_of_participants)
-            })
-            .eq('id', bookingToDelete.course_id);
+      const response = await fetch(`/api/bookings/${bookingToCancel.id}`, {
+        method: 'DELETE', // This now updates status to 'cancelled' instead of deleting
+        headers: {
+          'Content-Type': 'application/json',
         }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to cancel booking');
       }
       
       // Close the dialog
-      setDeleteDialogOpen(false);
-      setBookingToDelete(null);
+      setCancelDialogOpen(false);
+      setBookingToCancel(null);
       
       // Show success message
-      alert('Bokningen har tagits bort');
+      alert('Bokningen har avbokats');
       
       // Refresh the bookings list
       fetchBookings();
@@ -202,8 +150,8 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
         onBookingUpdate();
       }
     } catch (err) {
-      console.error('Error deleting booking:', err);
-      alert(`Kunde inte ta bort bokningen: ${err instanceof Error ? err.message : 'Okänt fel'}`);
+      console.error('Error cancelling booking:', err);
+      alert(`Kunde inte avboka bokningen: ${err instanceof Error ? err.message : 'Okänt fel'}`);
     }
   };
 
@@ -227,77 +175,28 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
     if (!bookingToEdit) return;
     
     try {
-      // First, get the current booking to calculate participant differences
-      const { data: currentBooking, error: fetchError } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('id', bookingToEdit.id)
-        .single();
-        
-      if (fetchError) throw fetchError;
+      const response = await fetch(`/api/bookings/${bookingToEdit.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editFormData)
+      });
       
-      // Prepare the update data
-      const updateData = {
-        ...editFormData,
-        updated_at: new Date().toISOString()
-      };
-      
-      // Update the booking
-      const { error: updateError } = await supabase
-        .from('bookings')
-        .update(updateData)
-        .eq('id', bookingToEdit.id);
-
-      if (updateError) throw updateError;
-      
-      // Update course participants count if needed
-      if (currentBooking && currentBooking.course_id) {
-        let participantsDiff = 0;
-        
-        // Calculate participant difference based on number changes
-        const newParticipants = editFormData.number_of_participants ?? currentBooking.number_of_participants;
-        if (newParticipants !== currentBooking.number_of_participants) {
-          participantsDiff = newParticipants - currentBooking.number_of_participants;
-        }
-        
-        // Adjust for status changes
-        if (editFormData.status !== currentBooking.status) {
-          if (editFormData.status === 'cancelled' && currentBooking.status !== 'cancelled') {
-            // When changing to cancelled, subtract all participants
-            participantsDiff -= newParticipants;
-          } else if (editFormData.status !== 'cancelled' && currentBooking.status === 'cancelled') {
-            // When changing from cancelled to another status, add all participants
-            participantsDiff += newParticipants;
-          }
-        }
-        
-        // Only update if there's a change in participants
-        if (participantsDiff !== 0) {
-          const { data: course, error: courseError } = await supabase
-            .from('course_instances')
-            .select('current_participants')
-            .eq('id', currentBooking.course_id)
-            .single();
-          
-          if (!courseError && course) {
-            await supabase
-              .from('course_instances')
-              .update({
-                current_participants: Math.max(0, course.current_participants + participantsDiff)
-              })
-              .eq('id', currentBooking.course_id);
-          }
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update booking');
       }
       
-      // Close the dialog
+      // Close the dialog and reset state
       setEditDialogOpen(false);
       setBookingToEdit(null);
+      setEditFormData({});
       
       // Show success message
       alert('Bokningen har uppdaterats');
       
-      // Refresh the bookings list
+      // Refresh bookings
       fetchBookings();
       
       // Notify parent component
@@ -315,32 +214,46 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
       case 'confirmed':
         return (
           <Chip
-            icon={<CheckCircleIcon />}
+            size="small"
             label="Bekräftad"
             color="success"
-            size="small"
+            icon={<CheckIcon fontSize="small" />}
           />
         );
-      case 'waiting':
+      case 'pending':
         return (
           <Chip
-            icon={<PendingIcon />}
+            size="small"
             label="Väntande"
             color="warning"
-            size="small"
           />
         );
       case 'cancelled':
         return (
           <Chip
-            icon={<CancelIcon />}
+            size="small"
             label="Avbokad"
             color="error"
+            icon={<CloseIcon fontSize="small" />}
+          />
+        );
+      case 'completed':
+        return (
+          <Chip
             size="small"
+            label="Genomförd"
+            color="info"
+            icon={<CheckIcon fontSize="small" />}
           />
         );
       default:
-        return null;
+        return (
+          <Chip
+            size="small"
+            label={status || "Okänd"}
+            color="default"
+          />
+        );
     }
   };
 
@@ -349,25 +262,50 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
       case 'paid':
         return (
           <Chip
+            size="small"
             label="Betald"
             color="success"
-            size="small"
-            variant="outlined"
+            icon={<CheckIcon fontSize="small" />}
           />
         );
       case 'unpaid':
         return (
           <Chip
-            label="Ej betald"
-            color="error"
             size="small"
-            variant="outlined"
+            label="Ej betald"
+            color="warning"
+          />
+        );
+      case 'refunded':
+        return (
+          <Chip
+            size="small"
+            label="Återbetald"
+            color="error"
+          />
+        );
+      case 'partial':
+        return (
+          <Chip
+            size="small"
+            label="Delbetalning"
+            color="info"
           />
         );
       default:
-        return null;
+        return (
+          <Chip
+            size="small"
+            label={status || "Okänd"}
+            color="default"
+          />
+        );
     }
   };
+
+  // Calculate pagination using the bookings array directly
+  const emptyRows = rowsPerPage - Math.min(rowsPerPage, bookings.length - page * rowsPerPage);
+  const paginatedBookings = bookings.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   if (loading) {
     return (
@@ -402,128 +340,126 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
   }
 
   return (
-    <>
-      <Paper elevation={3} sx={{ overflow: 'hidden', borderRadius: 2, mt: 4 }}>
-        <Box sx={{ bgcolor: primaryColor, color: 'white', px: 3, py: 2 }}>
-          <Typography variant="h6" component="h2">
-            Bokningar ({bookings.length})
-          </Typography>
+    <div>
+      <Typography variant="h5" component="h2" sx={{ mb: 2 }}>
+        Bokningar
+      </Typography>
+
+      {error && (
+        <Box sx={{ mb: 2 }}>
+          <Typography color="error">{error}</Typography>
         </Box>
+      )}
 
-        <TableContainer>
-          <Table sx={{ minWidth: 650 }} size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Namn</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Telefon</TableCell>
-                <TableCell align="center">Antal</TableCell>
-                <TableCell>Bokningsdatum</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Betalning</TableCell>
-                <TableCell align="right">Åtgärder</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {bookings
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((booking) => (
-                  <TableRow key={booking.id} hover>
-                    <TableCell>{booking.customer_name}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {booking.customer_email}
-                        <Tooltip title="Skicka email">
-                          <IconButton
-                            size="small"
-                            href={`mailto:${booking.customer_email}`}
-                            sx={{ color: primaryColor }}
-                          >
-                            <EmailIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      {booking.customer_phone ? (
-                        <Link href={`tel:${booking.customer_phone}`} underline="hover">
-                          {booking.customer_phone}
-                        </Link>
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
-                    <TableCell align="center">{booking.number_of_participants}</TableCell>
-                    <TableCell>
-                      {new Date(booking.booking_date).toLocaleDateString('sv-SE')}
-                    </TableCell>
-                    <TableCell>{getStatusChip(booking.status)}</TableCell>
-                    <TableCell>{getPaymentStatusChip(booking.payment_status)}</TableCell>
-                    <TableCell align="right">
-                      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <Tooltip title="Redigera bokning">
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleEditClick(booking)}
-                            sx={{ color: primaryColor }}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Ta bort bokning">
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleDeleteClick(booking)}
-                            sx={{ color: '#d32f2f' }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
+      {/* Status Filter Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+        <Tabs value={statusFilter} onChange={handleStatusFilterChange} aria-label="booking status tabs">
+          <Tab label="Alla" value="all" />
+          <Tab label="Aktiva" value="active" />
+          <Tab label="Avbokade" value="cancelled" />
+        </Tabs>
+      </Box>
+
+      {loading ? (
+        <Box display="flex" justifyContent="center" my={4}>
+          <CircularProgress />
+        </Box>
+      ) : bookings.length === 0 ? (
+        <Typography>Inga bokningar hittades med det valda filtret.</Typography>
+      ) : (
+        <>
+          <Paper>
+            <StyledTableContainer>
+              <Table stickyHeader aria-label="bookings table">
+                <TableHead>
+                  <TableRow>
+                    <StyledTableCell>Namn</StyledTableCell>
+                    <StyledTableCell>E-post</StyledTableCell>
+                    <StyledTableCell>Telefon</StyledTableCell>
+                    <StyledTableCell>Antal</StyledTableCell>
+                    <StyledTableCell>Status</StyledTableCell>
+                    <StyledTableCell>Betalning</StyledTableCell>
+                    <StyledTableCell>Datum</StyledTableCell>
+                    <StyledTableCell>Meddelande</StyledTableCell>
+                    <StyledTableCell>Åtgärder</StyledTableCell>
                   </TableRow>
-                ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={bookings.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage="Rader per sida:"
-        />
-      </Paper>
+                </TableHead>
+                <TableBody>
+                  {paginatedBookings.map((booking) => (
+                    <TableRow 
+                      key={booking.id}
+                      sx={booking.status === 'cancelled' ? { opacity: 0.6 } : {}}
+                    >
+                      <TableCell>{booking.customer_name}</TableCell>
+                      <TableCell>{booking.customer_email}</TableCell>
+                      <TableCell>{booking.customer_phone || '–'}</TableCell>
+                      <TableCell>{booking.number_of_participants}</TableCell>
+                      <TableCell>{getStatusChip(booking.status)}</TableCell>
+                      <TableCell>{getPaymentStatusChip(booking.payment_status)}</TableCell>
+                      <TableCell>{new Date(booking.created_at).toLocaleDateString('sv-SE')}</TableCell>
+                      <TableCell>{booking.message ? booking.message.slice(0, 30) + (booking.message.length > 30 ? '...' : '') : '–'}</TableCell>
+                      <TableCell>
+                        <Button
+                          startIcon={<EditIcon />}
+                          size="small"
+                          onClick={() => handleEditClick(booking)}
+                          sx={{ mr: 1 }}
+                          disabled={booking.status === 'cancelled'}
+                        >
+                          Ändra
+                        </Button>
+                        {booking.status !== 'cancelled' && (
+                          <Button
+                            startIcon={<CloseIcon />}
+                            size="small"
+                            color="error"
+                            onClick={() => handleCancelClick(booking)}
+                          >
+                            Avboka
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {emptyRows > 0 && (
+                    <TableRow style={{ height: 53 * emptyRows }}>
+                      <TableCell colSpan={9} />
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </StyledTableContainer>
+          </Paper>
+          <TablePagination
+            component="div"
+            count={bookings.length}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={[5, 10, 25]}
+            labelRowsPerPage="Rader per sida:"
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} av ${count}`}
+          />
+        </>
+      )}
 
-      {/* Delete Confirmation Dialog */}
+      {/* Cancel Confirmation Dialog */}
       <Dialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
+        open={cancelDialogOpen}
+        onClose={() => setCancelDialogOpen(false)}
       >
-        <DialogTitle>Ta bort bokning</DialogTitle>
+        <DialogTitle>Bekräfta avbokning</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Är du säker på att du vill ta bort bokningen för {bookingToDelete?.customer_name}? 
-            Denna åtgärd kan inte ångras.
+            Är du säker på att du vill avboka bokningen för {bookingToCancel?.customer_name}?
+            Bokningen kommer att markeras som avbokad.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button 
-            onClick={() => setDeleteDialogOpen(false)} 
-            sx={{ color: 'text.secondary' }}
-          >
-            Avbryt
-          </Button>
-          <Button 
-            onClick={handleDeleteConfirm} 
-            variant="contained" 
-            color="error"
-          >
-            Ta bort
+          <Button onClick={() => setCancelDialogOpen(false)}>Avbryt</Button>
+          <Button onClick={handleCancelConfirm} color="error" autoFocus>
+            Avboka
           </Button>
         </DialogActions>
       </Dialog>
@@ -532,114 +468,95 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
       <Dialog
         open={editDialogOpen}
         onClose={() => setEditDialogOpen(false)}
-        maxWidth="md"
         fullWidth
+        maxWidth="md"
       >
         <DialogTitle>Redigera bokning</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} md={6}>
               <TextField
-                name="customer_name"
-                label="Namn"
+                fullWidth
+                label="Kundens namn"
                 value={editFormData.customer_name || ''}
                 onChange={(e) => handleEditFormChange('customer_name', e.target.value)}
-                fullWidth
-                margin="dense"
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} md={6}>
               <TextField
-                name="customer_email"
-                label="Email"
-                type="email"
+                fullWidth
+                label="E-post"
                 value={editFormData.customer_email || ''}
                 onChange={(e) => handleEditFormChange('customer_email', e.target.value)}
-                fullWidth
-                margin="dense"
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} md={6}>
               <TextField
-                name="customer_phone"
+                fullWidth
                 label="Telefon"
                 value={editFormData.customer_phone || ''}
                 onChange={(e) => handleEditFormChange('customer_phone', e.target.value)}
-                fullWidth
-                margin="dense"
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} md={6}>
               <TextField
-                name="number_of_participants"
-                label="Antal deltagare"
-                type="number"
-                value={editFormData.number_of_participants || ''}
-                onChange={(e) => handleEditFormChange('number_of_participants', e.target.value)}
                 fullWidth
-                margin="dense"
+                type="number"
+                label="Antal deltagare"
+                value={editFormData.number_of_participants || 1}
+                onChange={(e) => handleEditFormChange('number_of_participants', parseInt(e.target.value, 10))}
                 InputProps={{ inputProps: { min: 1 } }}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth margin="dense">
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
                 <InputLabel>Status</InputLabel>
                 <Select
-                  name="status"
-                  value={editFormData.status || ''}
-                  onChange={(e) => handleEditFormChange('status', e.target.value as string)}
+                  value={editFormData.status || 'pending'}
                   label="Status"
+                  onChange={(e) => handleEditFormChange('status', e.target.value)}
                 >
-                  <MenuItem value="waiting">Väntande</MenuItem>
+                  <MenuItem value="pending">Väntande</MenuItem>
                   <MenuItem value="confirmed">Bekräftad</MenuItem>
                   <MenuItem value="cancelled">Avbokad</MenuItem>
+                  <MenuItem value="completed">Genomförd</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth margin="dense">
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
                 <InputLabel>Betalningsstatus</InputLabel>
                 <Select
-                  name="payment_status"
-                  value={editFormData.payment_status || ''}
-                  onChange={(e) => handleEditFormChange('payment_status', e.target.value as string)}
+                  value={editFormData.payment_status || 'unpaid'}
                   label="Betalningsstatus"
+                  onChange={(e) => handleEditFormChange('payment_status', e.target.value)}
                 >
-                  <MenuItem value="paid">Betald</MenuItem>
                   <MenuItem value="unpaid">Ej betald</MenuItem>
+                  <MenuItem value="paid">Betald</MenuItem>
+                  <MenuItem value="refunded">Återbetald</MenuItem>
+                  <MenuItem value="partial">Delbetalning</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={12}>
               <TextField
-                name="message"
+                fullWidth
                 label="Meddelande"
                 value={editFormData.message || ''}
                 onChange={(e) => handleEditFormChange('message', e.target.value)}
-                fullWidth
-                margin="dense"
                 multiline
-                rows={3}
+                rows={4}
               />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button 
-            onClick={() => setEditDialogOpen(false)} 
-            sx={{ color: 'text.secondary' }}
-          >
-            Avbryt
-          </Button>
-          <Button 
-            onClick={handleEditSave} 
-            variant="contained" 
-            sx={{ bgcolor: primaryColor, '&:hover': { bgcolor: '#3e5549' } }}
-          >
-            Spara
+          <Button onClick={() => setEditDialogOpen(false)}>Avbryt</Button>
+          <Button onClick={handleEditSave} variant="contained" style={{ backgroundColor: primaryColor }}>
+            Spara ändringar
           </Button>
         </DialogActions>
       </Dialog>
-    </>
+    </div>
   );
 } 

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import styles from '@/styles/Courses.module.css';
-import { supabase } from '@/utils/supabase';
 
 // Define the course type based on the API response
 interface ApiCourse {
@@ -259,68 +258,46 @@ const Courses = () => {
     };
   };
 
-  useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        console.log('Fetching courses from Supabase...');
-        
-        // Fetch courses directly from Supabase
-        const { data: courses, error } = await supabase
-          .from('course_instances')
-          .select(`
-            *,
-            template:course_templates (
-              *,
-              category:categories (
-                name
-              )
-            )
-          `)
-          .eq('is_published', true)
-          .order('start_date', { ascending: true });
-
-        if (error) {
-          console.error('Supabase error:', error);
-          throw error;
-        }
-
-        console.log('Courses fetched:', courses);
-
-        if (!courses || courses.length === 0) {
-          console.log('No courses found');
-          setTryCourses([]);
-          setLongerCourses([]);
-          return;
-        }
-
-        // Map courses to display format
-        const displayCourses = courses.map(mapApiCourseToDisplayCourse);
-        console.log('Mapped courses:', displayCourses);
-
-        // Split courses into try-on and longer courses
-        const tryOn = displayCourses.filter(course => 
-          course.name.toLowerCase().includes('prova')
-        );
-        const longer = displayCourses.filter(course => 
-          !course.name.toLowerCase().includes('prova')
-        );
-
-        console.log('Try-on courses:', tryOn);
-        console.log('Longer courses:', longer);
-
-        setTryCourses(tryOn);
-        setLongerCourses(longer);
-      } catch (err: any) {
-        console.error('Error fetching courses:', err);
-        setError(err.message || 'Failed to load courses');
-      } finally {
-        setIsLoading(false);
+  const fetchCourses = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Use a fetch call to a server API endpoint instead of direct Supabase access
+      const response = await fetch('/api/courses/public');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch courses');
       }
-    };
+      
+      const data = await response.json();
+      
+      // Ensure we have the expected data structure
+      const apiCourses = Array.isArray(data.courses) ? data.courses : [];
+      
+      // Process the courses
+      const processed = apiCourses
+        .filter((course: ApiCourse) => course.is_published) // Only display published courses
+        .map(mapApiCourseToDisplayCourse);
+      
+      // Split courses into try-on and longer courses
+      const tryOn = processed.filter((course: DisplayCourse) => 
+        course.name.toLowerCase().includes('prova')
+      );
+      const longer = processed.filter((course: DisplayCourse) => 
+        !course.name.toLowerCase().includes('prova')
+      );
 
+      setTryCourses(tryOn);
+      setLongerCourses(longer);
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+      setError('Failed to load courses. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchCourses();
   }, []);
 

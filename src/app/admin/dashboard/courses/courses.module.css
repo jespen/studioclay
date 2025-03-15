@@ -278,33 +278,29 @@
   border: 1px solid #d1d5db;
 }
 
+/* Standardized action buttons for all admin pages */
 .actionButton {
-  padding: 0.25rem 0.5rem;
-  border: none;
-  border-radius: 0.25rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
-  font-size: 0.75rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.editButton {
   padding: 0.5rem 1rem;
-  background-color: var(--primary-color, #547264);
-  color: white;
   border: none;
   border-radius: 4px;
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  min-width: 85px;
+  text-align: center;
+}
+
+.editButton {
+  background-color: #6B7280;
 }
 
 .editButton:hover {
-  background-color: var(--primary-dark, #3f574a);
+  background-color: #4B5563;
 }
 
 .publishButton {
@@ -467,16 +463,6 @@
 
 .disabledButton:hover {
   background-color: #9ca3af;
-}
-
-.actionButton {
-  padding: 0.25rem 0.5rem;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  margin-right: 0.5rem;
-  transition: background-color 0.2s;
 }
 
 .actionsCell {

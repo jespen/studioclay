@@ -19,8 +19,8 @@ interface SessionInfo {
 interface Course {
   id: string;
   title: string;
-  category?: string;
-  instructor?: string;
+  category?: string | { id: string; name: string; [key: string]: any };
+  instructor?: string | { id: string; name: string; [key: string]: any };
   start_date?: string;
   end_date?: string;
   is_published?: boolean;
@@ -132,6 +132,14 @@ export default function DeveloperPage() {
     return arr.length > 0 ? arr.join(separator) : 'None';
   };
 
+  // Helper function to safely extract name from an object or return the value
+  const safeObjectName = (value: any): string => {
+    if (typeof value === 'object' && value !== null) {
+      return value.name || 'N/A';
+    }
+    return value || 'N/A';
+  };
+
   // Handle editing a course
   const handleEditCourse = (courseId: string) => {
     console.log('Navigating to edit course:', courseId);
@@ -188,6 +196,7 @@ export default function DeveloperPage() {
                           <th>ID</th>
                           <th>Title</th>
                           <th>Category</th>
+                          <th>Instructor</th>
                           <th>Published</th>
                           <th>Actions</th>
                         </tr>
@@ -197,9 +206,8 @@ export default function DeveloperPage() {
                           <tr key={course.id}>
                             <td><code>{course.id}</code></td>
                             <td>{course.title}</td>
-                            <td>{typeof course.category === 'object' && course.category !== null 
-                                 ? (course.category as any).name || 'N/A' 
-                                 : course.category || 'N/A'}</td>
+                            <td>{safeObjectName(course.category)}</td>
+                            <td>{safeObjectName(course.instructor)}</td>
                             <td>{course.is_published ? 'Yes' : 'No'}</td>
                             <td>
                               <button 

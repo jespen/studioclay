@@ -1,6 +1,8 @@
 import React from 'react';
 import { Course } from '../../../types/course';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
+import StandardTable from '../common/StandardTable';
+import ActionButton from '../common/ActionButton';
 
 interface CourseTableProps {
   courses: Course[];
@@ -17,14 +19,8 @@ export const CourseTable: React.FC<CourseTableProps> = ({
   onPublish,
   onDelete
 }) => {
-  const tableHeaderClassName = variant === 'draft'
-    ? `${styles.tableHeader} ${styles.draftTableHeader}`
-    : variant === 'past'
-      ? `${styles.tableHeader} ${styles.pastTableHeader}`
-      : styles.tableHeader;
-
-  const rowClassName = variant === 'draft'
-    ? `${styles.tableRow} ${styles.draftRow}`
+  const rowClassName = variant === 'past'
+    ? `${styles.tableRow} ${styles.pastRow}`
     : styles.tableRow;
 
   const formatDate = (dateString: string | null) => {
@@ -37,76 +33,56 @@ export const CourseTable: React.FC<CourseTableProps> = ({
   };
 
   return (
-    <table className={styles.table}>
-      <thead className={tableHeaderClassName}>
-        <tr>
-          <th className={styles.tableHeaderCell}>Titel</th>
-          <th className={styles.tableHeaderCell}>Datum</th>
-          <th className={styles.tableHeaderCell}>Status</th>
-          <th className={styles.tableHeaderCell}>Åtgärder</th>
+    <StandardTable 
+      headers={['Titel', 'Datum', 'Status', 'Åtgärder']}
+      emptyMessage="Inga kurser att visa"
+      variant={variant}
+    >
+      {courses.map((course) => (
+        <tr key={course.id} className={rowClassName}>
+          <td className={styles.tableCell}>
+            <div>
+              <h3 className={styles.courseTitle}>{course.title}</h3>
+              <p className={styles.courseDescription}>{course.template?.description || 'Ingen beskrivning tillgänglig'}</p>
+            </div>
+          </td>
+          <td className={styles.tableCell}>
+            {formatDate(course.start_date)}
+          </td>
+          <td className={styles.tableCell}>
+            <span className={`${styles.statusBadge} ${course.is_published ? styles.publishedBadge : styles.draftBadge}`}>
+              {course.is_published ? 'Publicerad' : 'Avpublicerad'}
+            </span>
+          </td>
+          <td className={styles.tableCell}>
+            <div className={styles.actionButtonsContainer}>
+              {onEdit && (
+                <ActionButton
+                  variant="edit"
+                  onClick={() => onEdit(course)}
+                />
+              )}
+              {onPublish && variant !== 'past' && (
+                <ActionButton
+                  variant={course.is_published ? "unpublish" : "publish"}
+                  onClick={() => onPublish(course)}
+                />
+              )}
+              {onDelete && (
+                <ActionButton
+                  variant="delete"
+                  onClick={() => {
+                    if (confirm(`Är du säker på att du vill ta bort kursen "${course.title}"?`)) {
+                      onDelete(course.id);
+                    }
+                  }}
+                />
+              )}
+            </div>
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        {courses.length === 0 ? (
-          <tr className={styles.tableRow}>
-            <td className={styles.tableCell} colSpan={4}>
-              Inga kurser att visa
-            </td>
-          </tr>
-        ) : (
-          courses.map((course) => (
-            <tr key={course.id} className={rowClassName}>
-              <td className={styles.tableCell}>
-                <div>
-                  <h3 className={styles.courseTitle}>{course.title}</h3>
-                  <p className={styles.courseDescription}>{course.template?.description || 'Ingen beskrivning tillgänglig'}</p>
-                </div>
-              </td>
-              <td className={styles.tableCell}>
-                {formatDate(course.start_date)}
-              </td>
-              <td className={styles.tableCell}>
-                <span className={`${styles.statusBadge} ${course.is_published ? styles.publishedBadge : styles.draftBadge}`}>
-                  {course.is_published ? 'Publicerad' : 'Avpublicerad'}
-                </span>
-              </td>
-              <td className={styles.tableCell}>
-                <div className={styles.actionButtonsContainer}>
-                  {onEdit && (
-                    <button
-                      className={`${styles.actionButton} ${styles.editButton}`}
-                      onClick={() => onEdit(course)}
-                    >
-                      Redigera
-                    </button>
-                  )}
-                  {onPublish && variant !== 'past' && (
-                    <button
-                      className={`${styles.actionButton} ${course.is_published ? styles.unpublishButton : styles.publishButton}`}
-                      onClick={() => onPublish(course)}
-                    >
-                      {course.is_published ? 'Avpublicera' : 'Publicera'}
-                    </button>
-                  )}
-                  {onDelete && (
-                    <button
-                      className={`${styles.actionButton} ${styles.deleteButton}`}
-                      onClick={() => {
-                        if (confirm(`Är du säker på att du vill ta bort kursen "${course.title}"?`)) {
-                          onDelete(course.id);
-                        }
-                      }}
-                    >
-                      Ta bort
-                    </button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))
-        )}
-      </tbody>
-    </table>
+      ))}
+    </StandardTable>
   );
 };
 

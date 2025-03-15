@@ -23,19 +23,25 @@ export function middleware(request: NextRequest) {
   console.log('Has admin-session cookie:', !!adminSessionCookie);
   console.log('Has admin-session-active cookie:', !!adminSessionActiveCookie);
   
-  // If accessing admin dashboard or any sub-routes, enforce authentication
-  if (url.pathname.startsWith('/admin/dashboard')) {
+  // If accessing any admin route (not just dashboard), enforce authentication
+  if (url.pathname.startsWith('/admin') && url.pathname !== '/admin' && !url.pathname.includes('/api/')) {
     console.log('Protected route detected, checking authentication');
 
     // Check for admin session cookie (our custom cookie)
-    const hasAdminSession = !!adminSessionCookie && !!adminSessionActiveCookie;
+    // Both cookies must be present and have valid values
+    const hasAdminSession = !!adminSessionCookie && 
+      !!adminSessionActiveCookie && 
+      adminSessionCookie.value.length > 0 && 
+      adminSessionActiveCookie.value === 'true';
     
-    // Check for Supabase cookies as a fallback
-    const hasSupabaseCookies = supabaseCookies.length > 0;
+    // Check for Supabase cookies as a fallback - only consider valid if we have at least 3 Supabase cookies
+    const hasSupabaseCookies = supabaseCookies.length >= 3;
     
     console.log('Authentication check result:', { 
       hasAdminSession, 
-      hasSupabaseCookies
+      hasSupabaseCookies,
+      adminSessionValue: adminSessionCookie?.value,
+      adminSessionActiveValue: adminSessionActiveCookie?.value
     });
     
     // If neither custom cookie nor Supabase cookies exist, redirect to login

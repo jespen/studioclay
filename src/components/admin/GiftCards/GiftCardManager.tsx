@@ -1,9 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabaseClient } from '@/lib/supabase';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
-
-// Import the proper supabaseAdmin instance
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 interface GiftCard {
   id: string;
@@ -44,277 +40,95 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
   });
   const [newCardIsPaid, setNewCardIsPaid] = useState(false);
   const [updatingCards, setUpdatingCards] = useState<{ [key: string]: boolean }>({});
-  const [isAdmin, setIsAdmin] = useState(false); // Add admin state
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    checkAdminStatus();
     fetchGiftCards();
   }, [filter]);
 
-  // Initialize Supabase session from our cookies if needed
-  async function initializeSupabaseSession() {
-    try {
-      // Check if we already have a Supabase session
-      const { data: sessionData } = await supabaseAdmin.auth.getSession();
-      
-      if (sessionData.session) {
-        console.log('Existing Supabase session found, no need to initialize');
-        return true;
-      }
-      
-      console.log('No Supabase session found, checking for admin cookies');
-      
-      // Get admin email from cookie
-      const adminCookie = document.cookie
-        .split(';')
-        .find(c => c.trim().startsWith('admin-user='));
-      
-      if (!adminCookie) {
-        console.error('No admin-user cookie found');
-        return false;
-      }
-      
-      const email = decodeURIComponent(adminCookie.split('=')[1]);
-      console.log('Admin email from cookie:', email);
-      
-      // For our demo case, we'll use a hardcoded password since we're already
-      // authenticated through our custom cookies
-      // In a real app, you'd use a token exchange or other secure method
-      const password = 'StrongPassword123'; // This is safe because we already verified auth via middleware
-      
-      // Sign in to Supabase to initialize the session
-      const { error } = await supabaseAdmin.auth.signInWithPassword({
-        email,
-        password
-      });
-      
-      if (error) {
-        console.error('Error initializing Supabase session:', error);
-        setAuthError('Failed to initialize backend session. Please try logging out and back in.');
-        return false;
-      }
-      
-      console.log('Successfully initialized Supabase session');
-      return true;
-    } catch (err) {
-      console.error('Unexpected error initializing Supabase session:', err);
-      return false;
-    }
-  }
-
-  // Check if user has admin role
-  async function checkAdminStatus() {
-    try {
-      // First check for admin cookie as primary auth method
-      const adminCookie = document.cookie
-        .split(';')
-        .find(c => c.trim().startsWith('admin-user='));
-      
-      if (adminCookie) {
-        const email = decodeURIComponent(adminCookie.split('=')[1]);
-        console.log('Found admin user from cookie:', email);
-        setIsAdmin(true);
-        
-        // Initialize Supabase session if we have custom auth
-        await initializeSupabaseSession();
-        return;
-      }
-      
-      // Fallback: Check Supabase auth directly
-      const { data: userData, error: userError } = await supabaseClient.auth.getUser();
-      
-      if (userError) {
-        console.error('Error getting user:', userError);
-        return;
-      }
-      
-      if (userData && userData.user) {
-        console.log('Authenticated as:', userData.user.email);
-        // Set admin status based on email domain or other criteria
-        // This is a simple check - in a real app, you'd check the user's role
-        const isAdminUser = userData.user.email?.includes('studioclay.se') || true;
-        setIsAdmin(isAdminUser);
-        console.log('Admin status:', isAdminUser);
-      } else {
-        console.warn('No authentication found. Access may be limited.');
-      }
-    } catch (err) {
-      console.error('Error checking admin status:', err);
-    }
-  }
-
   async function fetchGiftCards() {
     setLoading(true);
+    setError(null);
 
     try {
-      console.log('Testing Supabase connectivity from admin...');
+      console.log('Fetching gift cards with filter:', filter);
       
-      // Try to use the admin supabase instance first (which has our login session)
-      const supabase = supabaseAdmin || supabaseClient;
+      // Build the query parameters based on the filter
+      const queryParams = new URLSearchParams();
+      if (filter !== 'all') {
+        queryParams.append('filter', filter);
+      }
       
-      // Test connectivity
-      const { data: testData, error: testError } = await supabase
-        .from('gift_cards')
-        .select('id')
-        .limit(1);
-        
-      if (testError) {
-        // If we get an auth error, try to initialize the session
-        if (testError.message.includes('JWT') || testError.message.includes('auth')) {
-          console.warn('Supabase auth error detected:', testError.message);
-          
-          // Try to initialize the session
-          const initialized = await initializeSupabaseSession();
-          if (!initialized) {
-            throw new Error('Failed to initialize Supabase session. Please try logging out and back in.');
-          }
-          
-          // Retry the test after initialization
-          const retryTest = await supabase
-            .from('gift_cards')
-            .select('id')
-            .limit(1);
-            
-          if (retryTest.error) {
-            console.error('Retry failed after initialization:', retryTest.error);
-            throw new Error(`Supabase connection error after initialization: ${retryTest.error.message}`);
-          } else {
-            console.log('Successfully connected after initialization:', retryTest.data);
-          }
-        } else {
-          console.error('Supabase connectivity test failed:', testError);
-          throw new Error(`Supabase connection error: ${testError.message}`);
-        }
-      } else {
-        console.log('Supabase connectivity test succeeded:', testData);
-      }
-
-      // Explicitly include all fields we need, including the code field
-      let query = supabase
-        .from('gift_cards')
-        .select('id, code, amount, type, status, remaining_balance, sender_name, sender_email, recipient_name, recipient_email, message, is_emailed, is_printed, is_paid, created_at, expires_at');
-
-      console.log('Applying filter:', filter);
+      // Fetch gift cards from API instead of direct database access
+      const response = await fetch(`/api/gift-cards?${queryParams.toString()}`);
       
-      // Apply filters
-      if (filter === 'active') {
-        query = query.eq('status', 'active');
-      } else if (filter === 'redeemed') {
-        query = query.eq('status', 'redeemed');
-      } else if (filter === 'expired') {
-        query = query.eq('status', 'expired');
-      } else if (filter === 'cancelled') {
-        query = query.eq('status', 'cancelled');
-      } else if (filter === 'digital') {
-        query = query.eq('type', 'digital');
-      } else if (filter === 'physical') {
-        query = query.eq('type', 'physical');
-      } else if (filter === 'paid') {
-        query = query.eq('is_paid', true);
-      } else if (filter === 'unpaid') {
-        query = query.eq('is_paid', false);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to fetch gift cards: ${response.status}`);
       }
-
-      query = query.order('created_at', { ascending: false });
-
-      console.log('Sending query to Supabase:', filter);
-      const { data, error } = await query;
-      console.log('Received response from Supabase:', { dataLength: data?.length, error });
-
-      if (error) {
-        console.error('Error fetching gift cards:', error);
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-        console.error('Error details:', error.details);
-        // Check if the error is related to RLS
-        if (error.code === '42501') {
-          console.error('This appears to be a permissions error. RLS might be blocking the select operation.');
-        }
-        // Show a user-friendly error toast
-        alert('Det gick inte att hämta presentkort: ' + error.message);
-      } else {
-        // Process the data directly without separate code requests
-        const processedData = (data || []).map(card => {
-          // Make sure the code field is there
-          if (!card.code) {
-            console.warn(`Card ${card.id} missing code field, generating fallback`);
-            return {
-              ...card,
-              code: `GC-${card.id.substring(0, 8)}`
-            };
-          }
-          return card;
-        });
-        
-        setGiftCards(processedData);
-        console.log('Gift cards loaded:', processedData.length || 0, 'cards');
-        
-        // Log first card to verify fields
-        if (processedData.length > 0) {
-          console.log('Sample card data:', {
-            id: processedData[0].id,
-            code: processedData[0].code,
-            status: processedData[0].status,
-            is_paid: processedData[0].is_paid
-          });
-        }
-      }
+      
+      const data = await response.json();
+      
+      setGiftCards(data.giftCards || []);
+      console.log('Gift cards loaded:', data.giftCards?.length || 0, 'cards');
+      
     } catch (err) {
-      console.error('Unexpected error in fetchGiftCards:', err);
-      if (err instanceof Error) {
-        alert('Ett oväntat fel inträffade: ' + err.message);
-      } else {
-        console.error('Non-Error object thrown:', err);
-        console.error('Error type:', typeof err);
-        console.error('Error JSON stringified:', JSON.stringify(err));
-        
-        // Special handling for empty error objects
-        if (typeof err === 'object' && Object.keys(err || {}).length === 0) {
-          console.error('Empty error object received. This could indicate a network issue or CORS problem.');
-          alert('Serverfel: Kunde inte ansluta till databasen. Kontrollera din internetanslutning eller försök igen senare.');
-        } else {
-          alert('Ett oväntat fel inträffade. Se konsolen för detaljer.');
-        }
-      }
+      console.error('Error fetching gift cards:', err);
+      setError(err instanceof Error ? err.message : 'Ett oväntat fel inträffade');
     } finally {
       setLoading(false);
     }
   }
 
   async function handleMarkAsEmailed(id: string) {
-    const supabase = supabaseAdmin || supabaseClient;
-    const { error } = await supabase
-      .from('gift_cards')
-      .update({ is_emailed: true })
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error updating gift card:', error);
-      alert('Det gick inte att uppdatera presentkortet: ' + error.message);
-    } else {
+    try {
+      const response = await fetch(`/api/gift-cards/${id}/email-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ is_emailed: true }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update email status');
+      }
+      
       // Update the local state
       setGiftCards(giftCards.map(card =>
         card.id === id ? { ...card, is_emailed: true } : card
       ));
+    } catch (error) {
+      console.error('Error updating email status:', error);
+      alert('Det gick inte att uppdatera presentkortet: ' + 
+        (error instanceof Error ? error.message : 'Ett oväntat fel inträffade'));
     }
   }
 
   async function handleMarkAsPrinted(id: string) {
-    const supabase = supabaseAdmin || supabaseClient;
-    const { error } = await supabase
-      .from('gift_cards')
-      .update({ is_printed: true })
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error updating gift card:', error);
-      alert('Det gick inte att uppdatera presentkortet: ' + error.message);
-    } else {
+    try {
+      const response = await fetch(`/api/gift-cards/${id}/print-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ is_printed: true }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update print status');
+      }
+      
       // Update the local state
       setGiftCards(giftCards.map(card =>
         card.id === id ? { ...card, is_printed: true } : card
       ));
+    } catch (error) {
+      console.error('Error updating print status:', error);
+      alert('Det gick inte att uppdatera presentkortet: ' + 
+        (error instanceof Error ? error.message : 'Ett oväntat fel inträffade'));
     }
   }
 
@@ -322,20 +136,10 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
     try {
       console.log(`Attempting to update gift card ${id} status to ${status}`);
       
-      if (!isAdmin) {
-        console.warn('Update may fail: User does not have admin privileges');
-      }
-      
       // Set loading state for this specific card
       setUpdatingCards(prev => ({ ...prev, [id]: true }));
       
-      // Get the current card data before updating
-      const cardBeforeUpdate = giftCards.find(card => card.id === id);
-      console.log('Card before update:', cardBeforeUpdate);
-      
-      // Call our server-side API endpoint instead of direct Supabase update
-      console.log('Calling server-side API endpoint for status update');
-      const response = await fetch('/api/gift-cards/update-status', {
+      const response = await fetch(`/api/gift-cards/update-status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -343,20 +147,18 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
         body: JSON.stringify({ id, status }),
       });
       
-      const result = await response.json();
-      
       if (!response.ok) {
-        console.error('API response error:', result);
-        alert('Det gick inte att uppdatera presentkortets status: ' + (result.error || 'Okänt fel'));
-        return;
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update status');
       }
       
-      console.log(`Update operation completed successfully`, result);
+      const data = await response.json();
+      console.log(`Update operation completed successfully`, data);
       
-      if (result.data) {
+      if (data.data) {
         // Update the local state with the returned data
         setGiftCards(prevCards =>
-          prevCards.map(card => (card.id === id ? result.data : card))
+          prevCards.map(card => (card.id === id ? data.data : card))
         );
         
         console.log(`Local state updated for card ${id}, status: ${status}`);
@@ -490,22 +292,25 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
       
       console.log(`Updating gift card ${id} payment status from ${isPaid ? 'paid' : 'unpaid'} to ${newStatus ? 'paid' : 'unpaid'}`);
       
-      const supabase = supabaseAdmin || supabaseClient; 
-      const { error } = await supabase
-        .from('gift_cards')
-        .update({ is_paid: newStatus })
-        .eq('id', id);
-
-      if (error) {
-        console.error('Error updating payment status:', error);
-        alert('Failed to update payment status: ' + error.message);
-      } else {
-        // Update locally too with the new status
-        setGiftCards(giftCards.map(card => 
-          card.id === id ? { ...card, is_paid: newStatus } : card
-        ));
-        console.log(`Successfully updated gift card ${id} payment status to ${newStatus ? 'paid' : 'unpaid'}`);
+      const response = await fetch(`/api/gift-cards/update-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id, isPaid: newStatus }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update payment status');
       }
+      
+      // Update locally with the new status
+      setGiftCards(giftCards.map(card => 
+        card.id === id ? { ...card, is_paid: newStatus } : card
+      ));
+      console.log(`Successfully updated gift card ${id} payment status to ${newStatus ? 'paid' : 'unpaid'}`);
+      
     } catch (err) {
       console.error('Error in togglePayment:', err);
       alert('An unexpected error occurred');
@@ -519,15 +324,6 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
     setLoading(true);
 
     try {
-      const supabase = supabaseAdmin || supabaseClient;
-      
-      // Generate a unique code for the gift card
-      const generateUniqueCode = () => {
-        // Generate a random code - in production this should be more sophisticated
-        const random = Math.random().toString(36).substring(2, 10).toUpperCase();
-        return `GC-${random}`;
-      };
-      
       const amountValue = parseFloat(newCardData.amount);
       
       if (isNaN(amountValue) || amountValue <= 0) {
@@ -536,37 +332,22 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
       
       console.log('Creating new gift card with data:', newCardData);
       
-      // Create a clean gift card object with all required fields
-      const giftCardData = {
-        code: generateUniqueCode(), // Explicitly provide code to avoid ambiguity
-        amount: amountValue,
-        type: newCardData.type,
-        sender_name: newCardData.sender_name,
-        sender_email: newCardData.sender_email,
-        recipient_name: newCardData.recipient_name,
-        recipient_email: newCardData.recipient_email || null,
-        message: newCardData.message || null,
-        status: 'active', // Explicitly set status
-        remaining_balance: amountValue, // Set initial remaining balance
-        is_emailed: false,
-        is_printed: false,
-        is_paid: newCardIsPaid, // Use the payment status from state
-        expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString() // 1 year from now
-      };
+      // Create the gift card via API
+      const response = await fetch(`/api/gift-cards/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...newCardData,
+          amount: amountValue,
+          is_paid: newCardIsPaid
+        }),
+      });
       
-      // Insert the gift card data
-      const { error } = await supabase
-        .from('gift_cards')
-        .insert([giftCardData]);
-      
-      console.log('Gift card creation response:', { error });
-      
-      if (error) {
-        console.error('Error creating gift card:', error);
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-        console.error('Error details:', error.details);
-        throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create gift card');
       }
       
       alert(`Presentkort skapat! Uppdatera listan för att se det nya presentkortet.`);
@@ -589,23 +370,8 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
       
     } catch (error) {
       console.error('Error creating gift card:', error);
-      if (error instanceof Error) {
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-        alert('Det gick inte att skapa presentkortet: ' + error.message);
-      } else {
-        console.error('Non-Error object thrown:', error);
-        console.error('Error type:', typeof error);
-        console.error('Error JSON stringified:', JSON.stringify(error));
-        
-        // Special handling for empty error objects
-        if (typeof error === 'object' && Object.keys(error || {}).length === 0) {
-          console.error('Empty error object received. This could indicate a network issue or CORS problem.');
-          alert('Serverfel: Kunde inte ansluta till databasen. Kontrollera din internetanslutning eller försök igen senare.');
-        } else {
-          alert('Ett oväntat fel inträffade. Försök igen.');
-        }
-      }
+      alert('Det gick inte att skapa presentkortet: ' + 
+        (error instanceof Error ? error.message : 'Ett oväntat fel inträffade'));
     } finally {
       setLoading(false);
     }
@@ -628,12 +394,14 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
   };
 
   const renderContent = () => {
-    if (authError) {
+    if (error) {
       return (
         <div className={styles.errorMessage}>
-          <h3>Autentiseringsfel</h3>
-          <p>{authError}</p>
-          <p>Försök att logga ut och logga in igen.</p>
+          <h3>Ett fel uppstod</h3>
+          <p>{error}</p>
+          <button onClick={fetchGiftCards} className={styles.publishButton}>
+            Försök igen
+          </button>
         </div>
       );
     }

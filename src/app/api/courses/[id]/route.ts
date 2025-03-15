@@ -11,9 +11,11 @@ export async function GET(
   try {
     // Wait for params to be fully resolved before using them
     const params = await Promise.resolve(context.params);
-    console.log('API Route: Fetching course with id:', params.id);
+    const courseId = params.id;
     
-    if (!params.id) {
+    console.log('API Route: Fetching course with id:', courseId);
+    
+    if (!courseId) {
       console.error('API Route Error: Missing course ID');
       return NextResponse.json(
         { error: 'Course ID is required' },
@@ -21,10 +23,10 @@ export async function GET(
       );
     }
     
-    const course = await getCourse(params.id);
+    const course = await getCourse(courseId);
     
     if (!course) {
-      console.error('API Route Error: Course not found with ID:', params.id);
+      console.error('API Route Error: Course not found with ID:', courseId);
       return NextResponse.json(
         { error: 'Course not found' },
         { status: 404 }

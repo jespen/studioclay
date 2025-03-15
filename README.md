@@ -104,4 +104,84 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Design inspiration from various creative agency websites
 - Icons from [Heroicons](https://heroicons.com/)
 - Fonts from [Google Fonts](https://fonts.google.com/)
-# studioclay
+
+# Studio Clay Website
+
+## API Refactoring
+
+The codebase has been refactored to follow Next.js best practices for server-side rendering and API routes:
+
+### Key Improvements
+
+1. **Centralized Database Access**
+   - Removed direct Supabase client access from client components
+   - Created proper API routes for all data operations
+   - Consolidated Supabase client instances to use `supabaseAdmin` for server operations
+
+2. **Dynamic Route Parameter Handling**
+   - Ensured all dynamic route parameters (`params.id`) are properly awaited
+   - Added consistent error handling for missing parameters
+   - Improved logging for better debugging
+
+3. **API Structure**
+   - Implemented RESTful API routes for all resources:
+     - `/api/courses` - List, create courses
+     - `/api/courses/[id]` - Get, update, delete specific course
+     - `/api/courses/[id]/bookings` - Get bookings for a course
+     - `/api/bookings` - List, create bookings
+     - `/api/bookings/[id]` - Get, update, delete specific booking
+     - `/api/course-templates` - List, create course templates
+     - `/api/course-templates/[id]` - Get, update, delete specific template
+     - `/api/gift-cards` - List, create gift cards
+     - `/api/gift-cards/[id]` - Get, update, delete specific gift card
+     - `/api/waitlist` - List, create waitlist entries
+     - `/api/waitlist/[id]` - Get, update, delete specific waitlist entry
+
+4. **Client Components**
+   - Updated all client components to use fetch API instead of direct database access
+   - Implemented proper loading states and error handling
+   - Added pagination for large data sets
+
+5. **Security Improvements**
+   - Moved sensitive operations to server-side API routes
+   - Prevented exposure of database credentials in client code
+   - Added validation for all API inputs
+
+This refactoring improves the application's security, maintainability, and performance by following Next.js best practices for data fetching and API design.
+
+## Database Migrations
+
+To apply database migrations, first ensure you have the correct Supabase credentials in your `.env.local` file:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
+
+Then, to apply a specific migration:
+
+```bash
+# First, create the run_sql_query function (only need to do this once)
+npx supabase functions deploy run_sql_query --project-ref your-project-ref
+
+# Then run the migration
+npm run migrate add_status_to_course_instances.sql
+```
+
+This will add the missing `status` column to the `course_instances` table.
+
+## Recent Fixes
+
+### 1. Course Creation Issues
+- Fixed an issue where course creation was failing due to a missing `status` column in the `course_instances` table.
+- Added a migration file `add_status_to_course_instances.sql` to add the required column.
+- Fixed course instance creation to include the `title` field, which had a NOT NULL constraint.
+
+### 2. Parameter Handling in Dynamic Routes
+- Updated dynamic route components to correctly handle parameters, fixing the "params.id should be awaited" warnings.
+- Fixed API routes to properly await route parameters before accessing them.
+
+### 3. Bookings List Component
+- Updated the BookingsList component to use server-side filtering for better performance.
+- Implemented status-based filtering that works from the API level instead of client-side.
+- Added proper error handling for all API operations.

@@ -243,7 +243,7 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
           <>
             <div className={styles.navButtons} style={{ marginBottom: '1rem' }}>
               <button onClick={handleAddCourse} className={styles.addButton}>
-                + Lägg till ny kurs
+                Lägg till ny kurs
               </button>
             </div>
 
