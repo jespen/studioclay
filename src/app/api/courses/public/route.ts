@@ -1,70 +1,72 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-export const dynamic = 'force-dynamic'; // Disable caching for this route
-
-// Helper function to add CORS headers
-function addCorsHeaders(response: NextResponse) {
-  response.headers.set('Access-Control-Allow-Origin', '*');
-  response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
-  return response;
-}
+export const dynamic = 'force-dynamic'; // Important: Disable caching
+export const fetchCache = 'force-no-store'; // Additional cache prevention
+export const revalidate = 0; // No revalidation period
 
 // Handle OPTIONS requests for CORS preflight
 export async function OPTIONS() {
-  const response = new NextResponse(null, { status: 204 }); // No content response
-  return addCorsHeaders(response);
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    }
+  });
 }
 
 export async function GET() {
   try {
-    console.log('Public courses API: Fetching published courses');
+    console.log('Public courses API: Starting fetch');
     
-    // Get current date to filter out past courses
-    const now = new Date().toISOString();
-    
-    // Fetch published courses from Supabase
+    // Simplified query - just get all courses for now to diagnose the issue
     const { data: courses, error } = await supabaseAdmin
       .from('course_instances')
       .select(`
         *,
-        template:course_templates (
-          *,
-          category:categories (
-            name
-          )
-        )
+        template:course_templates (*)
       `)
-      .eq('is_published', true)  // Only published courses
-      .gte('start_date', now)    // Only future courses
       .order('start_date', { ascending: true });
 
     if (error) {
-      console.error('Error fetching public courses:', error);
-      const response = NextResponse.json(
-        { error: 'Failed to fetch courses' },
-        { status: 500 }
-      );
-      return addCorsHeaders(response);
+      console.error('Public API Error:', error);
+      return new NextResponse(JSON.stringify({ 
+        error: 'Database error', 
+        details: error.message 
+      }), {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
     }
 
-    // Log success for debugging
-    console.log(`Public courses API: Fetched ${courses?.length || 0} published courses`);
+    console.log(`Public API Success: Found ${courses?.length || 0} courses`);
     
-    // Return the courses with CORS headers
-    const response = NextResponse.json({ 
+    return new NextResponse(JSON.stringify({ 
       courses: courses || [],
       timestamp: new Date().toISOString()
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      }
     });
-    
-    return addCorsHeaders(response);
   } catch (error) {
-    console.error('Unexpected error in public courses API:', error);
-    const response = NextResponse.json(
-      { error: 'An unexpected error occurred' },
-      { status: 500 }
-    );
-    return addCorsHeaders(response);
+    console.error('Public API Fatal Error:', error);
+    return new NextResponse(JSON.stringify({ 
+      error: 'Server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      }
+    });
   }
 } 
