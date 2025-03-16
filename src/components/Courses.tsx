@@ -126,7 +126,9 @@ const Courses = () => {
       maxParticipants: course.max_participants,
       currentParticipants: course.current_participants,
       availableSpots: availableSpots,
-      isFullyBooked: isFullyBooked
+      isFullyBooked: isFullyBooked,
+      category: course.template?.category?.name,
+      title: course.title
     });
     
     return {
@@ -180,15 +182,36 @@ const Courses = () => {
         .filter((course: ApiCourse) => course.is_published) // Only display published courses
         .map(mapApiCourseToDisplayCourse);
       
-      // Split courses into try-on and longer courses
-      const tryOn = processed.filter((course: DisplayCourse) => 
-        course.name.toLowerCase().includes('prova')
-      );
-      const longer = processed.filter((course: DisplayCourse) => 
-        !course.name.toLowerCase().includes('prova')
-      );
+      // Improved filtering for try-on courses
+      const tryOn = processed.filter((course: DisplayCourse) => {
+        // Check both the course name and possible properties that might contain "prova"
+        const isProva = 
+          course.name.toLowerCase().includes('prova') || 
+          (course.description && course.description.toLowerCase().includes('prova på'));
+        
+        console.log(`Course ${course.id} - ${course.name}: isProva = ${isProva}`);
+        return isProva;
+      });
+      
+      const longer = processed.filter((course: DisplayCourse) => {
+        // Exclude any course that's classified as a try-on course
+        const isProva = 
+          course.name.toLowerCase().includes('prova') ||
+          (course.description && course.description.toLowerCase().includes('prova på'));
+        
+        return !isProva;
+      });
 
       console.log(`Split into: ${tryOn.length} try-on courses and ${longer.length} longer courses`);
+      
+      // Log the course names for better debugging
+      if (tryOn.length > 0) {
+        console.log('Try-on course names:', tryOn.map((c: DisplayCourse) => c.name));
+      }
+      if (longer.length > 0) {
+        console.log('Longer course names:', longer.map((c: DisplayCourse) => c.name));
+      }
+      
       setTryCourses(tryOn);
       setLongerCourses(longer);
     } catch (error) {
