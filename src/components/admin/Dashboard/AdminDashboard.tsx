@@ -4,13 +4,13 @@ import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 import CourseManager from '../Courses/CourseManager';
 
 interface AdminDashboardProps {
-  userName?: string;
+  userEmail?: string | null;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ userName }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ userEmail }) => {
   return (
     <div className={styles.pageContainer}>
-      <AdminHeader title="Studio Clay administation" subtitle={userName ? `Välkommen ${userName}` : 'Välkommen'} />
+      <AdminHeader title="Studio Clay administation" subtitle={userEmail ? `Välkommen ${userEmail}` : 'Välkommen'} />
       
       <main className={styles.dashboardMainContent}>
         {/* Course Manager without limiting the number of courses */}

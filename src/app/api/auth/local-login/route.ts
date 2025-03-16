@@ -35,6 +35,11 @@ const ADMIN_USERS = [
     email: 'eva@studioclay.se',
     // For development testing purpose only
     password: 'StrongPassword123',
+  },
+  // For dev mode easy authentication
+  {
+    email: 'dev@studioclay.se',
+    password: 'devmode',
   }
 ];
 

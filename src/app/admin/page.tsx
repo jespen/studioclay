@@ -22,6 +22,17 @@ export default function AdminLogin() {
   useEffect(() => {
     async function verifyConnection() {
       try {
+        // First check if we already have a session before testing the connection
+        const { data: sessionData } = await supabase.auth.getSession();
+        
+        if (sessionData.session) {
+          console.log('Existing session found, skipping connection test');
+          setConnectionVerified(true);
+          setDebugInfo('Connected to Supabase (verified via existing session)');
+          setSession(sessionData.session);
+          return;
+        }
+        
         const response = await fetch('/api/auth/supabase-auth-test');
         const result = await response.json();
         
@@ -85,9 +96,22 @@ export default function AdminLogin() {
     if (redirectAttempts >= maxAttempts) {
       console.log('Too many redirect attempts, resetting count and staying on login page');
       localStorage.setItem('redirectAttempts', '0');
-      setDebugInfo('Login redirect loop detected. Please try logging in again.');
+      setDebugInfo(`Login redirect loop detected (${redirectAttempts} attempts). 
+        <hr/>
+        <strong>Possible causes:</strong>
+        <ul>
+          <li>Authentication cookies are not being set correctly</li>
+          <li>Network connectivity issues with Supabase</li>
+          <li>Session validation issues in middleware</li>
+        </ul>
+        <strong>Action required:</strong> Please try logging in again manually.`);
       return;
     }
+    
+    // Increment the redirect attempt counter
+    // We do this before the check so it applies even if the check fails
+    localStorage.setItem('redirectAttempts', (redirectAttempts + 1).toString());
+    console.log(`Checking session (attempt ${redirectAttempts + 1}/${maxAttempts})`);
     
     // Check if user is already logged in
     const checkSession = async () => {
@@ -100,30 +124,32 @@ export default function AdminLogin() {
           return;
         }
         
-        setSession(data.session);
-        if (data.session) {
-          console.log('Login page: Found existing session, setting cookies');
-          
-          // Set server-side cookies that middleware can detect
-          const email = data.session.user.email;
-          if (email) {
-            const success = await setAuthCookies(email);
-            if (!success) {
-              console.error('Failed to set auth cookies');
-              setDebugInfo('Failed to set authentication cookies');
-              return;
-            }
-          }
-          
-          // Increment redirect attempt counter
-          localStorage.setItem('redirectAttempts', (redirectAttempts + 1).toString());
-          
-          // Set a short timeout to ensure that cookies are set before navigation
-          setTimeout(() => {
-            // Use direct navigation for more reliable redirection
-            window.location.href = '/admin/dashboard';
-          }, 500);
+        // If no session, reset the redirect counter
+        if (!data.session) {
+          console.log('No active session found, resetting counter');
+          localStorage.setItem('redirectAttempts', '0');
+          return;
         }
+        
+        setSession(data.session);
+        console.log('Login page: Found existing session, setting cookies');
+        
+        // Set server-side cookies that middleware can detect
+        const email = data.session.user.email;
+        if (email) {
+          const success = await setAuthCookies(email);
+          if (!success) {
+            console.error('Failed to set auth cookies');
+            setDebugInfo('Failed to set authentication cookies');
+            return;
+          }
+        }
+        
+        // Set a short timeout to ensure that cookies are set before navigation
+        setTimeout(() => {
+          // Use direct navigation for more reliable redirection
+          window.location.href = '/admin/dashboard';
+        }, 500);
       } catch (err: any) {
         console.error('Error checking session:', err);
         setDebugInfo(`Error checking session: ${err.message || 'Unknown error'}`);

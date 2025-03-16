@@ -1,26 +1,34 @@
+import { createBrowserClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_URL');
+// Add error checking for environment variables
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('Missing Supabase environment variables in utils/supabase.ts');
 }
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY');
-}
+// Add graceful error handling for the client
+let supabase;
 
-// Create a Supabase client with minimal configuration
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  {
+try {
+  supabase = createBrowserClient(
+    supabaseUrl || '', 
+    supabaseKey || ''
+  );
+  console.log('Supabase client initialized successfully');
+} catch (error) {
+  console.error('Error initializing Supabase client:', error);
+  // Create a fallback mock client with no-op methods for graceful degradation
+  supabase = {
     auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storageKey: 'supabase.auth.token'
+      getSession: async () => ({ data: { session: null }, error: null }),
+      signInWithPassword: async () => ({ data: null, error: { message: 'Supabase client initialization failed' } }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
     }
-  }
-);
+  };
+}
 
-// Export types for convenience
-export type { User, Session } from '@supabase/supabase-js'; 
+export { supabase };
+export type Session = Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']; 
