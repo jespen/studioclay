@@ -46,6 +46,7 @@ interface DisplayCourse {
   startDate: string | null;
   endDate: string | null;
   availableSpots: number | null;
+  location: string;
 }
 
 const Courses = () => {
@@ -135,7 +136,7 @@ const Courses = () => {
       id: course.id,
       name: displayName,
       price: course.price ? course.price.toString() : (course.template?.price ? course.template.price.toString() : '0'),
-      frequency: course.currency || 'kr',
+      frequency: 'kr', // Always use 'kr' as currency
       sessionCount: getSessionCount(displayName, course.start_date, course.end_date),
       description: course.description || '',
       isPopular: false, // Will be set later
@@ -147,6 +148,7 @@ const Courses = () => {
       startDate: course.start_date,
       endDate: course.end_date,
       availableSpots: availableSpots,
+      location: 'Studio Clay Norrtullsgatan 65' // Fixed location for all courses
     };
   };
 

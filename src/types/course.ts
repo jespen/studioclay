@@ -1,20 +1,22 @@
 export interface CourseTemplate {
   id: string;
-  title: string;
-  description: string;
-  duration_minutes: number | null;
-  price: number;
-  currency: string;
-  max_participants: number | null;
-  location: string | null;
-  image_url: string | null;
+  title?: string;
+  description?: string;
+  rich_description?: string;
+  duration_minutes?: number | null;
+  price?: number | null;
+  currency?: string | null;
+  max_participants?: number | null;
+  location?: string | null;
+  image_url?: string | null;
   category_id: string | null;
-  instructor_id: string | null;
-  is_published: boolean;
+  is_published?: boolean;
   created_at: string;
   updated_at: string;
   category?: { name: string } | null;
-  instructor?: { name: string } | null;
+  instances_count?: number;
+  published?: boolean | null;
+  categorie?: string | null;
 }
 
 export interface CourseInstance {
@@ -29,6 +31,9 @@ export interface CourseInstance {
   updated_at: string;
   template_id: string | null;
   template?: Partial<CourseTemplate>;
+  // Additional fields for instance-specific customization
+  rich_description?: string | null;
+  price?: number | null; // Maps to 'amount' in the database
 }
 
 // Alias for backward compatibility

@@ -33,13 +33,19 @@ export async function GET(
       );
     }
     
+    // Map amount to price in the response
+    const responseData = {
+      ...course,
+      price: course.amount
+    };
+    
     console.log('API Route: Successfully fetched course:', {
       id: course.id,
       title: course.title,
       template_id: course.template_id
     });
 
-    return NextResponse.json({ course });
+    return NextResponse.json({ course: responseData });
   } catch (error) {
     console.error('API Route Error:', error);
     return NextResponse.json(
@@ -71,9 +77,16 @@ export async function PATCH(
     const body = await request.json();
     console.log('Update payload:', body);
 
+    // Map price to amount if it exists in the body
+    const dbBody = { ...body };
+    if (body.price !== undefined) {
+      dbBody.amount = body.price;
+      delete dbBody.price; // Remove price as it doesn't exist in the database
+    }
+
     const { data, error } = await supabaseAdmin
       .from('course_instances')
-      .update(body)
+      .update(dbBody)
       .eq('id', id)
       .select()
       .single();
@@ -97,7 +110,13 @@ export async function PATCH(
       template_id: data.template_id
     });
 
-    return NextResponse.json({ course: data });
+    // Map amount back to price in the response
+    const responseData = {
+      ...data,
+      price: data.amount
+    };
+
+    return NextResponse.json({ course: responseData });
   } catch (error) {
     console.error('Error updating course:', error);
     return NextResponse.json(

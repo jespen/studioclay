@@ -1,0 +1,83 @@
+/* Rich Text Content Styles */
+.rich-text-content {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  color: #333;
+}
+
+.rich-text-content h1,
+.rich-text-content h2,
+.rich-text-content h3,
+.rich-text-content h4,
+.rich-text-content h5,
+.rich-text-content h6 {
+  color: #547264;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.rich-text-content h1 {
+  font-size: 2rem;
+}
+
+.rich-text-content h2 {
+  font-size: 1.75rem;
+}
+
+.rich-text-content h3 {
+  font-size: 1.5rem;
+}
+
+.rich-text-content h4 {
+  font-size: 1.25rem;
+}
+
+.rich-text-content p {
+  margin-bottom: 1em;
+  line-height: 1.6;
+}
+
+.rich-text-content ul,
+.rich-text-content ol {
+  margin-bottom: 1em;
+  padding-left: 2em;
+}
+
+.rich-text-content li {
+  margin-bottom: 0.5em;
+}
+
+.rich-text-content strong {
+  font-weight: 600;
+  color: #222;
+}
+
+.rich-text-content em {
+  font-style: italic;
+}
+
+.rich-text-content a {
+  color: #547264;
+  text-decoration: underline;
+}
+
+.rich-text-content a:hover {
+  text-decoration: none;
+}
+
+/* Quill editor specific styles */
+.ql-editor {
+  min-height: 200px;
+}
+
+.ql-toolbar {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+
+.ql-container {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+} 

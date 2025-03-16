@@ -114,7 +114,10 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
   // Function to handle saving a course
   async function handleSaveCourse(courseData: Partial<Course>) {
     try {
+      console.log('Saving course with data:', courseData);
+      
       if (courseData.id) {
+        // Updating existing course
         const response = await fetch(`/api/courses/${courseData.id}`, {
           method: 'PATCH',
           headers: {
@@ -126,7 +129,8 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
             end_date: courseData.end_date,
             max_participants: courseData.max_participants,
             is_published: courseData.is_published,
-            template: courseData.template
+            rich_description: courseData.rich_description,
+            price: courseData.price
           }),
         });
 
@@ -135,18 +139,31 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
           throw new Error(`Failed to save course: ${response.status}${errorData ? ' - ' + JSON.stringify(errorData) : ''}`);
         }
       } else {
+        // Creating new course
         const response = await fetch('/api/courses', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(courseData),
+          body: JSON.stringify({
+            title: courseData.title,
+            start_date: courseData.start_date,
+            end_date: courseData.end_date,
+            max_participants: courseData.max_participants,
+            is_published: courseData.is_published,
+            template_id: courseData.template_id,
+            rich_description: courseData.rich_description,
+            price: courseData.price
+          }),
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
           throw new Error(`Failed to save course: ${response.status}${errorData ? ' - ' + JSON.stringify(errorData) : ''}`);
         }
+        
+        const result = await response.json();
+        console.log('Created course:', result);
       }
 
       await fetchCourses(); // Refresh the courses list

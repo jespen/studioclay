@@ -1,18 +1,20 @@
-import BookingForm from '@/components/BookingForm';
+import { Suspense } from 'react';
+import CourseDetailsWrapper from '@/components/booking/wrappers/CourseDetailsWrapper';
 
-interface PageProps {
-  params: Promise<{ id: string }>;
+interface CourseDetailPageProps {
+  params: {
+    id: string;
+  };
 }
 
-export default async function BookCoursePage({ params }: PageProps) {
-  const resolvedParams = await params;
-  const courseId = resolvedParams.id;
+// Server component that safely handles params
+export default async function CourseDetailPage({ params }: CourseDetailPageProps) {
+  // In Next.js 15.2+, we need to await the params
+  const id = await Promise.resolve(params.id);
   
   return (
-    <div className="min-h-screen pt-[120px] pb-16">
-      <div className="container mx-auto px-4">
-        <BookingForm courseId={courseId} />
-      </div>
-    </div>
+    <Suspense fallback={<div>Loading course details...</div>}>
+      <CourseDetailsWrapper id={id} />
+    </Suspense>
   );
 } 

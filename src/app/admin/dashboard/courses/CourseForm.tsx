@@ -14,6 +14,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [richDescription, setRichDescription] = useState('');
   const [startDate, setStartDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -21,55 +22,52 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   const [price, setPrice] = useState('');
   const [maxParticipants, setMaxParticipants] = useState('');
   const [isPublished, setIsPublished] = useState(false);
-  const [categoryId, setCategoryId] = useState('');
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [templateId, setTemplateId] = useState('');
+  const [templates, setTemplates] = useState<CourseTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
   // Primary color from globals.css
   const primaryColor = '#547264';
   
-  // Default instructor ID for Eva
-  const DEFAULT_INSTRUCTOR_ID = 'd34b1b44-9e49-4b7a-a038-84580f8ab9f0';
-  
-  // Fetch categories
+  // Fetch templates
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchTemplates = async () => {
       try {
-        const response = await fetch('/api/categories/');
+        const response = await fetch('/api/templates/');
         if (!response.ok) {
-          throw new Error('Kunde inte hämta kategorier');
+          throw new Error('Kunde inte hämta kursmallar');
         }
         const data = await response.json();
-        const fetchedCategories = Array.isArray(data.categories) ? data.categories : [];
-        setCategories(fetchedCategories);
+        const fetchedTemplates = Array.isArray(data.templates) ? data.templates : [];
+        setTemplates(fetchedTemplates);
         
-        // If we have a categoryId but no description, set the description from the category
-        if (categoryId && !description && !course) {
-          const selectedCategory = fetchedCategories.find((cat: Category) => cat.id === categoryId);
-          if (selectedCategory?.description) {
-            setDescription(selectedCategory.description);
+        // If we have a templateId but no description, set the rich description from the template
+        if (templateId && !richDescription && !course) {
+          const selectedTemplate = fetchedTemplates.find((temp: CourseTemplate) => temp.id === templateId);
+          if (selectedTemplate?.rich_description) {
+            setRichDescription(selectedTemplate.rich_description);
           }
         }
       } catch (err) {
-        console.error('Error fetching categories:', err);
-        setError('Kunde inte hämta kategorier');
+        console.error('Error fetching templates:', err);
+        setError('Kunde inte hämta kursmallar');
       } finally {
         setLoading(false);
       }
     };
     
-    fetchCategories();
-  }, [categoryId, description, course]);
+    fetchTemplates();
+  }, [templateId, richDescription, course]);
   
   // Initialize form with course data if editing
   useEffect(() => {
     if (course) {
       setTitle(course.title || '');
-      setDescription(course.template?.description || '');
+      setRichDescription(course.rich_description || course.template?.rich_description || '');
       setIsPublished(course.is_published || false);
       setPrice(course.template?.price ? course.template.price.toString() : '');
-      setCategoryId(course.template?.category_id || '');
+      setTemplateId(course.template_id || '');
       setMaxParticipants(course.max_participants ? course.max_participants.toString() : '');
       
       // Handle dates with proper timezone handling
@@ -101,12 +99,12 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     e.preventDefault();
     
     // Enhanced validation - all fields are mandatory
-    if (!categoryId) {
-      alert('Kategori måste väljas');
+    if (!templateId) {
+      alert('Kursmall måste väljas');
       return;
     }
     
-    if (!description.trim()) {
+    if (!richDescription.trim()) {
       alert('Beskrivning är obligatoriskt');
       return;
     }
@@ -131,10 +129,10 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
       return;
     }
     
-    // Get the selected category name to use as title
-    const selectedCategory = categories.find(cat => cat.id === categoryId);
-    if (!selectedCategory) {
-      alert('Kunde inte hitta vald kategori');
+    // Get the selected template
+    const selectedTemplate = templates.find(temp => temp.id === templateId);
+    if (!selectedTemplate) {
+      alert('Kunde inte hitta vald kursmall');
       return;
     }
     
@@ -151,33 +149,22 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     // Calculate duration in minutes
     const durationMinutes = Math.round((combinedEndDate.getTime() - combinedStartDate.getTime()) / 60000);
     
-    // Create course data with required values
+    // Create course data with required values - save everything to the instance
     const courseData: Partial<CourseInstance> = {
       id: course?.id || undefined,
-      title: selectedCategory.name,
+      title: selectedTemplate.title || selectedTemplate.categorie || '',
       start_date: combinedStartDate.toISOString(),
       end_date: combinedEndDate.toISOString(),
       max_participants: parseInt(maxParticipants),
+      current_participants: course?.current_participants || 0,
       is_published: isPublished,
-      template_id: course?.template_id || undefined
-    };
-
-    // Add template data
-    const templateData: Partial<CourseTemplate> = {
-      id: course?.template_id || undefined,
-      title: selectedCategory.name,
-      description,
-      duration_minutes: durationMinutes,
-      price: parseFloat(price),
-      currency: 'SEK',
-      category_id: categoryId,
-      instructor_id: DEFAULT_INSTRUCTOR_ID,
-      max_participants: parseInt(maxParticipants),
-      location: 'Studio Clay',
-      is_published: isPublished
+      template_id: templateId,
+      rich_description: richDescription, // Store the rich description in the instance
+      price: parseFloat(price) // Store price in the instance (maps to 'amount' in DB)
     };
     
-    courseData.template = templateData;
+    // Log the price information for reference, though we don't store it in the database
+    console.log(`Course price set to ${price} SEK - this will be displayed in the UI but stored in the template`);
     
     // Call the onSave callback with the course data
     onSave(courseData);
@@ -220,33 +207,38 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
       
       {/* Form */}
       <Box component="form" onSubmit={handleSubmit} sx={{ p: 3 }}>
-        {/* Category */}
+        {/* Template Selection */}
         <TextField
           fullWidth
           required
           select
-          id="category"
-          name="category"
-          label="Kategori"
-          value={categoryId}
+          id="template"
+          name="template"
+          label="Kursmall"
+          value={templateId}
           onChange={(e) => {
-            const newCategoryId = e.target.value;
-            setCategoryId(newCategoryId);
-            // Find the selected category and update description
-            const selectedCategory = categories.find(cat => cat.id === newCategoryId);
-            // Only set description if we're not editing an existing course
-            if (selectedCategory?.description && !course) {
-              setDescription(selectedCategory.description);
+            const newTemplateId = e.target.value;
+            setTemplateId(newTemplateId);
+            // Find the selected template and update description
+            const selectedTemplate = templates.find(temp => temp.id === newTemplateId);
+            // Only set rich description if we're not editing an existing course
+            if (selectedTemplate?.rich_description && !course) {
+              setRichDescription(selectedTemplate.rich_description);
+              // Set default title from template
+              setTitle(selectedTemplate.title || selectedTemplate.categorie || '');
+              // Set default price and other details if available
+              if (selectedTemplate.price) setPrice(selectedTemplate.price.toString());
+              if (selectedTemplate.max_participants) setMaxParticipants(selectedTemplate.max_participants.toString());
             }
           }}
           variant="outlined"
           size="small"
           sx={inputStyles}
         >
-          <MenuItem value="">Välj kategori</MenuItem>
-          {categories.map((category) => (
-            <MenuItem key={category.id} value={category.id}>
-              {category.name}
+          <MenuItem value="">Välj kursmall</MenuItem>
+          {templates.map((template) => (
+            <MenuItem key={template.id} value={template.id}>
+              {template.title || template.categorie}
             </MenuItem>
           ))}
         </TextField>
@@ -357,21 +349,36 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           </Grid>
         </Grid>
         
-        {/* Description */}
+        {/* Rich Description - using simple textarea for now, could enhance with rich text editor */}
         <TextField
           fullWidth
           required
-          id="description"
-          name="description"
-          label="Beskrivning"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          id="richDescription"
+          name="richDescription"
+          label="Beskrivning (HTML stöds)"
+          value={richDescription}
+          onChange={(e) => setRichDescription(e.target.value)}
           variant="outlined"
           size="small"
           multiline
-          rows={4}
+          rows={6}
           sx={inputStyles}
+          placeholder="HTML formatering stöds, t.ex. <h2>Rubrik</h2>, <p>Paragraf</p>, <strong>Fetstil</strong>"
+          helperText="Denna beskrivning kommer från kursmallen men kan anpassas till denna specifika kurs."
         />
+        
+        {/* Preview of rich text */}
+        {richDescription && (
+          <Box sx={{ mb: 3, mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: primaryColor }}>
+              Förhandsgranskning:
+            </Typography>
+            <Box 
+              sx={{ p: 1 }}
+              dangerouslySetInnerHTML={{ __html: richDescription }}
+            />
+          </Box>
+        )}
         
         {/* Published Status */}
         <Box sx={{ mb: 3 }}>

@@ -82,8 +82,12 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
             <Link href="/admin/dashboard" className={styles.navButton}>
               Kurser
             </Link>
+        
             <Link href="/admin/dashboard/gift-cards" className={styles.navButton}>
               Presentkort
+            </Link>
+            <Link href="/admin/templates" className={styles.navButton}>
+              Kursmallar
             </Link>
             <Link href="/admin/dashboard/developer" className={styles.navButton}>
               Developer

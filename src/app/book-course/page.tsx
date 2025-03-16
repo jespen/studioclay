@@ -6,11 +6,5 @@ export const metadata = {
 };
 
 export default function BookCoursePage() {
-  return (
-    <div className="hide-navigation">
-      <main className="flex-grow">
-        <BookCourse />
-      </main>
-    </div>
-  );
+  return <BookCourse />;
 } 

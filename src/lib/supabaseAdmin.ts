@@ -65,10 +65,54 @@ export type Instructor = {
   updated_at: string;
 };
 
+export type CourseSection = {
+  id: string;
+  template_id: string;
+  title: string;
+  content: string;
+  order_index: number;
+  section_type: 'description' | 'schedule' | 'materials' | 'prerequisites' | 'objectives' | 'other';
+  created_at: string;
+  updated_at: string;
+};
+
+export type CourseMaterial = {
+  id: string;
+  template_id: string;
+  name: string;
+  description: string | null;
+  is_required: boolean;
+  provided_by_studio: boolean;
+  additional_cost: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CourseReview = {
+  id: string;
+  course_id: string;
+  user_name: string;
+  rating: number;
+  review_text: string | null;
+  is_verified: boolean;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CourseTemplate = {
   id: string;
   title: string;
   description: string | null;
+  rich_description: string | null;
+  short_description: string | null;
+  learning_objectives: string[] | null;
+  required_equipment: string[] | null;
+  prerequisites: string[] | null;
+  target_audience: string | null;
+  skill_level: 'beginner' | 'intermediate' | 'advanced' | 'all_levels' | null;
+  cancellation_policy: string | null;
+  additional_notes: string | null;
   start_date: string | null;
   end_date: string | null;
   duration_minutes: number | null;
@@ -87,6 +131,8 @@ export type CourseTemplate = {
   // Joined fields
   category?: Category;
   instructor?: Instructor;
+  sections?: CourseSection[];
+  materials?: CourseMaterial[];
 };
 
 export type Course = {
@@ -94,6 +140,16 @@ export type Course = {
   template_id: string;
   current_participants: number;
   max_participants: number;
+  waitlist_capacity: number;
+  current_waitlist: number;
+  session_times: Array<{
+    start_time: string;
+    end_time: string;
+    date: string;
+  }> | null;
+  room_details: string | null;
+  specific_instructions: string | null;
+  is_fully_booked: boolean;
   start_date: string;
   end_date: string;
   status: 'scheduled' | 'completed' | 'cancelled';
@@ -104,6 +160,7 @@ export type Course = {
   template?: CourseTemplate;
   instructor?: Instructor;
   category?: Category;
+  reviews?: CourseReview[];
 };
 
 export type Booking = {
@@ -152,7 +209,7 @@ export async function getInstructors() {
 export async function getCourses({ published }: { published?: boolean | undefined } = {}) {
   console.log('supabaseAdmin: Starting getCourses with published:', published);
   
-  // First get all instances
+  // First get all instances (without reviews since the table doesn't exist yet)
   const { data: instances, error: instancesError } = await supabaseAdmin
     .from('course_instances')
     .select('*')
@@ -174,13 +231,12 @@ export async function getCourses({ published }: { published?: boolean | undefine
   const templateIds = [...new Set(instances.map(i => i.template_id))];
   console.log('supabaseAdmin: Unique template IDs:', templateIds);
 
-  // Then get all templates with their relationships
+  // Then get all templates with their relationships - removed instructor relationship
   const { data: templates, error: templatesError } = await supabaseAdmin
     .from('course_templates')
     .select(`
       *,
-      category:categories (*),
-      instructor:instructors (*)
+      category:categories (*)
     `)
     .in('id', templateIds);
     
@@ -209,11 +265,11 @@ export async function getCourses({ published }: { published?: boolean | undefine
 
     // Filter based on published parameter
     if (published !== undefined) {
-      if (published && !template.is_published) {
+      if (published && !(template.is_published || template.published)) {
         console.log('supabaseAdmin: Filtering out unpublished course:', template.id);
         return null;
       }
-      if (!published && template.is_published) {
+      if (!published && (template.is_published || template.published)) {
         console.log('supabaseAdmin: Filtering out published course:', template.id);
         return null;
       }
@@ -224,10 +280,10 @@ export async function getCourses({ published }: { published?: boolean | undefine
       ...instance,
       template_id: template.id,
       category: template.category || null,
-      instructor: template.instructor || null,
       availableSpots: instance.max_participants !== null 
         ? instance.max_participants - (instance.current_participants || 0)
-        : null
+        : null,
+      is_fully_booked: instance.current_participants >= instance.max_participants
     };
 
     return processedCourse;
@@ -237,10 +293,11 @@ export async function getCourses({ published }: { published?: boolean | undefine
   if (processedData.length > 0) {
     console.log('supabaseAdmin: First processed course:', {
       id: processedData[0].id,
-      title: processedData[0].title,
+      title: processedData[0].title || processedData[0].categorie,
       template_id: processedData[0].template_id,
-      is_published: processedData[0].is_published,
-      start_date: processedData[0].start_date
+      is_published: processedData[0].is_published || processedData[0].published,
+      start_date: processedData[0].start_date,
+      has_rich_description: !!processedData[0].rich_description
     });
   }
   
@@ -274,13 +331,12 @@ export async function getCourse(id: string) {
     current_participants: instance.current_participants
   });
 
-  // Then get the template with its relationships
+  // Then get the template with its relationships - removed instructor relationship
   const { data: template, error: templateError } = await supabaseAdmin
     .from('course_templates')
     .select(`
       *,
-      category:categories (*),
-      instructor:instructors (*)
+      category:categories (*)
     `)
     .eq('id', instance.template_id)
     .single();
@@ -297,10 +353,10 @@ export async function getCourse(id: string) {
 
   console.log('supabaseAdmin: Found template:', {
     id: template.id,
-    title: template.title,
-    is_published: template.is_published,
+    title: template.title || template.categorie,
+    is_published: template.is_published || template.published,
     category: template.category?.name,
-    instructor: template.instructor?.name
+    has_rich_description: !!template.rich_description
   });
   
   // Process and combine the data
@@ -309,7 +365,6 @@ export async function getCourse(id: string) {
     ...instance,
     template_id: template.id,
     category: template.category || null,
-    instructor: template.instructor || null,
     availableSpots: instance.max_participants !== null 
       ? instance.max_participants - (instance.current_participants || 0)
       : null
@@ -320,11 +375,11 @@ export async function getCourse(id: string) {
     title: processedData.title,
     template_id: processedData.template_id,
     category: processedData.category?.name,
-    instructor: processedData.instructor?.name,
     start_date: processedData.start_date,
     max_participants: processedData.max_participants,
     current_participants: processedData.current_participants,
-    availableSpots: processedData.availableSpots
+    availableSpots: processedData.availableSpots,
+    has_rich_description: !!processedData.rich_description
   });
   
   return processedData;
