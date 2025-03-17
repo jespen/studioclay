@@ -10,7 +10,7 @@ const BookCourse = () => {
     <>
       <PageContainer centerContent paddingTop={6}>
         <Typography variant="h3" component="h1" gutterBottom>
-          Boka din drejningskurs
+          Boka din drejningskurs test
         </Typography>
         
         <Typography variant="subtitle1" color="text.secondary" paragraph sx={{ maxWidth: 800, mb: 6 }}>
