@@ -7,6 +7,7 @@
     "dev:clean": "rm -rf .next && next dev",
     "dev:reset": "pkill -f 'node.*next' || true && rm -rf .next node_modules/.cache && npm run dev",
     "build": "next build",
+    "vercel-build": "npm install --legacy-peer-deps && next build",
     "start": "next start",
     "lint": "next lint",
     "instagram:check": "node scripts/instagram-tools.js check",
