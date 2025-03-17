@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminDashboard from '../../../components/admin/Dashboard/AdminDashboard';
-import { supabaseClient as supabase } from '@/lib/supabase';
+import { supabaseClient as supabase } from '../../../lib/supabase';
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);

@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import AdminHeader from '@/components/admin/Dashboard/AdminHeader';
+import AdminHeader from '../../../../../components/admin/Dashboard/AdminHeader';
 // Comment out the missing component
-// import GiftCardManager from '@/components/admin/GiftCards/GiftCardManager';
+// import GiftCardManager from '../../../../../components/admin/GiftCards/GiftCardManager';
 import styles from '../courses/courses.module.css';
 
 export default function GiftCardsPage() {
