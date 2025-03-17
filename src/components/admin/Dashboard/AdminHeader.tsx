@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/utils/supabase';
+import { supabaseClient as supabase } from '@/lib/supabase';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 
 interface AdminHeaderProps {
@@ -10,7 +10,7 @@ interface AdminHeaderProps {
   userEmail?: string;
 }
 
-export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userEmail }) => {
+const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userEmail }) => {
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -66,40 +66,48 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
   };
 
   return (
-    <header className={styles.header}>
-      <div className={styles.headerContent}>
-        <div>
-          <h1 className={styles.headerTitle}>{title}</h1>
-          {subtitle && <p className={styles.headerSubtitle}>{subtitle}</p>}
-          
-          {userEmail && (
-            <div className={styles.welcomeMessage}>
-              {userEmail}
-            </div>
-          )}
-          
-          <div className={styles.navButtonsRow}>
-            <Link href="/admin/dashboard" className={styles.navButton}>
-              Kurser
-            </Link>
+    <header className={styles.adminHeader}>
+      <div className={styles.headerLeft}>
+        <h1 className={styles.headerTitle}>{title}</h1>
+        {subtitle && <p className={styles.headerSubtitle}>{subtitle}</p>}
+      </div>
+      <div className={styles.headerRight}>
+        <nav className={styles.headerNav}>
+          <ul className={styles.navList}>
+            <li>
+              <Link href="/admin/dashboard" className={styles.navLink}>
+                Kurser
+              </Link>
+            </li>
+            <li>
+              <Link href="/admin/dashboard/templates" className={styles.navLink}>
+                Mallar
+              </Link>
+            </li>
+            <li>
+              <Link href="/admin/dashboard/gift-cards" className={styles.navLink}>
+                Presentkort
+              </Link>
+            </li>
+            <li>
+              <Link href="/admin/dashboard/settings" className={styles.navLink}>
+                Inställningar
+              </Link>
+            </li>
+          </ul>
+        </nav>
         
-            <Link href="/admin/dashboard/gift-cards" className={styles.navButton}>
-              Presentkort
-            </Link>
-            <Link href="/admin/templates" className={styles.navButton}>
-              Kursmallar
-            </Link>
-            <Link href="/admin/dashboard/developer" className={styles.navButton}>
-              Developer
-            </Link>
-            <button 
-              onClick={handleLogout} 
-              className={`${styles.navButton} ${styles.logoutButton}`}
-              disabled={isLoggingOut}
-            >
-              {isLoggingOut ? 'Loggar ut...' : 'Logga ut'}
-            </button>
-          </div>
+        <div className={styles.userActions}>
+          {userEmail && (
+            <span className={styles.userEmail}>{userEmail}</span>
+          )}
+          <button 
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className={styles.logoutButton}
+          >
+            {isLoggingOut ? 'Loggar ut...' : 'Logga ut'}
+          </button>
         </div>
       </div>
     </header>
