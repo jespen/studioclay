@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import AdminHeader from '@/components/admin/Dashboard/AdminHeader';
-import GiftCardManager from '@/components/admin/GiftCards/GiftCardManager';
+// Comment out the missing component
+// import GiftCardManager from '@/components/admin/GiftCards/GiftCardManager';
 import styles from '../courses/courses.module.css';
 
 export default function GiftCardsPage() {
@@ -41,7 +42,10 @@ export default function GiftCardsPage() {
         {loading ? (
           <div className={styles.loadingSpinner}>Laddar...</div>
         ) : (
-          <GiftCardManager showHeader={true} />
+          <div className={styles.comingSoon}>
+            <h2>Presentkort-hantering</h2>
+            <p>Kommer snart...</p>
+          </div>
         )}
       </main>
     </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminDashboard from '../../../components/admin/Dashboard/AdminDashboard';
-import { supabase } from '@/utils/supabase';
+import { supabaseClient as supabase } from '@/lib/supabase';
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -51,9 +51,13 @@ export default function DashboardPage() {
           return;
         }
         
-        // User is authenticated
+        // Set user email for UI display
+        if (data.session?.user?.email) {
+          setUserEmail(data.session.user.email);
+        }
+        
+        // User is authenticated, set state
         setIsAuthenticated(true);
-        setUserEmail(data.session.user.email);
         setIsLoading(false);
       } catch (err: any) {
         console.error('Unexpected error during authentication check:', err);

@@ -2,10 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase, type Session } from '@/utils/supabase';
+import { supabaseClient as supabase } from '@/lib/supabase';
 import Image from 'next/image';
 import Link from 'next/link';
 import styles from './admin.module.css';
+
+// Define Session type
+type Session = {
+  user: {
+    email?: string;
+  } | null;
+};
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('');
