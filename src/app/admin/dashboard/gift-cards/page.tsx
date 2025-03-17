@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import AdminHeader from '../../../../../components/admin/Dashboard/AdminHeader';
-// Comment out the missing component
-// import GiftCardManager from '../../../../../components/admin/GiftCards/GiftCardManager';
+import Link from 'next/link';
 import styles from '../courses/courses.module.css';
 
+// Simplified placeholder page until we have all components working correctly
 export default function GiftCardsPage() {
   const [userName, setUserName] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -32,18 +31,33 @@ export default function GiftCardsPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <AdminHeader 
-        title="Presentkort" 
-        subtitle={userName ? `Välkommen, ${userName}` : 'Välkommen'} 
-        userEmail={userName}
-      />
+      {/* Simplified header */}
+      <header className={styles.adminHeader || 'p-4 bg-gray-100 flex justify-between'}>
+        <div>
+          <h1 className="text-2xl font-bold">Presentkort</h1>
+          {userName && <p>Välkommen, {userName}</p>}
+        </div>
+        <nav>
+          <ul className="flex space-x-4">
+            <li>
+              <Link href="/admin/dashboard">Kurser</Link>
+            </li>
+            <li>
+              <Link href="/admin/dashboard/templates">Mallar</Link>
+            </li>
+            <li>
+              <Link href="/admin/dashboard/gift-cards">Presentkort</Link>
+            </li>
+          </ul>
+        </nav>
+      </header>
       
-      <main className={styles.mainContent}>
+      <main className={styles.mainContent || 'p-4'}>
         {loading ? (
-          <div className={styles.loadingSpinner}>Laddar...</div>
+          <div className={styles.loadingSpinner || 'p-4 text-center'}>Laddar...</div>
         ) : (
-          <div className={styles.comingSoon}>
-            <h2>Presentkort-hantering</h2>
+          <div className={styles.comingSoon || 'p-4 text-center'}>
+            <h2 className="text-xl font-semibold mb-2">Presentkort-hantering</h2>
             <p>Kommer snart...</p>
           </div>
         )}
