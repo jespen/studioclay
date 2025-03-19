@@ -55,11 +55,6 @@ const Footer = () => {
             <h4 className={styles.columnTitle}>Övrigt</h4>
             <ul className={styles.linksList}>
               <li>
-                <Link href="/book-course#faq" className={styles.footerLink}>
-                  Frågor och svar
-                </Link>
-              </li>
-              <li>
                 <Link href="/villkor" className={styles.footerLink}>
                   Allmäna villkor
                 </Link>

@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import styles from '@/styles/Portfolio.module.css';
-import { InstagramPost } from '@/utils/instagramApi';
 
 // Definition for a local gallery item
 interface GalleryItem {

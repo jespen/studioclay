@@ -59,6 +59,17 @@ export async function PATCH(
     
     const body = await request.json();
     
+    // Validate invoice fields
+    if (body.invoice_address || body.invoice_postal_code || body.invoice_city) {
+      // If any invoice field is provided, make sure required fields are present
+      if (!body.invoice_address || !body.invoice_postal_code || !body.invoice_city) {
+        return NextResponse.json(
+          { error: 'When providing invoice details, address, postal code, and city are all required' },
+          { status: 400 }
+        );
+      }
+    }
+    
     // Prepare the update data
     const updateData = {
       ...body,

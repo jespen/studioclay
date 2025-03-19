@@ -7,16 +7,23 @@ import StyledButton from './StyledButton';
 interface BackToCoursesProps {
   position?: 'top' | 'bottom';
   marginY?: number;
+  label?: string;
+  url?: string;
 }
 
 /**
- * A button to navigate back to the courses page
+ * A button to navigate back to the courses page or a custom URL
  */
-const BackToCourses: React.FC<BackToCoursesProps> = ({ position = 'top', marginY = 2 }) => {
+const BackToCourses: React.FC<BackToCoursesProps> = ({ 
+  position = 'top', 
+  marginY = 2,
+  label = 'Tillbaka till kurser',
+  url = '/courses'
+}) => {
   const router = useRouter();
 
-  const handleBackToCourses = () => {
-    router.push('/courses');
+  const handleBack = () => {
+    router.push(url);
   };
 
   return (
@@ -32,11 +39,11 @@ const BackToCourses: React.FC<BackToCoursesProps> = ({ position = 'top', marginY
       <StyledButton
         secondary
         startIcon={<ArrowBackIcon />}
-        onClick={handleBackToCourses}
+        onClick={handleBack}
         data-testid="back-to-courses-button"
         sx={{ fontSize: '0.9rem' }}
       >
-        Tillbaka till kurser
+        {label}
       </StyledButton>
     </Box>
   );

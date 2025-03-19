@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { Payment } from '@/types/booking';
 
 // Check for required environment variables
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -171,11 +172,20 @@ export type Booking = {
   customer_phone: string | null;
   number_of_participants: number;
   booking_date: string;
-  status: 'waiting' | 'confirmed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'cancelled';
   payment_status: 'paid' | 'unpaid';
+  payment_method?: string;
+  payment_id?: string;
   message: string | null;
   created_at: string;
   updated_at: string;
+  
+  // Invoice-specific fields
+  invoice_number?: string;
+  invoice_address?: string;
+  invoice_postal_code?: string;
+  invoice_city?: string;
+  invoice_reference?: string;
   
   // Joined fields
   course?: Course;
@@ -435,29 +445,19 @@ export async function getBooking(id: string) {
     .from('bookings')
     .select(`
       *,
-      course:course_instances(
+      course:course_instances (
         *,
-        template:course_templates(
+        template:course_templates (
           *,
-          category:categories(*),
-          instructor:instructors(*)
+          category:categories (*)
         )
-      )
+      ),
+      payment:payments (*)
     `)
     .eq('id', id)
     .single();
     
   if (error) throw error;
-  
-  // Process the data to maintain backward compatibility
-  if (data.course) {
-    data.course = {
-      ...data.course,
-      ...data.course.template,
-      template_id: data.course.template?.id
-    };
-  }
-  
   return data as Booking;
 }
 
@@ -483,4 +483,27 @@ export async function updatePaymentStatus(id: string, payment_status: Booking['p
     
   if (error) throw error;
   return data as Booking;
+}
+
+// Payment functions
+export async function createPayment(payment: Omit<Payment, 'id' | 'created_at'>) {
+  const { data, error } = await supabaseAdmin
+    .from('payments')
+    .insert([payment])
+    .select('*, booking(*)')
+    .single();
+    
+  if (error) throw error;
+  return data as Payment;
+}
+
+export async function getPayment(id: string) {
+  const { data, error } = await supabaseAdmin
+    .from('payments')
+    .select('*, booking(*)')
+    .eq('id', id)
+    .single();
+    
+  if (error) throw error;
+  return data as Payment;
 } 

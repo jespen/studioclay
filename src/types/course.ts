@@ -52,21 +52,24 @@ export interface Instructor {
   name: string;
 }
 
-export interface Booking {
+export type Booking = {
   id: string;
+  created_at: string;
   course_id: string;
   customer_name: string;
   customer_email: string;
   customer_phone: string | null;
   number_of_participants: number;
-  booking_date: string;
-  status: 'waiting' | 'confirmed' | 'cancelled';
-  payment_status: 'paid' | 'unpaid';
+  status: string;
   message: string | null;
-  created_at: string;
-  updated_at: string;
-  course?: CourseInstance & { template?: CourseTemplate };
-}
+  booking_reference: string;
+  invoice_address: string | null;
+  invoice_postal_code: string | null;
+  invoice_city: string | null;
+  invoice_reference: string | null;
+  booking_date: string;
+  // payment_id field removed as it's no longer used
+};
 
 export interface BookingHistory {
   id: string;

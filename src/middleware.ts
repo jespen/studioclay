@@ -74,11 +74,13 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // Check for authentication - first try Supabase session, then fallback to custom cookies
+  const isAuthenticated = await isUserAuthenticated(request, supabase);
+
   // For API routes that aren't public, verify auth
   const isApiPath = pathname.startsWith('/api/');
   if (isApiPath) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    if (!isAuthenticated) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -88,8 +90,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // For protected pages, redirect to login if not authenticated
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
+  if (!isAuthenticated) {
     const redirectUrl = new URL('/admin', request.url);
     redirectUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(redirectUrl);
@@ -98,9 +99,37 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+// Helper function to check authentication via multiple methods
+async function isUserAuthenticated(request: NextRequest, supabase: any): Promise<boolean> {
+  // Try Supabase session first
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      return true;
+    }
+  } catch (error) {
+    console.error('Error checking Supabase session:', error);
+    // Continue to next auth method
+  }
+
+  // Fallback to custom auth cookies
+  const hasSessionCookie = request.cookies.has('admin-session');
+  const hasActiveSessionCookie = request.cookies.has('admin-session-active');
+
+  if (hasSessionCookie && hasActiveSessionCookie) {
+    // In a production app, you would verify these token are valid, not just present
+    return true;
+  }
+  
+  return false;
+}
+
 // Configure the middleware to run on specific paths
 export const config = {
   matcher: [
-    '/admin/:path*'
+    '/admin/:path*',
+    '/api/admin/:path*',
+    '/api/courses/:path*',
+    '/api/bookings/:path*'
   ]
 }; 

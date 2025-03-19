@@ -57,6 +57,32 @@ export const FormTextField: React.FC<FormFieldProps> = ({
       margin={margin}
       error={!!error}
       helperText={error || helperText}
+      sx={{
+        '& .MuiOutlinedInput-root': {
+          '&.Mui-focused fieldset': {
+            borderColor: 'var(--primary)',
+          },
+          '&:hover fieldset': {
+            borderColor: 'var(--primary-light)',
+          }
+        },
+        '& .MuiInputLabel-root': {
+          '&.Mui-focused': {
+            color: 'var(--primary)',
+          },
+        },
+        '& .MuiInputBase-input': {
+          '&.Mui-focused': {
+            borderColor: 'var(--primary)',
+          }
+        },
+        '& .MuiCheckbox-root': {
+          '&.Mui-checked': {
+            color: 'var(--primary)',
+          }
+        },
+        ...props.sx
+      }}
       {...props}
     />
   );
@@ -80,6 +106,21 @@ export const FormSelectField: React.FC<SelectFieldProps> = ({
       variant={variant} 
       error={!!error} 
       margin={margin}
+      sx={{
+        '& .MuiOutlinedInput-root': {
+          '&.Mui-focused fieldset': {
+            borderColor: 'var(--primary)',
+          },
+          '&:hover fieldset': {
+            borderColor: 'var(--primary-light)',
+          }
+        },
+        '& .MuiInputLabel-root': {
+          '&.Mui-focused': {
+            color: 'var(--primary)',
+          },
+        },
+      }}
     >
       <InputLabel>{label}</InputLabel>
       <Select
@@ -115,6 +156,11 @@ export const FormCheckboxField: React.FC<CheckboxFieldProps> = ({
             name={name}
             checked={checked}
             onChange={onChange}
+            sx={{
+              '&.Mui-checked': {
+                color: 'var(--primary)',
+              },
+            }}
           />
         }
         label={label}

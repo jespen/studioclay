@@ -10,7 +10,8 @@ interface ConfirmationPageProps {
 // Server component that safely handles params
 export default async function ConfirmationPage({ params }: ConfirmationPageProps) {
   // In Next.js 15.2+, we need to await the params
-  const id = await Promise.resolve(params.id);
+  const awaitedParams = await params;
+  const id = awaitedParams.id;
   
   return (
     <Suspense fallback={<div>Loading confirmation...</div>}>

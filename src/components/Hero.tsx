@@ -10,8 +10,8 @@ interface HeroProps {
 }
 
 const Hero = ({
-  title = 'Clay Studio för kreativa sinnen',
-  highlightedText = 'Professionell',
+  title = 'Unik drejstudio för kreativa själar, upplev skapandets magi!',
+  highlightedText = 'Studio Clay -',
   description = 'En dedikerad keramikstudio som erbjuder kurser, workshops och studiotid för både privatpersoner och företag. Upplev konsten av lera i en kreativ och stödjande miljö.'
 }: HeroProps) => {
   return (

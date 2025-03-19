@@ -34,6 +34,19 @@ import {
 import { Check as CheckIcon, Close as CloseIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { styled } from '@mui/system';
 import type { Booking } from '@/lib/supabaseAdmin';
+import PaymentStatusBadge from '../Payments/PaymentStatusBadge';
+import PaymentStatusUpdater from '../Payments/PaymentStatusUpdater';
+import { getBookingPaymentStatus, mapLegacyPaymentStatus } from '@/utils/admin/paymentUtils';
+
+// Extend the Booking interface to include payments
+interface ExtendedBooking extends Booking {
+  payments?: Array<{
+    id: string;
+    status: string;
+    payment_reference: string;
+    payment_method: string;
+  }>;
+}
 
 // Styled components
 const StyledTableContainer = styled(TableContainer)({
@@ -54,21 +67,24 @@ interface BookingsListProps {
 type StatusFilter = 'all' | 'active' | 'cancelled';
 
 export default function BookingsList({ courseId, onBookingUpdate }: BookingsListProps) {
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<ExtendedBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   
+  // State for tracking payment statuses as they're loaded or updated
+  const [paymentStatuses, setPaymentStatuses] = useState<Record<string, string>>({});
+  
   // Delete (now cancel) dialog state
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
+  const [bookingToCancel, setBookingToCancel] = useState<ExtendedBooking | null>(null);
   
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [bookingToEdit, setBookingToEdit] = useState<Booking | null>(null);
-  const [editFormData, setEditFormData] = useState<Partial<Booking>>({});
+  const [bookingToEdit, setBookingToEdit] = useState<ExtendedBooking | null>(null);
+  const [editFormData, setEditFormData] = useState<Partial<ExtendedBooking>>({});
   
   // Primary color from globals.css
   const primaryColor = '#547264';
@@ -98,6 +114,51 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
     }
   };
 
+  // Handle payment status change from the payment status badge component
+  const handlePaymentStatusChange = async (bookingId: string, status: string) => {
+    // Find the booking to update
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+    
+    // Get the payment ID from the booking's payments array
+    const paymentId = booking.payments && booking.payments.length > 0 
+      ? booking.payments[0].id 
+      : null;
+      
+    if (!paymentId) {
+      console.error('No payment found for booking:', bookingId);
+      return;
+    }
+    
+    try {
+      // Update the payment status
+      const response = await fetch('/api/payments/update-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paymentId, status }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update payment status');
+      }
+      
+      // Update local state
+      setPaymentStatuses(prev => ({
+        ...prev,
+        [bookingId]: status
+      }));
+      
+      // Re-fetch bookings data to get updated status
+      fetchBookings();
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      alert('Det gick inte att uppdatera betalningsstatus. Försök igen.');
+    }
+  };
+
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);
   };
@@ -113,7 +174,7 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
   };
 
   // Handle opening the cancel confirmation dialog
-  const handleCancelClick = (booking: Booking) => {
+  const handleCancelClick = (booking: ExtendedBooking) => {
     setBookingToCancel(booking);
     setCancelDialogOpen(true);
   };
@@ -156,14 +217,14 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
   };
 
   // Handle opening the edit dialog
-  const handleEditClick = (booking: Booking) => {
+  const handleEditClick = (booking: ExtendedBooking) => {
     setBookingToEdit(booking);
     setEditFormData(booking);
     setEditDialogOpen(true);
   };
 
   // Handle edit form changes
-  const handleEditFormChange = (field: keyof Booking, value: any) => {
+  const handleEditFormChange = (field: keyof ExtendedBooking, value: any) => {
     setEditFormData(prev => ({
       ...prev,
       [field]: value
@@ -257,6 +318,7 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
     }
   };
 
+  // Legacy function - will be deprecated once we fully migrate to the new payment system
   const getPaymentStatusChip = (status: string) => {
     switch (status) {
       case 'paid':
@@ -395,7 +457,22 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
                       <TableCell>{booking.customer_phone || '–'}</TableCell>
                       <TableCell>{booking.number_of_participants}</TableCell>
                       <TableCell>{getStatusChip(booking.status)}</TableCell>
-                      <TableCell>{getPaymentStatusChip(booking.payment_status)}</TableCell>
+                      <TableCell>
+                        {booking.payments && booking.payments.length > 0 ? (
+                          <PaymentStatusUpdater
+                            bookingId={booking.id}
+                            paymentId={booking.payments[0].id}
+                            currentStatus={booking.payments[0].status || mapLegacyPaymentStatus(booking.payment_status)}
+                            onStatusUpdated={(newStatus) => handlePaymentStatusChange(booking.id, newStatus)}
+                          />
+                        ) : (
+                          <PaymentStatusBadge 
+                            bookingId={booking.id}
+                            initialStatus={paymentStatuses[booking.id]}
+                            onStatusChange={(status) => handlePaymentStatusChange(booking.id, status)}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell>{new Date(booking.created_at).toLocaleDateString('sv-SE')}</TableCell>
                       <TableCell>{booking.message ? booking.message.slice(0, 30) + (booking.message.length > 30 ? '...' : '') : '–'}</TableCell>
                       <TableCell>
@@ -524,19 +601,32 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
               </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Betalningsstatus</InputLabel>
-                <Select
-                  value={editFormData.payment_status || 'unpaid'}
-                  label="Betalningsstatus"
-                  onChange={(e) => handleEditFormChange('payment_status', e.target.value)}
-                >
-                  <MenuItem value="unpaid">Ej betald</MenuItem>
-                  <MenuItem value="paid">Betald</MenuItem>
-                  <MenuItem value="refunded">Återbetald</MenuItem>
-                  <MenuItem value="partial">Delbetalning</MenuItem>
-                </Select>
-              </FormControl>
+              {bookingToEdit?.payments && bookingToEdit.payments.length > 0 ? (
+                <Box>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Betalningsstatus hanteras nu via betalningsknappen i översikten.
+                  </Typography>
+                  <PaymentStatusBadge 
+                    bookingId={bookingToEdit.id}
+                    initialStatus={bookingToEdit.payments[0].status || mapLegacyPaymentStatus(bookingToEdit.payment_status)}
+                    onStatusChange={(status) => handlePaymentStatusChange(bookingToEdit.id, status)}
+                  />
+                </Box>
+              ) : (
+                <FormControl fullWidth>
+                  <InputLabel>Betalningsstatus (Legacy)</InputLabel>
+                  <Select
+                    value={editFormData.payment_status || 'unpaid'}
+                    label="Betalningsstatus (Legacy)"
+                    onChange={(e) => handleEditFormChange('payment_status', e.target.value)}
+                  >
+                    <MenuItem value="unpaid">Ej betald</MenuItem>
+                    <MenuItem value="paid">Betald</MenuItem>
+                    <MenuItem value="refunded">Återbetald</MenuItem>
+                    <MenuItem value="partial">Delbetalning</MenuItem>
+                  </Select>
+                </FormControl>
+              )}
             </Grid>
             <Grid item xs={12}>
               <TextField

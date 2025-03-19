@@ -76,7 +76,6 @@ export default function BookingsTable({
       customer_phone: booking.customer_phone,
       number_of_participants: booking.number_of_participants,
       status: booking.status,
-      payment_status: booking.payment_status,
       message: booking.message
     });
     setEditDialogOpen(true);
@@ -303,8 +302,8 @@ export default function BookingsTable({
                     <TableCell>{getStatusChip(booking.status)}</TableCell>
                     <TableCell>
                       <Chip
-                        label={booking.payment_status === 'paid' ? 'Betald' : 'Ej betald'}
-                        color={booking.payment_status === 'paid' ? 'success' : 'error'}
+                        label={booking.payment?.status === 'PAID' ? 'Betald' : 'Ej betald'}
+                        color={booking.payment?.status === 'PAID' ? 'success' : 'error'}
                         size="small"
                         variant="outlined"
                       />
@@ -421,18 +420,15 @@ export default function BookingsTable({
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth margin="dense">
-                <InputLabel>Betalningsstatus</InputLabel>
-                <Select
-                  name="payment_status"
-                  value={editFormData.payment_status || ''}
-                  onChange={handleSelectChange}
-                  label="Betalningsstatus"
-                >
-                  <MenuItem value="paid">Betald</MenuItem>
-                  <MenuItem value="unpaid">Ej betald</MenuItem>
-                </Select>
-              </FormControl>
+              <TextField
+                name="booking_reference"
+                label="Bokningsreferens"
+                value={editFormData.booking_reference || ''}
+                onChange={handleTextFieldChange}
+                fullWidth
+                margin="dense"
+                InputProps={{ readOnly: true }}
+              />
             </Grid>
             <Grid item xs={12}>
               <TextField

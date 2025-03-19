@@ -6,6 +6,7 @@ import GiftCardBanner from '@/components/GiftCardBanner';
 import Portfolio from '@/components/Portfolio';
 import Courses from '@/components/Courses';
 import NewsletterBanner from '@/components/NewsletterBanner';
+import FAQ from '@/components/FAQ';
 import Footer from '@/components/Footer';
 
 export default function Home() {
@@ -28,6 +29,9 @@ export default function Home() {
         </section>
         <section id="works">
           <Portfolio />
+        </section>
+        <section id="faq">
+          <FAQ />
         </section>
         <section id="newsletter">
           <NewsletterBanner />

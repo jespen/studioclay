@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Box, 
@@ -7,13 +7,18 @@ import {
   Grid,
   Alert, 
   CircularProgress,
-  Container
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormHelperText,
+  SelectChangeEvent,
 } from '@mui/material';
 
-import BookingStepper, { BookingStep } from '../common/BookingStepper';
-import BackToCourses from '../common/BackToCourses';
+import { GenericStep, FlowType } from '../common/BookingStepper';
+import GenericFlowContainer from '../common/GenericFlowContainer';
 import StyledButton from '../common/StyledButton';
-import { FormTextField, FormCheckboxField } from '../common/FormField';
+import { FormTextField } from '../common/FormField';
 
 interface UserInfoFormProps {
   courseId: string;
@@ -24,12 +29,8 @@ interface FormData {
   lastName: string;
   email: string;
   phone: string;
-  streetAddress: string;
-  postalCode: string;
-  city: string;
+  numberOfParticipants: string;
   specialRequirements: string;
-  acceptTerms: boolean;
-  acceptPrivacyPolicy: boolean;
 }
 
 interface FormErrors {
@@ -37,32 +38,71 @@ interface FormErrors {
   lastName?: string;
   email?: string;
   phone?: string;
-  streetAddress?: string;
-  postalCode?: string;
-  city?: string;
-  acceptTerms?: string;
-  acceptPrivacyPolicy?: string;
+  numberOfParticipants?: string;
+}
+
+interface CourseDetail {
+  id: string;
+  title: string;
+  max_participants?: number;
+  current_participants?: number;
+  availableSpots?: number;
+  price?: number;
 }
 
 const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId }) => {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [maxParticipants, setMaxParticipants] = useState(1);
   
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
-    streetAddress: '',
-    postalCode: '',
-    city: '',
+    numberOfParticipants: '1',
     specialRequirements: '',
-    acceptTerms: false,
-    acceptPrivacyPolicy: false,
   });
 
   const [formErrors, setFormErrors] = useState<FormErrors>({});
+
+  // Fetch course details to get available spots
+  useEffect(() => {
+    const fetchCourseDetails = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/courses/${courseId}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch course details');
+        }
+        
+        const data = await response.json();
+        
+        if (data && data.course) {
+          setCourseDetail(data.course);
+          
+          // Calculate available spots
+          const availableSpots = data.course.availableSpots !== undefined 
+            ? data.course.availableSpots 
+            : (data.course.max_participants ? data.course.max_participants - (data.course.current_participants || 0) : 10);
+          
+          setMaxParticipants(availableSpots);
+        }
+      } catch (error) {
+        setSubmitError('Failed to fetch course details. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (courseId) {
+      fetchCourseDetails();
+    }
+  }, [courseId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -73,10 +113,10 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId }) => {
     }
   };
 
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    setFormData(prev => ({ ...prev, [name]: checked }));
-    // Clear error when user checks
+  const handleSelectChange = (e: SelectChangeEvent<string>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    // Clear error when user selects
     if (formErrors[name as keyof FormErrors]) {
       setFormErrors(prev => ({ ...prev, [name]: undefined }));
     }
@@ -109,30 +149,17 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId }) => {
       errors.phone = 'Telefonnummer är obligatoriskt';
       isValid = false;
     }
-
-    if (!formData.streetAddress.trim()) {
-      errors.streetAddress = 'Gatuadress är obligatoriskt';
+    
+    // Validate number of participants
+    if (!formData.numberOfParticipants) {
+      errors.numberOfParticipants = 'Antal deltagare är obligatoriskt';
       isValid = false;
-    }
-
-    if (!formData.postalCode.trim()) {
-      errors.postalCode = 'Postnummer är obligatoriskt';
-      isValid = false;
-    }
-
-    if (!formData.city.trim()) {
-      errors.city = 'Ort är obligatoriskt';
-      isValid = false;
-    }
-
-    if (!formData.acceptTerms) {
-      errors.acceptTerms = 'Du måste acceptera villkoren';
-      isValid = false;
-    }
-
-    if (!formData.acceptPrivacyPolicy) {
-      errors.acceptPrivacyPolicy = 'Du måste acceptera integritetspolicyn';
-      isValid = false;
+    } else {
+      const numParticipants = parseInt(formData.numberOfParticipants);
+      if (isNaN(numParticipants) || numParticipants < 1 || numParticipants > maxParticipants) {
+        errors.numberOfParticipants = `Antal deltagare måste vara mellan 1 och ${maxParticipants}`;
+        isValid = false;
+      }
     }
 
     setFormErrors(errors);
@@ -156,6 +183,7 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId }) => {
       
       // Store form data in localStorage or context for the next step
       localStorage.setItem('userInfo', JSON.stringify(formData));
+      localStorage.setItem('courseDetail', JSON.stringify(courseDetail));
       
       // Navigate to next step
       router.push(`/book-course/${courseId}/payment`);
@@ -170,173 +198,172 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId }) => {
     router.push(`/book-course/${courseId}`);
   };
 
+  // Generate participant options based on available spots
+  const participantOptions = () => {
+    const options = [];
+    for (let i = 1; i <= maxParticipants; i++) {
+      options.push(
+        <MenuItem key={i} value={i.toString()}>
+          {i} {i === 1 ? 'person' : 'personer'}
+        </MenuItem>
+      );
+    }
+    return options;
+  };
+
   return (
-    <Container maxWidth="lg" sx={{ pt: 4, pb: 6 }} className="hide-navigation">
-      <BackToCourses position="top" />
-      <BookingStepper activeStep={BookingStep.USER_INFO} />
-      
-      <Typography variant="h4" component="h1" align="center" gutterBottom>
-        Dina uppgifter
-      </Typography>
-      
-      <Typography variant="body1" align="center" paragraph>
-        Fyll i dina personuppgifter nedan för att fortsätta med bokningen.
-      </Typography>
-      
-      {submitError && (
-        <Alert severity="error" sx={{ my: 2 }}>
-          {submitError}
-        </Alert>
+    <GenericFlowContainer 
+      activeStep={1} 
+      flowType={FlowType.COURSE_BOOKING}
+      title="Dina uppgifter"
+      subtitle="Fyll i dina personuppgifter nedan för att fortsätta med bokningen."
+      alertMessage={submitError || undefined}
+      alertSeverity="error"
+    >
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <Paper 
+          elevation={3} 
+          sx={{ 
+            borderRadius: 2, 
+            p: { xs: 2, sm: 4 }, 
+            mt: 4 
+          }}
+        >
+          {courseDetail && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                {courseDetail.title}
+              </Typography>
+              <Typography variant="body2">
+                Tillgängliga platser: {maxParticipants}
+              </Typography>
+            </Box>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <Grid container spacing={3}>
+              <Grid item xs={12} sm={6}>
+                <FormTextField
+                  label="Förnamn *"
+                  name="firstName"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  error={formErrors.firstName}
+                  required
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormTextField
+                  label="Efternamn *"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  error={formErrors.lastName}
+                  required
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormTextField
+                  label="E-post *"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  error={formErrors.email}
+                  required
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormTextField
+                  label="Telefon *"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  error={formErrors.phone}
+                  required
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormControl 
+                  fullWidth 
+                  error={!!formErrors.numberOfParticipants}
+                  required
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '&.Mui-focused fieldset': {
+                        borderColor: 'var(--primary)',
+                      },
+                      '&:hover fieldset': {
+                        borderColor: 'var(--primary-light)',
+                      }
+                    },
+                    '& .MuiInputLabel-root': {
+                      '&.Mui-focused': {
+                        color: 'var(--primary)',
+                      },
+                    },
+                  }}
+                >
+                  <InputLabel id="number-of-participants-label">Antal deltagare</InputLabel>
+                  <Select
+                    labelId="number-of-participants-label"
+                    id="numberOfParticipants"
+                    name="numberOfParticipants"
+                    value={formData.numberOfParticipants}
+                    onChange={handleSelectChange}
+                    label="Antal deltagare *"
+                  >
+                    {participantOptions()}
+                  </Select>
+                  {formErrors.numberOfParticipants && (
+                    <FormHelperText>{formErrors.numberOfParticipants}</FormHelperText>
+                  )}
+                </FormControl>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <FormTextField
+                  label="Särskilda önskemål eller behov"
+                  name="specialRequirements"
+                  value={formData.specialRequirements}
+                  onChange={handleChange}
+                  multiline
+                  rows={3}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
+                  <StyledButton
+                    secondary
+                    onClick={handleBack}
+                    disabled={isSubmitting}
+                  >
+                    Tillbaka
+                  </StyledButton>
+                  
+                  <StyledButton
+                    type="submit"
+                    disabled={isSubmitting || maxParticipants <= 0}
+                    startIcon={isSubmitting ? <CircularProgress size={20} sx={{ color: 'white' }} /> : undefined}
+                  >
+                    {isSubmitting ? 'Skickar...' : 'Fortsätt till betalning'}
+                  </StyledButton>
+                </Box>
+              </Grid>
+            </Grid>
+          </form>
+        </Paper>
       )}
-      
-      <Paper 
-        elevation={3} 
-        sx={{ 
-          borderRadius: 2, 
-          p: { xs: 2, sm: 4 }, 
-          mt: 4 
-        }}
-      >
-        <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} sm={6}>
-              <FormTextField
-                label="Förnamn *"
-                name="firstName"
-                value={formData.firstName}
-                onChange={handleChange}
-                error={formErrors.firstName}
-                required
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <FormTextField
-                label="Efternamn *"
-                name="lastName"
-                value={formData.lastName}
-                onChange={handleChange}
-                error={formErrors.lastName}
-                required
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <FormTextField
-                label="E-post *"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                error={formErrors.email}
-                required
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <FormTextField
-                label="Telefon *"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                error={formErrors.phone}
-                required
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <FormTextField
-                label="Gatuadress *"
-                name="streetAddress"
-                value={formData.streetAddress}
-                onChange={handleChange}
-                error={formErrors.streetAddress}
-                required
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <FormTextField
-                label="Postnummer *"
-                name="postalCode"
-                value={formData.postalCode}
-                onChange={handleChange}
-                error={formErrors.postalCode}
-                required
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <FormTextField
-                label="Ort *"
-                name="city"
-                value={formData.city}
-                onChange={handleChange}
-                error={formErrors.city}
-                required
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <FormTextField
-                label="Särskilda önskemål eller behov"
-                name="specialRequirements"
-                value={formData.specialRequirements}
-                onChange={handleChange}
-                multiline
-                rows={3}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <FormCheckboxField
-                name="acceptTerms"
-                checked={formData.acceptTerms}
-                onChange={handleCheckboxChange}
-                label="Jag accepterar bokningsvillkoren *"
-                error={formErrors.acceptTerms}
-              />
-              <Typography variant="caption" color="text.secondary">
-                Genom att klicka i denna ruta accepterar du våra <a href="/terms" target="_blank" rel="noopener noreferrer">bokningsvillkor</a>.
-              </Typography>
-            </Grid>
-            
-            <Grid item xs={12}>
-              <FormCheckboxField
-                name="acceptPrivacyPolicy"
-                checked={formData.acceptPrivacyPolicy}
-                onChange={handleCheckboxChange}
-                label="Jag accepterar integritetspolicyn *"
-                error={formErrors.acceptPrivacyPolicy}
-              />
-              <Typography variant="caption" color="text.secondary">
-                Genom att klicka i denna ruta accepterar du vår <a href="/privacy" target="_blank" rel="noopener noreferrer">integritetspolicy</a>.
-              </Typography>
-            </Grid>
-            
-            <Grid item xs={12}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-                <StyledButton
-                  secondary
-                  onClick={handleBack}
-                  disabled={isSubmitting}
-                >
-                  Tillbaka
-                </StyledButton>
-                
-                <StyledButton
-                  type="submit"
-                  disabled={isSubmitting}
-                  startIcon={isSubmitting ? <CircularProgress size={20} sx={{ color: 'white' }} /> : undefined}
-                >
-                  {isSubmitting ? 'Skickar...' : 'Fortsätt till betalning'}
-                </StyledButton>
-              </Box>
-            </Grid>
-          </Grid>
-        </form>
-      </Paper>
-    </Container>
+    </GenericFlowContainer>
   );
 };
 

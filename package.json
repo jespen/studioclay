@@ -10,9 +10,6 @@
     "vercel-build": "npm install --legacy-peer-deps tailwindcss@4.0.14 postcss@8.5.3 autoprefixer@10.4.21 @tailwindcss/nesting @tailwindcss/postcss && next build",
     "start": "next start",
     "lint": "next lint",
-    "instagram:check": "node scripts/instagram-tools.js check",
-    "instagram:refresh": "node scripts/instagram-tools.js refresh",
-    "instagram:details": "node scripts/instagram-tools.js details",
     "migrate": "node src/scripts/run-migration.js"
   },
   "dependencies": {
@@ -37,6 +34,7 @@
     "file-saver": "^2.0.5",
     "jspdf": "^3.0.0",
     "next": "15.2.1",
+    "nodemailer": "^6.10.0",
     "pdfkit": "^0.16.0",
     "postcss": "^8.5.3",
     "postcss-import": "^16.1.0",
@@ -49,6 +47,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@types/node": "^20",
+    "@types/nodemailer": "^6.4.17",
     "@types/pdfkit": "^0.13.9",
     "@types/react": "^18",
     "@types/react-dom": "^18",

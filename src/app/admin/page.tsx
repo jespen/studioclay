@@ -96,33 +96,12 @@ export default function AdminLogin() {
     // Skip Supabase session check if using local auth
     if (isLocalAuth) return;
     
-    // Add redirect attempt tracking to prevent loops
-    const redirectAttempts = parseInt(localStorage.getItem('redirectAttempts') || '0', 10);
-    const maxAttempts = 3;
-    
-    if (redirectAttempts >= maxAttempts) {
-      console.log('Too many redirect attempts, resetting count and staying on login page');
-      localStorage.setItem('redirectAttempts', '0');
-      setDebugInfo(`Login redirect loop detected (${redirectAttempts} attempts). 
-        <hr/>
-        <strong>Possible causes:</strong>
-        <ul>
-          <li>Authentication cookies are not being set correctly</li>
-          <li>Network connectivity issues with Supabase</li>
-          <li>Session validation issues in middleware</li>
-        </ul>
-        <strong>Action required:</strong> Please try logging in again manually.`);
-      return;
-    }
-    
-    // Increment the redirect attempt counter
-    // We do this before the check so it applies even if the check fails
-    localStorage.setItem('redirectAttempts', (redirectAttempts + 1).toString());
-    console.log(`Checking session (attempt ${redirectAttempts + 1}/${maxAttempts})`);
-    
     // Check if user is already logged in
     const checkSession = async () => {
       try {
+        // Clear redirect attempts counter when manually checking session
+        localStorage.removeItem('redirectAttempts');
+        
         const { data, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -131,10 +110,9 @@ export default function AdminLogin() {
           return;
         }
         
-        // If no session, reset the redirect counter
+        // If no session, stay on login page
         if (!data.session) {
-          console.log('No active session found, resetting counter');
-          localStorage.setItem('redirectAttempts', '0');
+          console.log('No active session found');
           return;
         }
         
@@ -152,11 +130,8 @@ export default function AdminLogin() {
           }
         }
         
-        // Set a short timeout to ensure that cookies are set before navigation
-        setTimeout(() => {
-          // Use direct navigation for more reliable redirection
-          window.location.href = '/admin/dashboard';
-        }, 500);
+        // Navigate to dashboard using router instead of direct location change
+        router.push('/admin/dashboard');
       } catch (err: any) {
         console.error('Error checking session:', err);
         setDebugInfo(`Error checking session: ${err.message || 'Unknown error'}`);
@@ -174,9 +149,8 @@ export default function AdminLogin() {
       if (session && event === 'SIGNED_IN') {
         console.log('New sign in detected, setting cookies');
         
-        // Increment redirect attempt counter
-        const currentAttempts = parseInt(localStorage.getItem('redirectAttempts') || '0', 10);
-        localStorage.setItem('redirectAttempts', (currentAttempts + 1).toString());
+        // Clear redirect attempts counter
+        localStorage.removeItem('redirectAttempts');
         
         // Set server-side cookies that middleware can detect
         const email = session.user.email;
@@ -189,11 +163,8 @@ export default function AdminLogin() {
           }
         }
         
-        // Set a short timeout to ensure that cookies are set before navigation
-        setTimeout(() => {
-          // Use direct navigation for more reliable redirection
-          window.location.href = '/admin/dashboard';
-        }, 500);
+        // Navigate using router instead of direct location change
+        router.push('/admin/dashboard');
       }
     });
 
@@ -230,16 +201,21 @@ export default function AdminLogin() {
         console.log('Supabase sign in successful:', data);
         setDebugInfo('Supabase login successful! Setting cookies and redirecting...');
         
+        // Clear any previous redirect attempts
+        localStorage.removeItem('redirectAttempts');
+        
         // Set server-side cookies that middleware can detect
         if (data.user?.email) {
-          await setAuthCookies(data.user.email);
+          const success = await setAuthCookies(data.user.email);
+          if (!success) {
+            console.error('Failed to set auth cookies');
+            setDebugInfo('Failed to set authentication cookies');
+            return;
+          }
         }
         
-        // Give Supabase time to set cookies before navigating
-        setTimeout(() => {
-          // Use direct navigation instead of Next.js router for auth redirects
-          window.location.href = '/admin/dashboard';
-        }, 500);
+        // Use the router for navigation instead of direct location change
+        router.push('/admin/dashboard');
       }
     } catch (err: any) {
       console.error('Login error:', err);
@@ -287,11 +263,11 @@ export default function AdminLogin() {
       console.log('Local authentication successful:', result);
       setDebugInfo('Login successful! Redirecting to dashboard...');
       
-      // Set a short timeout to ensure cookies are saved before redirect
-      setTimeout(() => {
-        // Use direct navigation instead of router for more reliable redirection
-        window.location.href = '/admin/dashboard';
-      }, 300);
+      // Clear any redirect attempt tracking
+      localStorage.removeItem('redirectAttempts');
+      
+      // Use the router for navigation instead of direct location change
+      router.push('/admin/dashboard');
     } catch (error: any) {
       console.error('Local auth request error:', error);
       setError(error.message || 'An error occurred during sign in');

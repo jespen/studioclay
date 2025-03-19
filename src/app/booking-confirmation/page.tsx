@@ -42,10 +42,6 @@ export default function BookingConfirmationPage() {
           </p>
           
           <div className={styles.actions}>
-            <Link href="/" className={styles.primaryButton}>
-              Tillbaka till startsidan
-            </Link>
-            
             <Link href="/contact" className={styles.secondaryButton}>
               Kontakta oss
             </Link>

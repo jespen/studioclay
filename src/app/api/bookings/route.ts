@@ -21,6 +21,12 @@ export async function GET(request: NextRequest) {
           category:categories (*),
           instructor:instructors (*)
         )
+      ),
+      payments (
+        id,
+        status,
+        payment_reference,
+        payment_method
       )
     `);
     
@@ -138,7 +144,13 @@ export async function POST(request: NextRequest) {
         booking_date: new Date().toISOString(),
         status: body.status || 'confirmed',
         payment_status: body.payment_status || 'unpaid',
-        message: body.message || null
+        message: body.message || null,
+        // Include invoice details if provided
+        invoice_number: body.invoice_number || null,
+        invoice_address: body.invoice_address || null,
+        invoice_postal_code: body.invoice_postal_code || null,
+        invoice_city: body.invoice_city || null,
+        invoice_reference: body.invoice_reference || null
       },
       participant_count: body.number_of_participants
     });
@@ -152,7 +164,11 @@ export async function POST(request: NextRequest) {
       // Start a transaction
       const { data, error } = await supabaseAdmin
         .from('bookings')
-        .insert(body)
+        .insert({
+          ...body,
+          // Ensure consistent format for date
+          booking_date: body.booking_date || new Date().toISOString()
+        })
         .select();
         
       if (error) {
