@@ -1,14 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Chip } from '@mui/material';
 import { PaymentStatus } from '@/types/booking';
 
 interface PaymentStatusBadgeProps {
   bookingId: string;
   status: PaymentStatus;
-  initialStatus?: PaymentStatus;
-  onStatusChange?: (status: PaymentStatus) => void;
+  onStatusChange: (status: PaymentStatus, bookingId: string) => void;
 }
 
 /**
@@ -17,40 +16,27 @@ interface PaymentStatusBadgeProps {
  */
 export default function PaymentStatusBadge({
   bookingId,
-  status,
-  initialStatus,
+  status: initialStatus,
   onStatusChange
 }: PaymentStatusBadgeProps) {
+  const [localStatus, setLocalStatus] = useState<PaymentStatus>(initialStatus);
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const getStatusColor = (status: PaymentStatus) => {
-    switch (status) {
-      case 'PAID':
-        return 'success';
-      case 'CREATED':
-        return 'warning';
-      case 'DECLINED':
-      case 'ERROR':
-        return 'error';
-      default:
-        return 'default';
-    }
+    return status === 'PAID' ? 'success' : 'warning';
   };
 
   const getStatusLabel = (status: PaymentStatus) => {
-    switch (status) {
-      case 'PAID':
-        return 'Betald';
-      case 'CREATED':
-        return 'Skapad';
-      case 'DECLINED':
-        return 'Nekad';
-      case 'ERROR':
-        return 'Fel';
-      default:
-        return status;
-    }
+    return status === 'PAID' ? 'Betald' : 'Ej betald';
   };
 
-  const handleStatusChange = async (newStatus: PaymentStatus) => {
+  const handleClick = async () => {
+    const newStatus = localStatus === 'PAID' ? 'CREATED' : 'PAID';
+    
+    // Optimistically update the UI
+    setIsUpdating(true);
+    setLocalStatus(newStatus);
+
     try {
       const response = await fetch('/api/admin/payments/update-status', {
         method: 'POST',
@@ -64,21 +50,34 @@ export default function PaymentStatusBadge({
       });
 
       if (!response.ok) {
+        // Revert on error
+        setLocalStatus(localStatus);
         throw new Error('Failed to update payment status');
       }
 
-      onStatusChange?.(newStatus);
+      // Notify parent of the change, but don't trigger a full reload
+      onStatusChange(newStatus, bookingId);
     } catch (error) {
       console.error('Error updating payment status:', error);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
   return (
     <Chip
-      label={getStatusLabel(status)}
-      color={getStatusColor(status)}
+      label={getStatusLabel(localStatus)}
+      color={getStatusColor(localStatus)}
       size="small"
-      onClick={() => handleStatusChange(status)}
+      onClick={handleClick}
+      disabled={isUpdating}
+      sx={{
+        transition: 'all 0.2s ease-in-out',
+        cursor: 'pointer',
+        '&:hover': {
+          opacity: 0.8
+        }
+      }}
     />
   );
 } 

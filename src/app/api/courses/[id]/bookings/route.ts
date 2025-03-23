@@ -24,7 +24,7 @@ export async function GET(
     
     console.log('Fetching bookings for course ID:', courseId);
     
-    // Get bookings from Supabase
+    // Get bookings from Supabase - only using the payment_status field from bookings table
     const { data, error } = await supabaseAdmin
       .from('bookings')
       .select('*')
@@ -37,6 +37,12 @@ export async function GET(
         { status: 500 }
       );
     }
+
+    // Debug log to check payment status
+    console.log('Bookings with payment status:', data?.map(booking => ({
+      id: booking.id,
+      payment_status: booking.payment_status
+    })));
     
     return NextResponse.json({
       courseId,

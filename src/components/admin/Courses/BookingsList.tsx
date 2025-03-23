@@ -31,7 +31,7 @@ import {
   Tabs,
   Tab
 } from '@mui/material';
-import { Check as CheckIcon, Close as CloseIcon, Edit as EditIcon } from '@mui/icons-material';
+import { Check as CheckIcon, Close as CloseIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { styled } from '@mui/system';
 import type { Booking, PaymentStatus } from '@/types/booking';
 import PaymentStatusBadge from '../Payments/PaymentStatusBadge';
@@ -46,12 +46,9 @@ interface ExtendedBooking extends Omit<Booking, 'course' | 'payments'> {
     duration: number;
     capacity: number;
   };
-  payments?: Array<{
-    id: string;
-    status: PaymentStatus;
-    payment_reference: string;
-    payment_method: string;
-  }>;
+  payment_status: PaymentStatus;
+  payment_method: string;
+  booking_reference: string;
   message?: string;
 }
 
@@ -60,6 +57,9 @@ const StyledTableContainer = styled(TableContainer)({
   marginTop: '1rem',
   maxHeight: '60vh',
   overflowY: 'auto',
+  '& .MuiTableCell-root': {
+    padding: '8px 4px', // Reduce horizontal padding in cells
+  },
 });
 
 const StyledTableCell = styled(TableCell)({
@@ -76,8 +76,6 @@ interface BookingsListProps {
   participantInfo?: string;
 }
 
-type StatusFilter = 'all' | 'active' | 'cancelled';
-
 export default function BookingsList({ 
   courseId, 
   bookings, 
@@ -87,9 +85,7 @@ export default function BookingsList({
   title = "Bokningar",
   participantInfo 
 }: BookingsListProps) {
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const primaryColor = '#547264';
   
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -99,23 +95,6 @@ export default function BookingsList({
   // Cancel dialog state
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [bookingToCancel, setBookingToCancel] = useState<ExtendedBooking | null>(null);
-  
-  // Primary color from globals.css
-  const primaryColor = '#547264';
-
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  const handleStatusFilterChange = (event: React.SyntheticEvent, newValue: StatusFilter) => {
-    setStatusFilter(newValue);
-    setPage(0);
-  };
 
   // Handle opening the cancel confirmation dialog
   const handleCancelClick = (booking: ExtendedBooking) => {
@@ -164,7 +143,9 @@ export default function BookingsList({
       customer_phone: booking.customer_phone,
       number_of_participants: booking.number_of_participants,
       status: booking.status,
-      payment_status: booking.payments?.[0]?.status || 'CREATED',
+      payment_status: booking.payment_status,
+      payment_method: booking.payment_method,
+      booking_reference: booking.booking_reference,
       message: booking.message
     });
     setEditDialogOpen(true);
@@ -213,27 +194,13 @@ export default function BookingsList({
   };
 
   // Handle payment status change
-  const handlePaymentStatusChange = async (status: string): Promise<void> => {
-    try {
-      const paymentId = bookingToEdit?.payments?.[0]?.id;
-      if (!paymentId || !bookingToEdit) return;
-
-      const response = await fetch('/api/admin/payments/update-status', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ paymentId, status }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update payment status');
-      }
-
-      onBookingUpdate();
-    } catch (error) {
-      console.error('Error updating payment status:', error);
-    }
+  const handlePaymentStatusChange = async (newStatus: PaymentStatus, bookingId: string): Promise<void> => {
+    // Update the local state first
+    const updatedBookings = bookings.map(booking => 
+      booking.id === bookingId 
+        ? { ...booking, payment_status: newStatus }
+        : booking
+    );
   };
 
   const getStatusChip = (status: string) => {
@@ -283,17 +250,6 @@ export default function BookingsList({
         );
     }
   };
-
-  // Filter bookings based on status filter
-  const filteredBookings = bookings.filter(booking => {
-    if (statusFilter === 'all') return true;
-    if (statusFilter === 'active') return booking.status !== 'cancelled';
-    return booking.status === 'cancelled';
-  });
-
-  // Calculate pagination
-  const paginatedBookings = filteredBookings.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
-  const emptyRows = rowsPerPage - Math.min(rowsPerPage, filteredBookings.length - page * rowsPerPage);
 
   if (loading) {
     return (
@@ -348,15 +304,6 @@ export default function BookingsList({
         )}
       </Box>
 
-      {/* Status Filter Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
-        <Tabs value={statusFilter} onChange={handleStatusFilterChange} aria-label="booking status tabs">
-          <Tab label="Alla" value="all" />
-          <Tab label="Aktiva" value="active" />
-          <Tab label="Avbokade" value="cancelled" />
-        </Tabs>
-      </Box>
-
       <StyledTableContainer>
         <Table stickyHeader aria-label="bookings table">
           <TableHead>
@@ -367,13 +314,15 @@ export default function BookingsList({
               <StyledTableCell>Antal</StyledTableCell>
               <StyledTableCell>Status</StyledTableCell>
               <StyledTableCell>Betalning</StyledTableCell>
+              <StyledTableCell>Metod</StyledTableCell>
+              <StyledTableCell>Referens</StyledTableCell>
               <StyledTableCell>Datum</StyledTableCell>
               <StyledTableCell>Meddelande</StyledTableCell>
               <StyledTableCell>Åtgärder</StyledTableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {paginatedBookings.map((booking) => (
+            {bookings.map((booking) => (
               <TableRow 
                 key={booking.id}
                 sx={booking.status === 'cancelled' ? { opacity: 0.6 } : {}}
@@ -384,65 +333,48 @@ export default function BookingsList({
                 <TableCell>{booking.number_of_participants}</TableCell>
                 <TableCell>{getStatusChip(booking.status)}</TableCell>
                 <TableCell>
-                  {booking.payments && booking.payments.length > 0 ? (
-                    <PaymentStatusUpdater
-                      status={booking.payments[0].status}
-                      onChange={handlePaymentStatusChange}
-                    />
-                  ) : (
-                    <PaymentStatusBadge
-                      bookingId={booking.id}
-                      status={booking.payments?.[0]?.status || 'CREATED'}
-                      initialStatus={booking.payments?.[0]?.status}
-                      onStatusChange={handlePaymentStatusChange}
-                    />
-                  )}
+                  <PaymentStatusBadge
+                    bookingId={booking.id}
+                    status={booking.payment_status}
+                    onStatusChange={handlePaymentStatusChange}
+                  />
+                </TableCell>
+                <TableCell>
+                  {booking.payment_method === 'invoice' ? 'Faktura' : 
+                   booking.payment_method === 'swish' ? 'Swish' : 
+                   booking.payment_method || '–'}
+                </TableCell>
+                <TableCell>
+                  <Tooltip title="Bokningsreferens" arrow>
+                    <span>{booking.booking_reference || '–'}</span>
+                  </Tooltip>
                 </TableCell>
                 <TableCell>{new Date(booking.created_at).toLocaleDateString('sv-SE')}</TableCell>
                 <TableCell>{booking.message ? booking.message.slice(0, 30) + (booking.message.length > 30 ? '...' : '') : '–'}</TableCell>
                 <TableCell>
-                  <Button
-                    startIcon={<EditIcon />}
+                  <IconButton
                     size="small"
                     onClick={() => handleEditClick(booking)}
-                    sx={{ mr: 1 }}
                     disabled={booking.status === 'cancelled'}
+                    sx={{ color: 'action.active' }}
                   >
-                    Ändra
-                  </Button>
+                    <EditIcon fontSize="small" />
+                  </IconButton>
                   {booking.status !== 'cancelled' && (
-                    <Button
-                      startIcon={<CloseIcon />}
+                    <IconButton
                       size="small"
-                      color="error"
                       onClick={() => handleCancelClick(booking)}
+                      sx={{ color: 'error.main' }}
                     >
-                      Avboka
-                    </Button>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
                   )}
                 </TableCell>
               </TableRow>
             ))}
-            {emptyRows > 0 && (
-              <TableRow style={{ height: 53 * emptyRows }}>
-                <TableCell colSpan={9} />
-              </TableRow>
-            )}
           </TableBody>
         </Table>
       </StyledTableContainer>
-
-      <TablePagination
-        component="div"
-        count={filteredBookings.length}
-        page={page}
-        onPageChange={handleChangePage}
-        rowsPerPage={rowsPerPage}
-        onRowsPerPageChange={handleChangeRowsPerPage}
-        rowsPerPageOptions={[5, 10, 25]}
-        labelRowsPerPage="Rader per sida:"
-        labelDisplayedRows={({ from, to, count }) => `${from}–${to} av ${count}`}
-      />
 
       {/* Edit Booking Dialog */}
       <Dialog
@@ -511,12 +443,31 @@ export default function BookingsList({
                   label="Betalningsstatus"
                   onChange={(e) => handleEditFormChange('payment_status', e.target.value)}
                 >
-                  <MenuItem value="CREATED">Skapad</MenuItem>
+                  <MenuItem value="CREATED">Ej betald</MenuItem>
                   <MenuItem value="PAID">Betald</MenuItem>
-                  <MenuItem value="DECLINED">Nekad</MenuItem>
-                  <MenuItem value="ERROR">Fel</MenuItem>
                 </Select>
               </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel>Betalningsmetod</InputLabel>
+                <Select
+                  value={editFormData.payment_method || 'invoice'}
+                  label="Betalningsmetod"
+                  onChange={(e) => handleEditFormChange('payment_method', e.target.value)}
+                >
+                  <MenuItem value="invoice">Faktura</MenuItem>
+                  <MenuItem value="swish">Swish</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Bokningsreferens"
+                value={editFormData.booking_reference || ''}
+                onChange={(e) => handleEditFormChange('booking_reference', e.target.value)}
+              />
             </Grid>
             <Grid item xs={12}>
               <TextField

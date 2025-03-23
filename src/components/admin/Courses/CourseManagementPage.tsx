@@ -61,6 +61,16 @@ export default function CourseManagementPage({
           throw new Error(errorData.error || 'Failed to fetch bookings');
         }
         const bookingsData = await bookingsResponse.json();
+        console.log('Received bookings data:', bookingsData);
+        
+        // Debug log for payment status
+        bookingsData.bookings?.forEach((booking: any) => {
+          console.log(`Booking ${booking.id} payment status:`, {
+            hasPayments: !!booking.payments?.length,
+            paymentStatus: booking.payments?.[0]?.status
+          });
+        });
+        
         setBookings(bookingsData.bookings || []);
         
       } catch (err) {
@@ -117,14 +127,33 @@ export default function CourseManagementPage({
 
   if (error) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container 
+        maxWidth={false} 
+        sx={{ 
+          py: 4,
+          px: { xs: 2, sm: 3 }, // Smaller padding on the sides
+          maxWidth: '100%',
+          '@media (min-width: 1200px)': {
+            px: 4, // Even on large screens, keep padding reasonable
+          }
+        }}
+      >
         <Typography color="error">Error: {error}</Typography>
       </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg">
+    <Container 
+      maxWidth={false}
+      sx={{ 
+        px: { xs: 2, sm: 3 }, // Smaller padding on the sides
+        maxWidth: '100%',
+        '@media (min-width: 1200px)': {
+          px: 4, // Even on large screens, keep padding reasonable
+        }
+      }}
+    >
       <Box sx={{ mt: 4, mb: 4 }}>
         <Button
           startIcon={<ArrowBackIcon />}
