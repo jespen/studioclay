@@ -28,6 +28,7 @@
     "@tailwindcss/nesting": "^0.0.0-insiders.565cd3e",
     "@tailwindcss/postcss": "^4.0.14",
     "@tailwindcss/typography": "^0.5.16",
+    "@vercel/analytics": "^1.5.0",
     "autoprefixer": "^10.4.21",
     "basic-ftp": "^5.0.5",
     "date-fns": "^4.1.0",
