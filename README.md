@@ -186,6 +186,19 @@ This will add the missing `status` column to the `course_instances` table.
 - Implemented status-based filtering that works from the API level instead of client-side.
 - Added proper error handling for all API operations.
 
+### 4. Payment Status Handling
+- Moved payment status updates to use API routes instead of direct Supabase access
+- Updated PaymentStatusBadge and PaymentStatusUpdater components to use client-side fetch
+- Removed direct database access from client components for better security
+- Simplified the payment status update flow to use a single API endpoint
+- Added proper error handling and loading states for payment status updates
+
+The payment status can now be updated through:
+- PaymentStatusBadge component (click to update)
+- PaymentStatusUpdater component (dropdown selection)
+
+Both components now use the `/api/admin/payments/update-status` endpoint for updates.
+
 ## Testing Swish Payments
 
 Swish payments follow an E-Commerce flow as documented at [Swish Developer Portal](https://developer.swish.nu/documentation/guides/create-a-payment-request):

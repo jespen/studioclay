@@ -30,7 +30,7 @@ export interface PaymentDetails {
 export interface Payment {
   id: string;
   created_at: string;
-  status: 'CREATED' | 'PAID' | 'DECLINED' | 'ERROR';
+  status: PaymentStatus;
   payment_method: string;
   amount: number;
   payment_reference: string;
@@ -54,4 +54,17 @@ export interface Booking {
   payment?: Payment;
   payments?: Payment[];
   course?: Course;
+  message?: string;
+}
+
+export interface ExtendedBooking extends Omit<Booking, 'course' | 'payments'> {
+  course: {
+    id: string;
+    title: string;
+    description: string;
+    price: number;
+    duration: number;
+    capacity: number;
+  };
+  payments?: Array<Payment>;
 } 

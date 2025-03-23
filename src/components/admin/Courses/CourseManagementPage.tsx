@@ -6,17 +6,24 @@ import { Container, Box, Paper, Typography, Button } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CourseForm from '@/app/admin/dashboard/courses/CourseForm';
 import BookingsTable from './BookingsTable';
-import { Course, Booking } from '@/types/course';
+import { Course } from '@/types/course';
+import type { ExtendedBooking } from '@/types/booking';
 
 interface CourseManagementPageProps {
   courseId: string;
+  initialCourse: Course;
+  initialBookings: ExtendedBooking[];
 }
 
-export default function CourseManagementPage({ courseId }: CourseManagementPageProps) {
+export default function CourseManagementPage({ 
+  courseId, 
+  initialCourse,
+  initialBookings 
+}: CourseManagementPageProps) {
   const router = useRouter();
-  const [course, setCourse] = useState<Course | null>(null);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [course, setCourse] = useState<Course>(initialCourse);
+  const [bookings, setBookings] = useState<ExtendedBooking[]>(initialBookings);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshData, setRefreshData] = useState(0);
   
@@ -25,6 +32,8 @@ export default function CourseManagementPage({ courseId }: CourseManagementPageP
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!refreshData) return; // Skip initial fetch since we have initial data
+      
       try {
         setLoading(true);
         
@@ -106,14 +115,6 @@ export default function CourseManagementPage({ courseId }: CourseManagementPageP
     setRefreshData(prev => prev + 1);
   };
 
-  if (loading) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Typography>Laddar kurs...</Typography>
-      </Container>
-    );
-  }
-
   if (error) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -164,8 +165,7 @@ export default function CourseManagementPage({ courseId }: CourseManagementPageP
               loading={loading}
               error={error}
               status="confirmed"
-              onEditBooking={() => {}}
-              onUpdateBooking={handleDataUpdate}
+              onBookingUpdate={handleDataUpdate}
               participantInfo={`${bookings
                 .filter(b => b.status === 'confirmed')
                 .reduce((sum, b) => sum + b.number_of_participants, 0)} av ${course?.max_participants || 0}`}
@@ -177,8 +177,7 @@ export default function CourseManagementPage({ courseId }: CourseManagementPageP
               loading={loading}
               error={error}
               status="pending"
-              onEditBooking={() => {}}
-              onUpdateBooking={handleDataUpdate}
+              onBookingUpdate={handleDataUpdate}
               participantInfo={`${bookings
                 .filter(b => b.status === 'pending')
                 .reduce((sum, b) => sum + b.number_of_participants, 0)} personer`}
@@ -190,8 +189,7 @@ export default function CourseManagementPage({ courseId }: CourseManagementPageP
               loading={loading}
               error={error}
               status="cancelled"
-              onEditBooking={() => {}}
-              onUpdateBooking={handleDataUpdate}
+              onBookingUpdate={handleDataUpdate}
               participantInfo={`${bookings
                 .filter(b => b.status === 'cancelled')
                 .reduce((sum, b) => sum + b.number_of_participants, 0)}`}

@@ -1,98 +1,84 @@
-import React, { useState, useEffect } from 'react';
-import { Chip, Tooltip, CircularProgress, ChipProps } from '@mui/material';
-import { getBookingPaymentStatus, getHumanReadablePaymentStatus, paymentStatusLabels } from '@/utils/admin/paymentUtils';
+'use client';
+
+import React from 'react';
+import { Chip } from '@mui/material';
 import { PaymentStatus } from '@/types/booking';
 
-interface PaymentStatusBadgeProps extends Omit<ChipProps, 'label' | 'color'> {
+interface PaymentStatusBadgeProps {
   bookingId: string;
-  initialStatus?: string;
-  onStatusChange?: (status: string) => void;
   status: PaymentStatus;
+  initialStatus?: PaymentStatus;
+  onStatusChange?: (status: PaymentStatus) => void;
 }
 
 /**
  * A component for displaying payment status as a colored badge
  * It loads the status from the payments table via the booking ID
  */
-const PaymentStatusBadge: React.FC<PaymentStatusBadgeProps> = ({ 
-  bookingId, 
-  initialStatus, 
-  onStatusChange,
+export default function PaymentStatusBadge({
+  bookingId,
   status,
-  ...props
-}) => {
-  const [loading, setLoading] = useState<boolean>(!initialStatus);
-
-  useEffect(() => {
-    if (!initialStatus) {
-      // Only fetch if we don't have an initial status
-      const fetchStatus = async () => {
-        try {
-          const paymentStatus = await getBookingPaymentStatus(bookingId);
-          if (onStatusChange) {
-            onStatusChange(paymentStatus);
-          }
-        } catch (error) {
-          console.error('Error fetching payment status:', error);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchStatus();
-    }
-  }, [bookingId, initialStatus, onStatusChange]);
-
-  // Update local state if initialStatus changes
-  useEffect(() => {
-    if (initialStatus && initialStatus !== status) {
-      // This should not happen as the status is now controlled by props
-    }
-  }, [initialStatus, status]);
-
-  const getStatusColor = (status: PaymentStatus): ChipProps['color'] => {
+  initialStatus,
+  onStatusChange
+}: PaymentStatusBadgeProps) {
+  const getStatusColor = (status: PaymentStatus) => {
     switch (status) {
       case 'PAID':
         return 'success';
-      case 'DECLINED':
+      case 'CREATED':
         return 'warning';
+      case 'DECLINED':
       case 'ERROR':
         return 'error';
-      case 'CREATED':
       default:
         return 'default';
     }
   };
 
-  const label = loading ? 'Laddar...' : paymentStatusLabels[status];
+  const getStatusLabel = (status: PaymentStatus) => {
+    switch (status) {
+      case 'PAID':
+        return 'Betald';
+      case 'CREATED':
+        return 'Skapad';
+      case 'DECLINED':
+        return 'Nekad';
+      case 'ERROR':
+        return 'Fel';
+      default:
+        return status;
+    }
+  };
 
-  if (loading) {
-    return (
-      <Chip
-        label={label}
-        size="small"
-        icon={<CircularProgress size={14} color="inherit" />}
-        sx={{
-          backgroundColor: '#f3f4f6',
-          color: '#374151',
-          border: '1px solid #d1d5db',
-          '& .MuiChip-label': { paddingLeft: 0 }
-        }}
-        {...props}
-      />
-    );
-  }
+  const handleStatusChange = async (newStatus: PaymentStatus) => {
+    try {
+      const response = await fetch('/api/admin/payments/update-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          bookingId,
+          status: newStatus 
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update payment status');
+      }
+
+      onStatusChange?.(newStatus);
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+    }
+  };
 
   return (
-    <Tooltip title={`Betalningsstatus: ${label}`}>
-      <Chip
-        label={label}
-        size="small"
-        color={getStatusColor(status)}
-        {...props}
-      />
-    </Tooltip>
+    <Chip
+      label={getStatusLabel(status)}
+      color={getStatusColor(status)}
+      size="small"
+      onClick={() => handleStatusChange(status)}
+    />
   );
-};
-
-export default PaymentStatusBadge; 
+} 
