@@ -155,7 +155,7 @@ export default function WaitlistComponent({ courseId, onWaitlistUpdate }: Waitli
           number_of_participants: entryToAdd.number_of_participants,
           message: entryToAdd.message,
           status: 'confirmed', // Set status to confirmed
-          payment_status: 'unpaid'
+          payment_status: 'CREATED'
         }),
       });
       

@@ -1,10 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
-import { Payment } from '@/types/booking';
+import { Payment, PaymentStatus } from '@/types/booking';
 
 // Check for required environment variables
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  console.error('Missing required environment variable: NEXT_PUBLIC_SUPABASE_URL');
-}
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.error('Missing required environment variable: SUPABASE_SERVICE_ROLE_KEY');
@@ -13,7 +11,7 @@ if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
 // Initialize Supabase client with admin privileges
 // This should only be used server-side in API routes
 const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  supabaseUrl,
   process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   {
     auth: {
@@ -173,7 +171,7 @@ export type Booking = {
   number_of_participants: number;
   booking_date: string;
   status: 'pending' | 'confirmed' | 'cancelled';
-  payment_status: 'paid' | 'unpaid';
+  payment_status: PaymentStatus;
   payment_method?: string;
   payment_id?: string;
   message: string | null;

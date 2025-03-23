@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
+import GiftCardTable from './GiftCardTable';
+import { Box, Paper, Typography, Button, CircularProgress } from '@mui/material';
+import SectionContainer from '../Dashboard/SectionContainer';
 
 interface GiftCard {
   id: string;
@@ -20,11 +23,7 @@ interface GiftCard {
   expires_at: string;
 }
 
-interface GiftCardManagerProps {
-  showHeader?: boolean;
-}
-
-const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) => {
+const GiftCardManager: React.FC = () => {
   const [giftCards, setGiftCards] = useState<GiftCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, active, redeemed, expired, digital, physical, paid, unpaid
@@ -290,7 +289,7 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
       // Need to pass the OPPOSITE of the current status to toggle it
       const newStatus = !isPaid;
       
-      console.log(`Updating gift card ${id} payment status from ${isPaid ? 'paid' : 'unpaid'} to ${newStatus ? 'paid' : 'unpaid'}`);
+      console.log(`Updating gift card ${id} payment status from ${isPaid ? 'PAID' : 'CREATED'} to ${newStatus ? 'PAID' : 'CREATED'}`);
       
       const response = await fetch(`/api/gift-cards/update-payment`, {
         method: 'POST',
@@ -309,7 +308,7 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
       setGiftCards(giftCards.map(card => 
         card.id === id ? { ...card, is_paid: newStatus } : card
       ));
-      console.log(`Successfully updated gift card ${id} payment status to ${newStatus ? 'paid' : 'unpaid'}`);
+      console.log(`Successfully updated gift card ${id} payment status to ${newStatus ? 'PAID' : 'CREATED'}`);
       
     } catch (err) {
       console.error('Error in togglePayment:', err);
@@ -387,351 +386,241 @@ const GiftCardManager: React.FC<GiftCardManagerProps> = ({ showHeader = true }) 
       case 'cancelled': return 'Visar avbrutna presentkort';
       case 'digital': return 'Visar digitala presentkort';
       case 'physical': return 'Visar fysiska presentkort';
-      case 'paid': return 'Visar betalda presentkort';
-      case 'unpaid': return 'Visar ej betalda presentkort';
+      case 'PAID': return 'Visar betalda presentkort';
+      case 'CREATED': return 'Visar ej betalda presentkort';
       default: return '';
     }
   };
 
-  const renderContent = () => {
-    if (error) {
-      return (
-        <div className={styles.errorMessage}>
-          <h3>Ett fel uppstod</h3>
-          <p>{error}</p>
-          <button onClick={fetchGiftCards} className={styles.publishButton}>
-            Försök igen
-          </button>
-        </div>
-      );
-    }
-    
-    if (loading) {
-      return <div className={styles.loadingSpinner}>Hämtar presentkort...</div>;
-    }
+  return (
+    <>
+      {error && (
+        <div className="error-message">{error}</div>
+      )}
 
-    return (
-      <div className={styles.managerContainer}>
-        <div className={styles.managerHeader}>
-          {showHeader && (
-            <h2 className={styles.managerTitle}>Hantera Presentkort</h2>
-          )}
-          
-          <div className={styles.managerActions}>
-            <button 
-              onClick={() => setIsModalOpen(true)}
-              className={styles.addButton}
-            >
+      {loading ? (
+        <div>Laddar presentkort...</div>
+      ) : (
+        <>
+          <div className={styles.navButtons} style={{ marginBottom: '1rem' }}>
+            <button onClick={() => setIsModalOpen(true)} className={styles.addButton}>
               Lägg till presentkort
             </button>
           </div>
-        </div>
 
-        <div className={styles.sectionContainer}>
-          <div className={styles.sectionHeader}>
-            <div className={styles.managerControls}>
-              <div className={styles.filterContainer}>
-                <select
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                  className={styles.statusSelect}
-                  aria-label="Filtrera presentkort"
-                >
-                  <option value="all">Alla Presentkort</option>
-                  <option value="active">Aktiva</option>
-                  <option value="redeemed">Inlösta</option>
-                  <option value="expired">Utgångna</option>
-                  <option value="cancelled">Avbrutna</option>
-                  <option value="digital">Digitala</option>
-                  <option value="physical">Fysiska</option>
-                  <option value="paid">Betalda</option>
-                  <option value="unpaid">Ej betalda</option>
-                </select>
-                
-                <button
-                  onClick={fetchGiftCards}
-                  className={styles.publishButton}
-                  title="Uppdatera listan med presentkort"
-                >
-                  <span>Uppdatera</span>
-                </button>
-                
-                {getFilterDescription() && (
-                  <span className={styles.filterDescription}>
-                    {getFilterDescription()} ({giftCards.length})
-                  </span>
-                )}
-              </div>
+          <SectionContainer title="Presentkort">
+            <div className={styles.filterContainer} style={{ margin: '1rem' }}>
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className={styles.statusSelect}
+                aria-label="Filtrera presentkort"
+              >
+                <option value="all">Alla Presentkort</option>
+                <option value="active">Aktiva</option>
+                <option value="redeemed">Inlösta</option>
+                <option value="expired">Utgångna</option>
+                <option value="cancelled">Avbrutna</option>
+                <option value="digital">Digitala</option>
+                <option value="physical">Fysiska</option>
+                <option value="PAID">Betalda</option>
+                <option value="CREATED">Ej betalda</option>
+              </select>
+              
+              <button
+                onClick={fetchGiftCards}
+                className={styles.publishButton}
+                title="Uppdatera listan med presentkort"
+              >
+                <span>Uppdatera</span>
+              </button>
+              
+              {getFilterDescription() && (
+                <span className={styles.filterDescription}>
+                  {getFilterDescription()} ({giftCards.length})
+                </span>
+              )}
             </div>
-          </div>
 
-          {giftCards.length === 0 ? (
-            <div className={styles.emptyState}>
-              <p>Inga presentkort hittades</p>
-              <p className={styles.emptyStateSubtext}>Presentkorten som har köpts via hemsidan visas här.</p>
-            </div>
-          ) : (
-            <table className={styles.table}>
-              <thead className={styles.tableHeader}>
-                <tr>
-                  <th className={styles.tableHeaderCell}>Kod</th>
-                  <th className={styles.tableHeaderCell}>Belopp</th>
-                  <th className={styles.tableHeaderCell}>Typ</th>
-                  <th className={styles.tableHeaderCell}>Status</th>
-                  <th className={styles.tableHeaderCell}>Betald</th>
-                  <th className={styles.tableHeaderCell}>Mottagare</th>
-                  <th className={styles.tableHeaderCell}>Skapat</th>
-                  <th className={styles.tableHeaderCell}>Utgår</th>
-                  <th className={styles.tableHeaderCell}>Åtgärder</th>
-                </tr>
-              </thead>
-              <tbody>
-                {giftCards.map((card) => (
-                  <tr key={card.id} className={`${styles.tableRow} ${updatingCards[card.id] ? styles.loading : ''}`}>
-                    <td className={`${styles.tableCell} ${styles.codeCell}`}>{card.code}</td>
-                    <td className={styles.tableCell}>{card.amount} kr</td>
-                    <td className={styles.tableCell}>
-                      {card.type === 'digital' ? 'Digitalt' : 'Fysiskt'}
-                    </td>
-                    <td className={styles.tableCell}>
-                      <select
-                        value={card.status}
-                        onChange={(e) => handleChangeStatus(
-                          card.id, 
-                          e.target.value as GiftCard['status']
-                        )}
-                        className={styles.statusSelect}
-                        disabled={updatingCards[card.id]}
-                      >
-                        <option value="active">Aktivt</option>
-                        <option value="redeemed">Inlöst</option>
-                        <option value="expired">Utgånget</option>
-                        <option value="cancelled">Avbrutet</option>
-                      </select>
-                    </td>
-                    <td className={styles.tableCell}>
-                      <button
-                        onClick={() => handleTogglePaymentStatus(card.id, card.is_paid)}
-                        className={`${styles.actionButton} ${card.is_paid ? styles.paidButton : styles.unpaidButton}`}
-                        title={card.is_paid ? "Markera som obetald" : "Markera som betald"}
-                        disabled={updatingCards[card.id]}
-                      >
-                        {card.is_paid ? 'Betald ✓' : 'Ej betald ✗'}
-                      </button>
-                    </td>
-                    <td className={styles.tableCell}>
-                      <div>{card.recipient_name}</div>
-                      {card.recipient_email && (
-                        <div className={styles.smallText}>{card.recipient_email}</div>
-                      )}
-                    </td>
-                    <td className={styles.tableCell}>{formatDate(card.created_at)}</td>
-                    <td className={styles.tableCell}>{formatDate(card.expires_at)}</td>
-                    <td className={`${styles.tableCell} ${styles.actionsCell}`}>
-                      <div className={styles.actionButtonsContainer}>
-                        <button
-                          onClick={() => generateGiftCardPDF(card)}
-                          className={`${styles.actionButton} ${styles.pdfButton}`}
-                          title="Generera PDF"
-                          disabled={updatingCards[card.id]}
-                        >
-                          {updatingCards[card.id] ? 'Genererar...' : 'PDF'}
-                        </button>
-
-                        {card.type === 'digital' && (
-                          <button
-                            onClick={() => {
-                              sendGiftCardEmail(card);
-                              handleMarkAsEmailed(card.id);
-                            }}
-                            disabled={card.is_emailed}
-                            className={`${styles.actionButton} ${card.is_emailed ? styles.disabledButton : styles.emailButton}`}
-                            title={card.is_emailed ? 'Redan skickat' : 'Skicka via e-post'}
-                          >
-                            {card.is_emailed ? 'Skickat' : 'Skicka'}
-                          </button>
-                        )}
-
-                        {card.type === 'physical' && (
-                          <button
-                            onClick={() => handleMarkAsPrinted(card.id)}
-                            disabled={card.is_printed}
-                            className={`${styles.actionButton} ${card.is_printed ? styles.disabledButton : styles.printButton}`}
-                            title={card.is_printed ? 'Redan utskrivet' : 'Markera som utskrivet'}
-                          >
-                            {card.is_printed ? 'Utskrivet' : 'Skriv ut'}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {/* Modal for adding new gift card */}
-        {isModalOpen && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modal}>
-              <div className={styles.modalHeader}>
-                <h3>Lägg till nytt presentkort</h3>
-                <button 
-                  onClick={() => setIsModalOpen(false)}
-                  className={styles.modalCloseButton}
-                >
-                  ✕
-                </button>
+            {giftCards.length === 0 ? (
+              <div className={styles.emptyState}>
+                <p>Inga presentkort hittades</p>
+                <p className={styles.emptyStateSubtext}>Presentkorten som har köpts via hemsidan visas här.</p>
               </div>
-              <div className={styles.modalBody}>
-                <form onSubmit={handleCreateCard}>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="type">Typ av presentkort</label>
-                    <select
-                      id="type"
-                      name="type"
-                      value={newCardData.type}
-                      onChange={handleNewCardInput}
-                      required
-                      className={styles.formControl}
+            ) : (
+              <GiftCardTable 
+                giftCards={giftCards}
+                updatingCards={updatingCards}
+                onStatusChange={handleChangeStatus}
+                onTogglePayment={handleTogglePaymentStatus}
+                onGeneratePDF={generateGiftCardPDF}
+                onSendEmail={sendGiftCardEmail}
+                onMarkAsEmailed={handleMarkAsEmailed}
+                onMarkAsPrinted={handleMarkAsPrinted}
+              />
+            )}
+          </SectionContainer>
+        </>
+      )}
+      
+      {/* Modal for adding new gift card */}
+      {isModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <div className={styles.modalHeader}>
+              <h3>Lägg till nytt presentkort</h3>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className={styles.modalCloseButton}
+              >
+                ✕
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <form onSubmit={handleCreateCard}>
+                <div className={styles.formGroup}>
+                  <label htmlFor="type">Typ av presentkort</label>
+                  <select
+                    id="type"
+                    name="type"
+                    value={newCardData.type}
+                    onChange={handleNewCardInput}
+                    required
+                    className={styles.formControl}
+                  >
+                    <option value="digital">Digitalt Presentkort</option>
+                    <option value="physical">Fysiskt Presentkort</option>
+                  </select>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="amount">Belopp (SEK)</label>
+                  <input
+                    type="number"
+                    id="amount"
+                    name="amount"
+                    value={newCardData.amount}
+                    onChange={handleNewCardInput}
+                    required
+                    min="1"
+                    step="1"
+                    className={styles.formControl}
+                    placeholder="t.ex. 500"
+                  />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label>Betalningsstatus</label>
+                  <div className={styles.paymentToggle}>
+                    <button
+                      type="button"
+                      onClick={() => setNewCardIsPaid(!newCardIsPaid)}
+                      className={`${styles.actionButton} ${newCardIsPaid ? styles.paidButton : styles.unpaidButton}`}
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
                     >
-                      <option value="digital">Digitalt Presentkort</option>
-                      <option value="physical">Fysiskt Presentkort</option>
-                    </select>
+                      {newCardIsPaid ? 'Betald ✓' : 'Ej betald ✗'}
+                    </button>
+                    <span className={styles.smallText} style={{ marginLeft: '0.5rem' }}>
+                      {newCardIsPaid ? 'Presentkortet markeras som betalt' : 'Presentkortet markeras som ej betalt'}
+                    </span>
                   </div>
+                </div>
 
+                <div className={styles.formRow}>
                   <div className={styles.formGroup}>
-                    <label htmlFor="amount">Belopp (SEK)</label>
+                    <label htmlFor="sender_name">Köparens namn</label>
                     <input
-                      type="number"
-                      id="amount"
-                      name="amount"
-                      value={newCardData.amount}
+                      type="text"
+                      id="sender_name"
+                      name="sender_name"
+                      value={newCardData.sender_name}
                       onChange={handleNewCardInput}
                       required
-                      min="1"
-                      step="1"
                       className={styles.formControl}
-                      placeholder="t.ex. 500"
+                      placeholder="Köparens fullständiga namn"
                     />
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label>Betalningsstatus</label>
-                    <div className={styles.paymentToggle}>
-                      <button
-                        type="button"
-                        onClick={() => setNewCardIsPaid(!newCardIsPaid)}
-                        className={`${styles.actionButton} ${newCardIsPaid ? styles.paidButton : styles.unpaidButton}`}
-                        style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
-                      >
-                        {newCardIsPaid ? 'Betald ✓' : 'Ej betald ✗'}
-                      </button>
-                      <span className={styles.smallText} style={{ marginLeft: '0.5rem' }}>
-                        {newCardIsPaid ? 'Presentkortet markeras som betalt' : 'Presentkortet markeras som ej betalt'}
-                      </span>
-                    </div>
+                    <label htmlFor="sender_email">Köparens e-post</label>
+                    <input
+                      type="email"
+                      id="sender_email"
+                      name="sender_email"
+                      value={newCardData.sender_email}
+                      onChange={handleNewCardInput}
+                      required
+                      className={styles.formControl}
+                      placeholder="kopare@exempel.se"
+                    />
                   </div>
+                </div>
 
-                  <div className={styles.formRow}>
-                    <div className={styles.formGroup}>
-                      <label htmlFor="sender_name">Köparens namn</label>
-                      <input
-                        type="text"
-                        id="sender_name"
-                        name="sender_name"
-                        value={newCardData.sender_name}
-                        onChange={handleNewCardInput}
-                        required
-                        className={styles.formControl}
-                        placeholder="Köparens fullständiga namn"
-                      />
-                    </div>
-
-                    <div className={styles.formGroup}>
-                      <label htmlFor="sender_email">Köparens e-post</label>
-                      <input
-                        type="email"
-                        id="sender_email"
-                        name="sender_email"
-                        value={newCardData.sender_email}
-                        onChange={handleNewCardInput}
-                        required
-                        className={styles.formControl}
-                        placeholder="kopare@exempel.se"
-                      />
-                    </div>
-                  </div>
-
-                  <div className={styles.formRow}>
-                    <div className={styles.formGroup}>
-                      <label htmlFor="recipient_name">Mottagarens namn</label>
-                      <input
-                        type="text"
-                        id="recipient_name"
-                        name="recipient_name"
-                        value={newCardData.recipient_name}
-                        onChange={handleNewCardInput}
-                        required
-                        className={styles.formControl}
-                        placeholder="Mottagarens fullständiga namn"
-                      />
-                    </div>
-
-                    <div className={styles.formGroup}>
-                      <label htmlFor="recipient_email">Mottagarens e-post</label>
-                      <input
-                        type="email"
-                        id="recipient_email"
-                        name="recipient_email"
-                        value={newCardData.recipient_email}
-                        onChange={handleNewCardInput}
-                        required={newCardData.type === 'digital'}
-                        className={styles.formControl}
-                        placeholder="mottagare@exempel.se"
-                      />
-                    </div>
+                <div className={styles.formRow}>
+                  <div className={styles.formGroup}>
+                    <label htmlFor="recipient_name">Mottagarens namn</label>
+                    <input
+                      type="text"
+                      id="recipient_name"
+                      name="recipient_name"
+                      value={newCardData.recipient_name}
+                      onChange={handleNewCardInput}
+                      required
+                      className={styles.formControl}
+                      placeholder="Mottagarens fullständiga namn"
+                    />
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label htmlFor="message">Personligt meddelande</label>
-                    <textarea
-                      id="message"
-                      name="message"
-                      value={newCardData.message}
+                    <label htmlFor="recipient_email">Mottagarens e-post</label>
+                    <input
+                      type="email"
+                      id="recipient_email"
+                      name="recipient_email"
+                      value={newCardData.recipient_email}
                       onChange={handleNewCardInput}
+                      required={newCardData.type === 'digital'}
                       className={styles.formControl}
-                      rows={3}
-                      placeholder="Valfritt personligt meddelande till mottagaren..."
-                    ></textarea>
+                      placeholder="mottagare@exempel.se"
+                    />
                   </div>
+                </div>
 
-                  <div className={styles.modalFooter}>
-                    <button
-                      type="button"
-                      onClick={() => setIsModalOpen(false)}
-                      className={styles.cancelButton}
-                    >
-                      Avbryt
-                    </button>
-                    <button
-                      type="submit"
-                      className={styles.saveButton}
-                    >
-                      Skapa presentkort
-                    </button>
-                  </div>
-                </form>
-              </div>
+                <div className={styles.formGroup}>
+                  <label htmlFor="message">Personligt meddelande</label>
+                  <textarea
+                    id="message"
+                    name="message"
+                    value={newCardData.message}
+                    onChange={handleNewCardInput}
+                    className={styles.formControl}
+                    rows={3}
+                    placeholder="Valfritt personligt meddelande till mottagaren..."
+                  ></textarea>
+                </div>
+
+                <div className={styles.modalFooter}>
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className={styles.cancelButton}
+                  >
+                    Avbryt
+                  </button>
+                  <button
+                    type="submit"
+                    className={styles.saveButton}
+                  >
+                    Skapa presentkort
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-        )}
-      </div>
-    );
-  };
-
-  return renderContent();
+        </div>
+      )}
+    </>
+  );
 };
 
 export default GiftCardManager; 

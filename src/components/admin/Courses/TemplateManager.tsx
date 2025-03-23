@@ -1,24 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { CourseTemplate, Category } from '../../../types/course';
-import { 
-  Box, 
-  Paper, 
-  Typography, 
-  Button, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow,
-  IconButton,
-  Tooltip,
-  CircularProgress
-} from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import InfoIcon from '@mui/icons-material/Info';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
+import TemplateTable from './TemplateTable';
+import { Box, Paper, Typography, Button, CircularProgress } from '@mui/material';
+import SectionContainer from '../Dashboard/SectionContainer';
 
 interface TemplateManagerProps {
   onEditTemplate: (template: CourseTemplate) => void;
@@ -29,6 +14,7 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onEditTemplate }) => 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Record<string, Category>>({});
+  const [filter, setFilter] = useState('all');
 
   // Fetch templates
   const fetchTemplates = async () => {
@@ -85,10 +71,6 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onEditTemplate }) => 
 
   // Handle delete template
   const handleDeleteTemplate = async (templateId: string) => {
-    if (!confirm('Are you sure you want to delete this template? This will NOT affect existing courses.')) {
-      return;
-    }
-    
     try {
       const response = await fetch(`/api/templates/${templateId}`, {
         method: 'DELETE',
@@ -106,80 +88,79 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onEditTemplate }) => 
     }
   };
 
+  const getFilterDescription = () => {
+    if (filter === 'all') {
+      return 'Alla mallar';
+    } else {
+      const category = categories[filter];
+      return category ? category.name : 'Okänd kategori';
+    }
+  };
+
   return (
-    <Box sx={{ mb: 4 }}>
-      <Paper elevation={3} sx={{ p: 0, borderRadius: 2, overflow: 'hidden' }}>
-        <Box sx={{ bgcolor: 'primary.main', color: 'white', px: 3, py: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">
-            Kursmallar
-          </Typography>
-          <Button 
-            variant="contained" 
-            color="secondary" 
-            onClick={() => onEditTemplate({} as CourseTemplate)}
-            sx={{ textTransform: 'none' }}
-          >
-            Lägg till ny mall
-          </Button>
-        </Box>
-        
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : error ? (
-          <Box sx={{ p: 3 }}>
-            <Typography color="error">{error}</Typography>
-          </Box>
-        ) : templates.length === 0 ? (
-          <Box sx={{ p: 3 }}>
-            <Typography>Inga kursmallar hittades. Klicka på 'Lägg till ny mall' för att skapa en.</Typography>
-          </Box>
-        ) : (
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Namn</TableCell>
-                  <TableCell>Kategori</TableCell>
-                  <TableCell>Pris</TableCell>
-                  <TableCell>Antal kurser</TableCell>
-                  <TableCell>Åtgärder</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {templates.map((template) => (
-                  <TableRow key={template.id}>
-                    <TableCell>{template.title || template.categorie || 'Untitled'}</TableCell>
-                    <TableCell>
-                      {template.category?.name || categories[template.category_id || '']?.name || 'Ingen kategori'}
-                    </TableCell>
-                    <TableCell>
-                      {template.price !== undefined && template.price !== null 
-                       ? `${template.price} ${template.currency || ''}` 
-                       : 'Varierar'}
-                    </TableCell>
-                    <TableCell>{template.instances_count || 0}</TableCell>
-                    <TableCell>
-                      <Tooltip title="Redigera">
-                        <IconButton onClick={() => onEditTemplate(template)} size="small">
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Ta bort">
-                        <IconButton onClick={() => handleDeleteTemplate(template.id)} size="small">
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
+    <>
+      {error && (
+        <div className="error-message">{error}</div>
+      )}
+
+      {loading ? (
+        <div>Laddar kursmallar...</div>
+      ) : (
+        <>
+          <div className={styles.navButtons} style={{ marginBottom: '1rem' }}>
+            <button onClick={() => onEditTemplate({} as CourseTemplate)} className={styles.addButton}>
+              Lägg till ny mall
+            </button>
+          </div>
+
+          <SectionContainer title="Kursmallar">
+            <div className={styles.filterContainer} style={{ margin: '1rem' }}>
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className={styles.statusSelect}
+                aria-label="Filtrera kursmallar"
+              >
+                <option value="all">Alla mallar</option>
+                {Object.values(categories).map(category => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
                 ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </Paper>
-    </Box>
+              </select>
+              
+              <button
+                onClick={fetchTemplates}
+                className={styles.publishButton}
+                title="Uppdatera listan med kursmallar"
+              >
+                <span>Uppdatera</span>
+              </button>
+              
+              {getFilterDescription() && (
+                <span className={styles.filterDescription}>
+                  {getFilterDescription()} ({templates.length})
+                </span>
+              )}
+            </div>
+
+            {templates.length === 0 ? (
+              <div className={styles.emptyState}>
+                <p>Inga kursmallar hittades</p>
+                <p className={styles.emptyStateSubtext}>Klicka på 'Lägg till ny mall' för att skapa en kursmall.</p>
+              </div>
+            ) : (
+              <TemplateTable 
+                templates={templates}
+                categories={categories}
+                onEditTemplate={onEditTemplate}
+                onDeleteTemplate={handleDeleteTemplate}
+              />
+            )}
+          </SectionContainer>
+        </>
+      )}
+    </>
   );
 };
 

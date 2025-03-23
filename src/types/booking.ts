@@ -38,6 +38,8 @@ export interface Payment {
   booking?: Booking;
 }
 
+export type PaymentStatus = 'CREATED' | 'PAID' | 'DECLINED' | 'ERROR';
+
 export interface Booking {
   id: string;
   created_at: string;
@@ -48,10 +50,8 @@ export interface Booking {
   number_of_participants: number;
   course_id: string;
   course_date: string;
-  payment_status?: string;
+  payment_status?: PaymentStatus;
   payment?: Payment;
   payments?: Payment[];
   course?: Course;
-}
-
-export type PaymentStatus = 'CREATED' | 'PAID' | 'DECLINED' | 'ERROR'; 
+} 

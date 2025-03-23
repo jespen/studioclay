@@ -12,6 +12,7 @@ const publicPaths = [
   '/courses/public',
   '/course/',  // Only the base of course detail pages
   '/checkout',
+  '/api/courses',  // Add the base courses API endpoint
   '/api/courses/public',
   '/api/checkout',
   '/api/webhooks',
@@ -129,7 +130,7 @@ export const config = {
   matcher: [
     '/admin/:path*',
     '/api/admin/:path*',
-    '/api/courses/:path*',
+    '/api/courses/admin/:path*',  // Only protect admin course routes
     '/api/bookings/:path*'
   ]
 }; 

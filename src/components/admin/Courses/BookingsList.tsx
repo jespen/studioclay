@@ -33,19 +33,34 @@ import {
 } from '@mui/material';
 import { Check as CheckIcon, Close as CloseIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { styled } from '@mui/system';
-import type { Booking } from '@/lib/supabaseAdmin';
+import type { Booking, PaymentStatus } from '@/types/booking';
 import PaymentStatusBadge from '../Payments/PaymentStatusBadge';
 import PaymentStatusUpdater from '../Payments/PaymentStatusUpdater';
 import { getBookingPaymentStatus, mapLegacyPaymentStatus } from '@/utils/admin/paymentUtils';
+import { Course } from '@/types/course';
 
-// Extend the Booking interface to include payments
-interface ExtendedBooking extends Booking {
+interface ExtendedBooking extends Omit<Booking, 'course' | 'payments'> {
+  course: {
+    id: string;
+    title: string;
+    description: string;
+    price: number;
+    duration: number;
+    capacity: number;
+  };
   payments?: Array<{
     id: string;
-    status: string;
+    status: PaymentStatus;
     payment_reference: string;
     payment_method: string;
   }>;
+  message?: string;
+}
+
+interface Payment {
+  id: string;
+  status: 'PAID' | 'CREATED' | 'DECLINED' | 'ERROR';
+  // ... other payment fields
 }
 
 // Styled components
@@ -115,47 +130,39 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
   };
 
   // Handle payment status change from the payment status badge component
-  const handlePaymentStatusChange = async (bookingId: string, status: string) => {
-    // Find the booking to update
-    const booking = bookings.find(b => b.id === bookingId);
-    if (!booking) return;
-    
-    // Get the payment ID from the booking's payments array
-    const paymentId = booking.payments && booking.payments.length > 0 
-      ? booking.payments[0].id 
-      : null;
-      
-    if (!paymentId) {
-      console.error('No payment found for booking:', bookingId);
-      return;
-    }
-    
+  const handlePaymentStatusChange = async (status: string): Promise<void> => {
     try {
-      // Update the payment status
-      const response = await fetch('/api/payments/update-status', {
+      const paymentId = bookingToEdit?.payments?.[0]?.id;
+      if (!paymentId || !bookingToEdit) return;
+
+      const response = await fetch('/api/admin/payments/update-status', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ paymentId, status }),
       });
-      
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update payment status');
+        throw new Error('Failed to update payment status');
       }
-      
+
       // Update local state
-      setPaymentStatuses(prev => ({
-        ...prev,
-        [bookingId]: status
+      setBookings(prev => prev.map(b => {
+        if (b.id === bookingToEdit.id && b.payments?.[0]) {
+          return {
+            ...b,
+            payments: [{
+              ...b.payments[0],
+              status: status as PaymentStatus
+            }, ...b.payments.slice(1)]
+          };
+        }
+        return b;
       }));
-      
-      // Re-fetch bookings data to get updated status
-      fetchBookings();
+
     } catch (error) {
       console.error('Error updating payment status:', error);
-      alert('Det gick inte att uppdatera betalningsstatus. Försök igen.');
     }
   };
 
@@ -219,7 +226,15 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
   // Handle opening the edit dialog
   const handleEditClick = (booking: ExtendedBooking) => {
     setBookingToEdit(booking);
-    setEditFormData(booking);
+    setEditFormData({
+      customer_name: booking.customer_name,
+      customer_email: booking.customer_email,
+      customer_phone: booking.customer_phone,
+      number_of_participants: booking.number_of_participants,
+      status: booking.status,
+      payment_status: booking.payments?.[0]?.status || 'CREATED',
+      message: booking.message
+    });
     setEditDialogOpen(true);
   };
 
@@ -229,6 +244,11 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
       ...prev,
       [field]: value
     }));
+
+    // If changing payment status, update the payment record
+    if (field === 'payment_status' && bookingToEdit?.payments?.[0]) {
+      handlePaymentStatusChange(value);
+    }
   };
 
   // Handle edit save
@@ -236,12 +256,16 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
     if (!bookingToEdit) return;
     
     try {
+      // Update booking details
       const response = await fetch(`/api/bookings/${bookingToEdit.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(editFormData)
+        body: JSON.stringify({
+          ...editFormData,
+          payment_status: editFormData.payment_status || 'CREATED'
+        })
       });
       
       if (!response.ok) {
@@ -318,51 +342,64 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
     }
   };
 
-  // Legacy function - will be deprecated once we fully migrate to the new payment system
-  const getPaymentStatusChip = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return (
-          <Chip
-            size="small"
-            label="Betald"
-            color="success"
-            icon={<CheckIcon fontSize="small" />}
-          />
-        );
-      case 'unpaid':
-        return (
-          <Chip
-            size="small"
-            label="Ej betald"
-            color="warning"
-          />
-        );
-      case 'refunded':
-        return (
-          <Chip
-            size="small"
-            label="Återbetald"
-            color="error"
-          />
-        );
-      case 'partial':
-        return (
-          <Chip
-            size="small"
-            label="Delbetalning"
-            color="info"
-          />
-        );
-      default:
-        return (
-          <Chip
-            size="small"
-            label={status || "Okänd"}
-            color="default"
-          />
-        );
+  // Update the payment status display
+  const getPaymentStatusChip = (booking: ExtendedBooking) => {
+    // If we have a payment record, use its status
+    if (booking.payments && booking.payments.length > 0) {
+      const status = booking.payments[0].status;
+      switch (status) {
+        case 'PAID':
+          return (
+            <Chip
+              size="small"
+              label="Betald"
+              color="success"
+              icon={<CheckIcon fontSize="small" />}
+            />
+          );
+        case 'CREATED':
+          return (
+            <Chip
+              size="small"
+              label="Skapad"
+              color="info"
+            />
+          );
+        case 'DECLINED':
+          return (
+            <Chip
+              size="small"
+              label="Nekad"
+              color="error"
+            />
+          );
+        case 'ERROR':
+          return (
+            <Chip
+              size="small"
+              label="Fel"
+              color="error"
+            />
+          );
+        default:
+          return (
+            <Chip
+              size="small"
+              label={status || "Okänd"}
+              color="default"
+            />
+          );
+      }
     }
+    
+    // Legacy payment status handling
+    return (
+      <Chip
+        size="small"
+        label="Ej betald"
+        color="warning"
+      />
+    );
   };
 
   // Calculate pagination using the bookings array directly
@@ -460,16 +497,15 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
                       <TableCell>
                         {booking.payments && booking.payments.length > 0 ? (
                           <PaymentStatusUpdater
-                            bookingId={booking.id}
-                            paymentId={booking.payments[0].id}
-                            currentStatus={booking.payments[0].status || mapLegacyPaymentStatus(booking.payment_status)}
-                            onStatusUpdated={(newStatus) => handlePaymentStatusChange(booking.id, newStatus)}
+                            status={booking.payments[0].status}
+                            onChange={handlePaymentStatusChange}
                           />
                         ) : (
-                          <PaymentStatusBadge 
+                          <PaymentStatusBadge
                             bookingId={booking.id}
-                            initialStatus={paymentStatuses[booking.id]}
-                            onStatusChange={(status) => handlePaymentStatusChange(booking.id, status)}
+                            status={booking.payments?.[0]?.status || 'CREATED'}
+                            initialStatus={booking.payments?.[0]?.status}
+                            onStatusChange={handlePaymentStatusChange}
                           />
                         )}
                       </TableCell>
@@ -601,32 +637,19 @@ export default function BookingsList({ courseId, onBookingUpdate }: BookingsList
               </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
-              {bookingToEdit?.payments && bookingToEdit.payments.length > 0 ? (
-                <Box>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Betalningsstatus hanteras nu via betalningsknappen i översikten.
-                  </Typography>
-                  <PaymentStatusBadge 
-                    bookingId={bookingToEdit.id}
-                    initialStatus={bookingToEdit.payments[0].status || mapLegacyPaymentStatus(bookingToEdit.payment_status)}
-                    onStatusChange={(status) => handlePaymentStatusChange(bookingToEdit.id, status)}
-                  />
-                </Box>
-              ) : (
-                <FormControl fullWidth>
-                  <InputLabel>Betalningsstatus (Legacy)</InputLabel>
-                  <Select
-                    value={editFormData.payment_status || 'unpaid'}
-                    label="Betalningsstatus (Legacy)"
-                    onChange={(e) => handleEditFormChange('payment_status', e.target.value)}
-                  >
-                    <MenuItem value="unpaid">Ej betald</MenuItem>
-                    <MenuItem value="paid">Betald</MenuItem>
-                    <MenuItem value="refunded">Återbetald</MenuItem>
-                    <MenuItem value="partial">Delbetalning</MenuItem>
-                  </Select>
-                </FormControl>
-              )}
+              <FormControl fullWidth>
+                <InputLabel>Betalningsstatus</InputLabel>
+                <Select
+                  value={editFormData.payment_status || 'CREATED'}
+                  label="Betalningsstatus"
+                  onChange={(e) => handleEditFormChange('payment_status', e.target.value)}
+                >
+                  <MenuItem value="CREATED">Skapad</MenuItem>
+                  <MenuItem value="PAID">Betald</MenuItem>
+                  <MenuItem value="DECLINED">Nekad</MenuItem>
+                  <MenuItem value="ERROR">Fel</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12}>
               <TextField

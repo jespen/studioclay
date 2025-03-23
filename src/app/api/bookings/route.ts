@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
         number_of_participants: body.number_of_participants,
         booking_date: new Date().toISOString(),
         status: body.status || 'confirmed',
-        payment_status: body.payment_status || 'unpaid',
+        payment_status: body.payment_status || 'CREATED',
         message: body.message || null,
         // Include invoice details if provided
         invoice_number: body.invoice_number || null,

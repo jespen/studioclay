@@ -27,10 +27,10 @@ export async function GET(request: NextRequest) {
         query = query.eq('type', 'digital');
       } else if (filter === 'physical') {
         query = query.eq('type', 'physical');
-      } else if (filter === 'paid') {
-        query = query.eq('is_paid', true);
-      } else if (filter === 'unpaid') {
-        query = query.eq('is_paid', false);
+      } else if (filter === 'PAID') {
+        query = query.eq('payment_status', true);
+      } else if (filter === 'CREATED') {
+        query = query.eq('payment_status', false);
       }
     }
 

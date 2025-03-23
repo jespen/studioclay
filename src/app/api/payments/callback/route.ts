@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { generateBookingReference } from '@/utils/booking';
 import { sendServerBookingConfirmationEmail } from '@/utils/serverEmail';
 import { SwishCallbackData, SwishPaymentStatus } from '@/types/payment';
+import { PaymentStatus } from '@/types/booking';
 
 // Create a Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -73,6 +75,22 @@ export async function POST(request: Request) {
     
     console.log('Payment status updated successfully');
 
+    // If there's an existing booking, update its payment_status
+    if (paymentData.booking_id && status === 'PAID') {
+      console.log('Updating existing booking payment status to PAID');
+      const { error: bookingUpdateError } = await supabase
+        .from('bookings')
+        .update({ payment_status: 'PAID' })
+        .eq('id', paymentData.booking_id);
+
+      if (bookingUpdateError) {
+        console.error('Error updating booking payment status:', bookingUpdateError);
+        // Log error but continue, as the payment status is already updated
+      } else {
+        console.log('Booking payment status updated successfully');
+      }
+    }
+
     // If payment is PAID and no booking exists yet, create booking and update course participants
     if (status === 'PAID' && !paymentData.booking_id) {
       console.log('Payment is PAID and no booking exists, creating booking now');
@@ -117,17 +135,12 @@ export async function POST(request: Request) {
           maxParticipants: courseData.max_participants
         });
 
-        // Generate a unique booking reference
-        const timestamp = new Date().getTime().toString().slice(-6);
-        const randomChars = Math.random().toString(36).substring(2, 5).toUpperCase();
-        const bookingReference = `SC-${randomChars}-${timestamp}`;
-
         // Create booking record
-        console.log('Creating booking record with customer information');
+        const bookingReference = generateBookingReference();
         const { data: bookingData, error: bookingError } = await supabase
           .from('bookings')
           .insert({
-            course_id: paymentData.course_instance_id,
+            course_id: courseData.id,
             customer_name: pendingBooking.customer_name,
             customer_email: pendingBooking.customer_email,
             customer_phone: pendingBooking.customer_phone,
@@ -136,6 +149,7 @@ export async function POST(request: Request) {
             payment_method: 'swish',
             booking_date: new Date().toISOString(),
             status: 'confirmed',
+            payment_status: 'PAID',
             booking_reference: bookingReference
           })
           .select()

@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log(`API: Updating gift card ${id} payment status to ${isPaid ? 'paid' : 'unpaid'}`);
+    console.log(`API: Updating gift card ${id} payment status to ${isPaid ? 'PAID' : 'CREATED'}`);
     
     // Convert to boolean if needed
     const isPaidBoolean = Boolean(isPaid);

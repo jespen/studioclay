@@ -114,8 +114,11 @@ export function mapLegacyPaymentStatus(legacyStatus: string | null): PaymentStat
   if (!legacyStatus) return 'CREATED';
   
   const statusMap: Record<string, PaymentStatus> = {
-    'paid': 'PAID',
-    'unpaid': 'CREATED',
+    'PAID': 'PAID',
+    'UNPAID': 'CREATED',
+    'CANCELLED': 'DECLINED',
+    'paid': 'PAID',      // Keep lowercase mappings for backward compatibility
+    'unpaid': 'CREATED', // but put them after the uppercase ones
     'cancelled': 'DECLINED'
   };
   

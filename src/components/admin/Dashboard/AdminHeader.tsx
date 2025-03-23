@@ -1,17 +1,18 @@
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
-// @ts-ignore - Supabase client typing will be handled with conditional checks
 import { supabase } from '@/utils/supabase';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 interface AdminHeaderProps {
   title: string;
   subtitle?: string;
   userEmail?: string;
+  showBackButton?: boolean;
 }
 
-export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userEmail }) => {
+export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userEmail, showBackButton }) => {
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -19,53 +20,30 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
     try {
       setIsLoggingOut(true);
 
-      // Try to sign out from Supabase first
-      if (supabase && typeof supabase.auth?.signOut === 'function') {
-        // @ts-ignore - Suppress TypeScript error for supabase.auth.signOut()
-        await supabase.auth.signOut();
-      }
+      // Sign out from Supabase first
+      await (supabase as SupabaseClient).auth.signOut();
 
-      // Then call our local logout endpoint
-      const response = await fetch('/api/auth/logout', {
+      // Call our logout API
+      await fetch('/api/auth/logout', {
         method: 'POST',
+        credentials: 'include',
         headers: {
-          'Content-Type': 'application/json',
           'Cache-Control': 'no-cache'
-        },
-        credentials: 'same-origin'
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`Logout failed: ${response.status}`);
-      }
+      // Clear all cookies
+      document.cookie.split(';').forEach(cookie => {
+        const [name] = cookie.split('=');
+        document.cookie = `${name.trim()}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+      });
 
-      // Manually clear cookies in the browser too (belt and suspenders approach)
-      document.cookie = 'admin-session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-      document.cookie = 'admin-session-active=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-      document.cookie = 'admin-user=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-      
-      // Find and clear any Supabase cookies
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.startsWith('sb-')) {
-          const name = cookie.split('=')[0];
-          document.cookie = `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
-        }
-      }
-
-      // Small delay to ensure cookies are cleared
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Force a complete page reload and redirect
+      // Force a complete page reload to clear all state
       window.location.href = '/admin?ts=' + Date.now();
-
     } catch (error) {
       console.error('Logout error:', error);
-      // Even if there's an error, try to redirect to login
+      // Even if there's an error, try to redirect
       window.location.href = '/admin?ts=' + Date.now();
-    } finally {
-      setIsLoggingOut(false);
     }
   };
 
