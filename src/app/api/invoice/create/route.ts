@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { sendServerInvoiceEmail, sendServerBookingConfirmationEmail } from '@/utils/serverEmail';
+import { sendServerInvoiceEmail } from '@/utils/serverEmail';
 import { UserInfo, PaymentDetails } from '@/types/booking';
 
 // Create a Supabase client
@@ -52,17 +52,6 @@ export async function POST(request: Request) {
       );
     }
     
-    console.log('Course data fetched:', courseData);
-    console.log('Course amount:', courseData.amount);
-    
-    if (!courseData.amount) {
-      console.error('Course amount is missing or zero');
-      return NextResponse.json(
-        { success: false, error: 'Invalid course amount' },
-        { status: 400 }
-      );
-    }
-    
     // Generate a unique invoice number (format: SC-YYYYMMDD-XXXX)
     const today = new Date();
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
@@ -105,70 +94,13 @@ export async function POST(request: Request) {
     
     if (bookingError) {
       console.error('Error creating booking:', bookingError);
-      console.error('Attempted booking data:', {
-        course_id: courseId,
-        customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
-        customer_email: userInfo.email,
-        customer_phone: userInfo.phone,
-        number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
-        payment_method: 'invoice',
-        booking_date: new Date().toISOString(),
-        status: 'confirmed',
-        payment_status: 'CREATED',
-        booking_reference: bookingReference,
-        invoice_number: invoiceNumber,
-        invoice_address: paymentDetails.invoiceDetails?.address,
-        invoice_postal_code: paymentDetails.invoiceDetails?.postalCode,
-        invoice_city: paymentDetails.invoiceDetails?.city,
-        invoice_reference: paymentDetails.invoiceDetails?.reference || null
-      });
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Failed to create booking',
-          details: bookingError.message 
-        },
+        { success: false, error: 'Failed to create booking' },
         { status: 500 }
       );
     }
     
     console.log('Booking created successfully:', bookingData);
-    
-    // Calculate total amount based on number of participants
-    const numberOfParticipants = parseInt(userInfo.numberOfParticipants) || 1;
-    const totalAmount = courseData.amount * numberOfParticipants;
-    
-    console.log('Calculating total amount:', {
-      basePrice: courseData.amount,
-      numberOfParticipants,
-      totalAmount
-    });
-
-    // Create payment record linked to booking
-    console.log('Creating payment record in Supabase');
-    const { data: paymentData, error: paymentError } = await supabase
-      .from('payments')
-      .insert({
-        booking_id: bookingData.id,
-        course_instance_id: courseId,
-        amount: totalAmount,
-        payment_reference: invoiceNumber,
-        status: 'CREATED',
-        payment_method: 'invoice',
-        phone_number: userInfo.phone  // Add customer's phone number
-      })
-      .select()
-      .single();
-    
-    if (paymentError) {
-      console.error('Error creating payment:', paymentError);
-      return NextResponse.json(
-        { success: false, error: 'Failed to create payment' },
-        { status: 500 }
-      );
-    }
-    
-    console.log('Payment created successfully:', paymentData);
     
     // Update course current_participants count
     const participantCount = parseInt(userInfo.numberOfParticipants) || 1;
@@ -220,7 +152,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       bookingId: bookingData.id,
-      paymentId: paymentData.id,
       invoiceNumber,
       bookingReference,
       emailSent: emailResult.success,

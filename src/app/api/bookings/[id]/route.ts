@@ -187,7 +187,7 @@ export async function DELETE(
       );
     }
     
-    // Get the booking to update its status and adjust course participants
+    // Get the booking to update course participants
     const { data: booking, error: fetchError } = await supabaseAdmin
       .from('bookings')
       .select('*')
@@ -208,19 +208,15 @@ export async function DELETE(
     // Check if we need to update course participants (only if booking was confirmed or pending)
     const wasActive = booking.status === 'confirmed' || booking.status === 'pending';
     
-    // Update the booking status to cancelled instead of deleting it
-    const { data, error: updateError } = await supabaseAdmin
+    // For Swish payments, the payment record will be automatically deleted due to CASCADE
+    // For invoice payments, we only need to delete the booking
+    const { error: deleteError } = await supabaseAdmin
       .from('bookings')
-      .update({
-        status: 'cancelled',
-        updated_at: new Date().toISOString(),
-        cancellation_date: new Date().toISOString() // Optional: track when it was cancelled
-      })
-      .eq('id', id)
-      .select();
+      .delete()
+      .eq('id', id);
       
-    if (updateError) {
-      throw updateError;
+    if (deleteError) {
+      throw deleteError;
     }
     
     // Update course participants count if the booking was active
@@ -243,13 +239,12 @@ export async function DELETE(
     
     return NextResponse.json({
       status: 'success',
-      message: 'Booking cancelled successfully',
-      booking: data?.[0] || null
+      message: 'Booking deleted successfully'
     });
   } catch (error) {
-    console.error('Error cancelling booking:', error);
+    console.error('Error deleting booking:', error);
     return NextResponse.json(
-      { error: 'Failed to cancel booking', details: error instanceof Error ? error.message : String(error) },
+      { error: 'Failed to delete booking', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
