@@ -68,6 +68,7 @@ export type Booking = {
   invoice_city: string | null;
   invoice_reference: string | null;
   booking_date: string;
+  payment_status: 'PAID' | 'CREATED' | 'DECLINED' | 'ERROR';
   // payment_id field removed as it's no longer used
 };
 

@@ -42,7 +42,7 @@ interface BookingsTableProps {
   bookings: Booking[];
   loading: boolean;
   error: string | null;
-  status: 'confirmed' | 'waiting' | 'cancelled';
+  status: 'confirmed' | 'pending' | 'cancelled';
   onEditBooking: (booking: Booking) => void;
   onUpdateBooking: () => void;
   participantInfo?: string;
@@ -173,7 +173,7 @@ export default function BookingsTable({
             size="small"
           />
         );
-      case 'waiting':
+      case 'pending':
         return (
           <Chip
             icon={<PendingIcon />}
@@ -302,8 +302,8 @@ export default function BookingsTable({
                     <TableCell>{getStatusChip(booking.status)}</TableCell>
                     <TableCell>
                       <Chip
-                        label={booking.payment?.status === 'PAID' ? 'Betald' : 'Ej betald'}
-                        color={booking.payment?.status === 'PAID' ? 'success' : 'error'}
+                        label={booking.payment_status === 'PAID' ? 'Betald' : 'Ej betald'}
+                        color={booking.payment_status === 'PAID' ? 'success' : 'error'}
                         size="small"
                         variant="outlined"
                       />
@@ -413,7 +413,7 @@ export default function BookingsTable({
                   onChange={handleSelectChange}
                   label="Status"
                 >
-                  <MenuItem value="waiting">Väntande</MenuItem>
+                  <MenuItem value="pending">Väntande</MenuItem>
                   <MenuItem value="confirmed">Bekräftad</MenuItem>
                   <MenuItem value="cancelled">Avbokad</MenuItem>
                 </Select>

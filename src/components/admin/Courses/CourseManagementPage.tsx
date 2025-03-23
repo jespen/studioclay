@@ -176,12 +176,12 @@ export default function CourseManagementPage({ courseId }: CourseManagementPageP
               bookings={bookings}
               loading={loading}
               error={error}
-              status="waiting"
+              status="pending"
               onEditBooking={() => {}}
               onUpdateBooking={handleDataUpdate}
               participantInfo={`${bookings
-                .filter(b => b.status === 'waiting')
-                .reduce((sum, b) => sum + b.number_of_participants, 0)}`}
+                .filter(b => b.status === 'pending')
+                .reduce((sum, b) => sum + b.number_of_participants, 0)} personer`}
             />
             
             <BookingsTable

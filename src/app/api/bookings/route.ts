@@ -21,12 +21,6 @@ export async function GET(request: NextRequest) {
           category:categories (*),
           instructor:instructors (*)
         )
-      ),
-      payments (
-        id,
-        status,
-        payment_reference,
-        payment_method
       )
     `);
     
