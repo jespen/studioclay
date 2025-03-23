@@ -91,8 +91,10 @@ export async function POST(request: Request) {
         payment_method: 'invoice',
         booking_date: new Date().toISOString(),
         status: 'confirmed', // Invoice bookings are confirmed immediately
+        payment_status: 'CREATED', // Initial payment status for invoices
         booking_reference: bookingReference,
         // Add invoice details to the booking record
+        invoice_number: invoiceNumber,
         invoice_address: paymentDetails.invoiceDetails?.address,
         invoice_postal_code: paymentDetails.invoiceDetails?.postalCode,
         invoice_city: paymentDetails.invoiceDetails?.city,
@@ -103,8 +105,29 @@ export async function POST(request: Request) {
     
     if (bookingError) {
       console.error('Error creating booking:', bookingError);
+      console.error('Attempted booking data:', {
+        course_id: courseId,
+        customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
+        customer_email: userInfo.email,
+        customer_phone: userInfo.phone,
+        number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
+        payment_method: 'invoice',
+        booking_date: new Date().toISOString(),
+        status: 'confirmed',
+        payment_status: 'CREATED',
+        booking_reference: bookingReference,
+        invoice_number: invoiceNumber,
+        invoice_address: paymentDetails.invoiceDetails?.address,
+        invoice_postal_code: paymentDetails.invoiceDetails?.postalCode,
+        invoice_city: paymentDetails.invoiceDetails?.city,
+        invoice_reference: paymentDetails.invoiceDetails?.reference || null
+      });
       return NextResponse.json(
-        { success: false, error: 'Failed to create booking' },
+        { 
+          success: false, 
+          error: 'Failed to create booking',
+          details: bookingError.message 
+        },
         { status: 500 }
       );
     }
