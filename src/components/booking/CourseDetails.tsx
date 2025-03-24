@@ -244,7 +244,7 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId }) => {
         }}
       >
         {/* Course header and description */}
-        <Typography variant="h5" component="h2" gutterBottom>
+        <Typography variant="h4" component="h2" gutterBottom sx={{ color: '#547264' }}>
           {courseDetail.title || 'Kurs'}
         </Typography>
           
