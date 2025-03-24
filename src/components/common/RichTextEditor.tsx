@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 
-// Import our custom Quill styles to avoid source map 404 errors
-import '@/styles/quill-custom.css';
+// Import Quill styles
+import 'react-quill-new/dist/quill.snow.css';
 
 // Dynamically import ReactQuill with SSR disabled
 const ReactQuill = dynamic(() => import('react-quill-new'), {
