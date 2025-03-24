@@ -1,7 +1,6 @@
 export interface CourseTemplate {
   id: string;
   title?: string;
-  description?: string;
   rich_description?: string;
   duration_minutes?: number | null;
   price?: number | null;

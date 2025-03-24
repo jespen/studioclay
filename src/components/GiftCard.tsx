@@ -188,30 +188,24 @@ const GiftCard = () => {
         </header>
 
         <main className={styles.mainContent}>
-          <div className={styles.topRow}>
-            <div className={styles.imageColumn}>
-              <div className={styles.giftCardImage}>
+          <div className={styles.giftCardContainer}>
+            <div className={styles.giftCardPreview}>
+              <div className={styles.giftCardImageContainer}>
                 <img 
-                  src="/pictures/471904659_17904629667091314_3509545999734555197_n_18299326909224234.jpg"
+                  src="/pictures/finavaser.jpg"
                   alt="Studio Clay presentkort"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    borderRadius: '0.75rem'
-                  }}
+                  className={styles.giftCardImage}
                 />
+                <div className={styles.giftCardImageOverlay}>
+                  <div className={styles.giftCardLabel}>Presentkort</div>
+                  <div className={styles.giftCardAmount}>
+                    {amount === 'custom' ? `${customAmount} kr` : `${amount} kr`}
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className={styles.optionsColumn}>
-              <h2 className={styles.cardOptionsTitle}>Anpassa ditt presentkort</h2>
               
-              <div className={styles.optionsStack}>
-                <div className={styles.cardTypeSection}>
+              <div className={styles.giftCardInfo}>
+                <div className={styles.cardTypeContainer}>
                   <h3 className={styles.sectionTitle}>Korttyp</h3>
                   <div className={styles.cardTypes}>
                     {cardTypes.map((type) => (
@@ -227,7 +221,7 @@ const GiftCard = () => {
                     ))}
                   </div>
                 </div>
-
+                
                 <div className={styles.amountSection}>
                   <h3 className={styles.sectionTitle}>Belopp</h3>
                   <div className={styles.amounts}>
@@ -255,9 +249,7 @@ const GiftCard = () => {
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className={styles.bottomRow}>
             <div className={styles.formSection}>
               <h3 className={styles.sectionTitle}>Kundinformation</h3>
               <form className={styles.form} onSubmit={handleSubmit}>

@@ -20,7 +20,6 @@ export async function GET(request: Request) {
       ...template,
       // Map database fields to expected client fields
       title: template.categorie || '',
-      description: '', // Default empty since this field doesn't exist in DB
       is_published: template.published || false,
       instances_count: template.instances_count[0]?.count || 0
     }));
@@ -40,16 +39,26 @@ export async function POST(request: Request) {
     const body = await request.json();
     
     // Validate required fields
-    if (!body.title) {
+    if (!body.category_id) {
       return NextResponse.json(
-        { error: 'Title is required' },
+        { error: 'Category is required' },
         { status: 400 }
       );
     }
     
-    if (!body.category_id) {
+    // Get category name
+    let categoryName = '';
+    const { data: categoryData, error: categoryError } = await supabaseAdmin
+      .from('categories')
+      .select('name')
+      .eq('id', body.category_id)
+      .single();
+      
+    if (!categoryError && categoryData) {
+      categoryName = categoryData.name;
+    } else {
       return NextResponse.json(
-        { error: 'Category is required' },
+        { error: 'Invalid category ID' },
         { status: 400 }
       );
     }
@@ -58,7 +67,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabaseAdmin
       .from('course_templates')
       .insert({
-        categorie: body.title, // Map client field to database field
+        categorie: categoryName, // Use category name as title
         rich_description: body.rich_description || '',
         published: body.is_published || false,
         category_id: body.category_id
@@ -72,7 +81,6 @@ export async function POST(request: Request) {
     const responseData = {
       ...data,
       title: data.categorie,
-      description: '', // Default empty since this field doesn't exist in DB
       is_published: data.published
     };
     

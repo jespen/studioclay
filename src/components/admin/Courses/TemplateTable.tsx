@@ -33,9 +33,6 @@ export const TemplateTable: React.FC<TemplateTableProps> = ({
           <td className={styles.tableCell}>
             <div>
               <h3 className={styles.courseTitle}>{template.title || template.categorie || 'Namnlös'}</h3>
-              {template.description && (
-                <p className={styles.courseDescription}>{template.description}</p>
-              )}
             </div>
           </td>
           <td className={styles.tableCell}>

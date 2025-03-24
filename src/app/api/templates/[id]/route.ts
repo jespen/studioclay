@@ -31,7 +31,6 @@ export async function GET(
     const responseData = {
       ...data,
       title: data.categorie || '',
-      description: '', // Default empty since this field doesn't exist in DB
       is_published: data.published || false
     };
     
@@ -70,11 +69,25 @@ export async function PATCH(
       throw checkError;
     }
     
+    // Get category name if category_id is provided
+    let categoryName = '';
+    if (body.category_id) {
+      const { data: categoryData, error: categoryError } = await supabaseAdmin
+        .from('categories')
+        .select('name')
+        .eq('id', body.category_id)
+        .single();
+        
+      if (!categoryError && categoryData) {
+        categoryName = categoryData.name;
+      }
+    }
+    
     // Update the template with adapted fields
     const { data, error } = await supabaseAdmin
       .from('course_templates')
       .update({
-        categorie: body.title, // Map client fields to database fields
+        categorie: categoryName, // Use category name as title
         rich_description: body.rich_description,
         published: body.is_published,
         category_id: body.category_id
@@ -89,7 +102,6 @@ export async function PATCH(
     const responseData = {
       ...data,
       title: data.categorie || '',
-      description: '', // Default empty since this field doesn't exist in DB
       is_published: data.published || false
     };
     
