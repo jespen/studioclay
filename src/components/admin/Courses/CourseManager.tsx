@@ -8,7 +8,13 @@ import CourseForm from '../../../app/admin/dashboard/courses/CourseForm';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 
 interface CourseManagerProps {
+  /**
+   * Whether to show the admin header, defaults to true
+   */
   showHeader?: boolean;
+  /**
+   * Maximum number of courses to display, if undefined shows all courses
+   */
   maxCourses?: number;
 }
 

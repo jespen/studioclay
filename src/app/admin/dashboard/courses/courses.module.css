@@ -688,4 +688,16 @@
   justify-content: center;
   align-items: center;
   z-index: 10;
+}
+
+.sortableHeader {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.sortableHeader:hover {
+  color: #547264;
 } 

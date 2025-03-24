@@ -2,7 +2,7 @@ import React from 'react';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 
 interface StandardTableProps {
-  headers: string[];
+  headers: (string | React.ReactNode)[];
   emptyMessage?: string;
   variant?: 'default' | 'draft' | 'past';
   children: React.ReactNode;
