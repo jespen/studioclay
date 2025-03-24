@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendServerInvoiceEmail } from '@/utils/serverEmail';
 import { UserInfo, PaymentDetails } from '@/types/booking';
+import { generateInvoicePDF } from '@/utils/invoicePDF';
 
 // Create a Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -65,6 +66,54 @@ export async function POST(request: Request) {
     
     console.log('Generated invoice number:', invoiceNumber);
     console.log('Generated booking reference:', bookingReference);
+    
+    // Calculate due date (10 days from now)
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 10);
+    const formattedDueDate = dueDate.toLocaleDateString('sv-SE');
+    
+    // Generate invoice PDF
+    console.log('Generating invoice PDF');
+    const invoiceData = {
+      customerInfo: userInfo,
+      courseDetails: {
+        title: courseData.title,
+        description: courseData.description,
+        start_date: courseData.start_date,
+        location: courseData.location,
+        price: courseData.amount
+      },
+      invoiceDetails: paymentDetails.invoiceDetails || {
+        address: '',
+        postalCode: '',
+        city: ''
+      },
+      invoiceNumber,
+      dueDate: formattedDueDate
+    };
+    
+    const pdfBlob = await generateInvoicePDF(invoiceData);
+    
+    // Convert blob to buffer for storage
+    const pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
+    
+    // Save PDF to Supabase storage
+    console.log('Saving PDF to Supabase storage');
+    const { error: storageError } = await supabase
+      .storage
+      .from('invoices')
+      .upload(`${invoiceNumber}.pdf`, pdfBuffer, {
+        contentType: 'application/pdf',
+        upsert: true
+      });
+    
+    if (storageError) {
+      console.error('Error saving PDF to storage:', storageError);
+      return NextResponse.json(
+        { success: false, error: 'Failed to save invoice PDF' },
+        { status: 500 }
+      );
+    }
     
     // Create booking record with status 'confirmed'
     console.log('Creating confirmed booking record for invoice');
@@ -144,7 +193,8 @@ export async function POST(request: Request) {
         location: courseData.location,
         price: courseData.amount
       },
-      invoiceNumber
+      invoiceNumber,
+      pdfBuffer // Pass the PDF buffer to the email function
     });
     
     console.log('Invoice email sending result:', emailResult);

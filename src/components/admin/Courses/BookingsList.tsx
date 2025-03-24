@@ -29,28 +29,14 @@ import {
   Grid,
   SelectChangeEvent,
   Tabs,
-  Tab
+  Tab,
+  Alert
 } from '@mui/material';
-import { Check as CheckIcon, Close as CloseIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Check as CheckIcon, Close as CloseIcon, Edit as EditIcon, Delete as DeleteIcon, Receipt as ReceiptIcon } from '@mui/icons-material';
 import { styled } from '@mui/system';
-import type { Booking, PaymentStatus } from '@/types/booking';
+import type { Booking, PaymentStatus, ExtendedBooking } from '@/types/booking';
 import PaymentStatusBadge from '../Payments/PaymentStatusBadge';
 import PaymentStatusUpdater from '../Payments/PaymentStatusUpdater';
-
-interface ExtendedBooking extends Omit<Booking, 'course' | 'payments'> {
-  course: {
-    id: string;
-    title: string;
-    description: string;
-    price: number;
-    duration: number;
-    capacity: number;
-  };
-  payment_status: PaymentStatus;
-  payment_method: string;
-  booking_reference: string;
-  message?: string;
-}
 
 // Styled components
 const StyledTableContainer = styled(TableContainer)({
@@ -95,6 +81,12 @@ export default function BookingsList({
   // Cancel dialog state
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [bookingToCancel, setBookingToCancel] = useState<ExtendedBooking | null>(null);
+
+  // Invoice PDF dialog state
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const [invoicePdf, setInvoicePdf] = useState<string | null>(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
 
   // Handle opening the cancel confirmation dialog
   const handleCancelClick = (booking: ExtendedBooking) => {
@@ -201,6 +193,32 @@ export default function BookingsList({
         ? { ...booking, payment_status: newStatus }
         : booking
     );
+  };
+
+  // Handle opening the invoice PDF dialog
+  const handleInvoiceClick = async (booking: ExtendedBooking) => {
+    if (booking.payment_method !== 'invoice') return;
+    
+    setInvoiceDialogOpen(true);
+    setInvoiceLoading(true);
+    setInvoiceError(null);
+    setInvoicePdf(null);
+    
+    try {
+      const response = await fetch(`/api/invoice/${booking.id}`);
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load invoice');
+      }
+      
+      setInvoicePdf(data.pdf);
+    } catch (error) {
+      console.error('Error fetching invoice:', error);
+      setInvoiceError('Could not load the invoice PDF. Please try again later.');
+    } finally {
+      setInvoiceLoading(false);
+    }
   };
 
   const getStatusChip = (status: string) => {
@@ -340,8 +358,23 @@ export default function BookingsList({
                   />
                 </TableCell>
                 <TableCell>
-                  {booking.payment_method === 'invoice' ? 'Faktura' : 
-                   booking.payment_method === 'swish' ? 'Swish' : 
+                  {booking.payment_method === 'invoice' ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <span>Faktura</span>
+                      {booking.invoice_number && (
+                        <Tooltip title="Visa faktura">
+                          <IconButton 
+                            size="small" 
+                            color="primary" 
+                            onClick={() => handleInvoiceClick(booking)}
+                            sx={{ ml: 1 }}
+                          >
+                            <ReceiptIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  ) : booking.payment_method === 'swish' ? 'Swish' : 
                    booking.payment_method || '–'}
                 </TableCell>
                 <TableCell>
@@ -506,6 +539,42 @@ export default function BookingsList({
           <Button onClick={handleCancelConfirm} color="error" autoFocus>
             Avboka
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Invoice PDF Dialog */}
+      <Dialog
+        open={invoiceDialogOpen}
+        onClose={() => setInvoiceDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Faktura
+        </DialogTitle>
+        <DialogContent>
+          {invoiceLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : invoiceError ? (
+            <Alert severity="error">
+              {invoiceError}
+            </Alert>
+          ) : invoicePdf ? (
+            <Box sx={{ height: '70vh', width: '100%' }}>
+              <iframe
+                src={`data:application/pdf;base64,${invoicePdf}`}
+                width="100%"
+                height="100%"
+                style={{ border: 'none' }}
+                title="Invoice PDF"
+              />
+            </Box>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInvoiceDialogOpen(false)}>Stäng</Button>
         </DialogActions>
       </Dialog>
     </Paper>

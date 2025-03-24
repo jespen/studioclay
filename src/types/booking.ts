@@ -70,4 +70,9 @@ export interface ExtendedBooking extends Omit<Booking, 'course' | 'payments' | '
   payment_method: string;
   booking_reference: string;
   payment_status: PaymentStatus;
+  invoice_number?: string;
+  invoice_address?: string;
+  invoice_postal_code?: string;
+  invoice_city?: string;
+  invoice_reference?: string;
 } 
