@@ -33,10 +33,9 @@ export async function GET(
       );
     }
     
-    // Map amount to price in the response
+    // Det behövs ingen mappning eftersom vi nu använder price direkt
     const responseData = {
-      ...course,
-      price: course.amount
+      ...course
     };
     
     console.log('API Route: Successfully fetched course:', {
@@ -77,12 +76,8 @@ export async function PATCH(
     const body = await request.json();
     console.log('Update payload:', body);
 
-    // Map price to amount if it exists in the body
+    // Ingen konvertering behövs längre eftersom vi använder price direkt
     const dbBody = { ...body };
-    if (body.price !== undefined) {
-      dbBody.amount = body.price;
-      delete dbBody.price; // Remove price as it doesn't exist in the database
-    }
 
     const { data, error } = await supabaseAdmin
       .from('course_instances')
@@ -110,10 +105,9 @@ export async function PATCH(
       template_id: data.template_id
     });
 
-    // Map amount back to price in the response
+    // Ingen konvertering behövs längre
     const responseData = {
-      ...data,
-      price: data.amount
+      ...data
     };
 
     return NextResponse.json({ course: responseData });

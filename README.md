@@ -323,3 +323,54 @@ The API returns bookings with course information joined, allowing the UI to disp
 For deeper debugging, check browser console logs and server-side logs for any errors during API calls.
 
 For more detailed technical documentation on the booking system, please refer to [BOOKING-SYSTEM.md](./BOOKING-SYSTEM.md).
+
+## Rich Text Editor
+
+### Overview
+Studio Clay använder en anpassad Rich Text Editor för att redigera formaterad text i systemet, såsom kursbeskrivningar och innehåll. Editorn är baserad på React-Quill-New, en modern version av Quill som är kompatibel med React 18 och Next.js.
+
+### Funktioner
+- WYSIWYG (What You See Is What You Get) redigering
+- Stöd för typografiska format: rubriker, fetstil, kursiv, understruket, genomstruket
+- Stöd för listor (numrerade och punkter)
+- Stöd för länkar
+- Responsiv design som fungerar på alla enheter
+- Dynamisk laddning för att minska initial laddningstid
+- Anpassad styling som matchar Studio Clay's designsystem
+
+### Implementering
+Rich Text Editorn är implementerad som en React-komponent i `src/components/common/RichTextEditor.tsx`. Komponenten använder:
+
+1. **Dynamic Import**: Komponenten laddas dynamiskt på klientsidan för att förbättra prestanda
+2. **Klientsidesrendering**: För att undvika serverladdningsproblem körs editorn endast på klientsidan
+3. **Anpassade formatdefinitioner**: Specificerar vilka format som stöds av editorn
+4. **Responsiv styling**: Anpassad CSS för att matcha resten av designsystemet
+
+### Användning
+För att använda Rich Text Editorn i en komponent:
+
+```tsx
+import RichTextEditor from '../../components/common/RichTextEditor';
+
+// I din komponent
+const [content, setContent] = useState('');
+
+return (
+  <RichTextEditor
+    value={content}
+    onChange={setContent}
+    placeholder="Skriv eller klistra in text här..."
+  />
+);
+```
+
+### Props
+Rich Text Editorn accepterar följande props:
+
+- `value`: (string) Det aktuella värdet av editorn
+- `onChange`: (function) Callback-funktion som anropas när innehållet ändras
+- `placeholder`: (string, optional) Platshållartext som visas när editorn är tom
+- `readOnly`: (boolean, optional) Om editorn ska vara skrivskyddad
+- `style`: (object, optional) Ytterligare CSS-stilar att tillämpa
+
+Rich Text Editorn används främst i kursredigeringsgränssnittet för att skapa rika kursbeskrivningar som visas på webbplatsen.

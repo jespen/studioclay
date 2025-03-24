@@ -287,6 +287,8 @@ export async function getCourses({ published }: { published?: boolean | undefine
       ...template,
       ...instance,
       template_id: template.id,
+      // Ensure we provide a price field (for backward compatibility)
+      price: instance.amount || template.price,
       category: template.category || null,
       availableSpots: instance.max_participants !== null 
         ? instance.max_participants - (instance.current_participants || 0)
@@ -373,6 +375,7 @@ export async function getCourse(id: string) {
     ...instance,
     template_id: template.id,
     category: template.category || null,
+    price: instance.price || template.price,
     availableSpots: instance.max_participants !== null 
       ? instance.max_participants - (instance.current_participants || 0)
       : null
@@ -387,6 +390,7 @@ export async function getCourse(id: string) {
     max_participants: processedData.max_participants,
     current_participants: processedData.current_participants,
     availableSpots: processedData.availableSpots,
+    price: processedData.price,
     has_rich_description: !!processedData.rich_description
   });
   

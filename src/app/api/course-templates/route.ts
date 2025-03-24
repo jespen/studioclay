@@ -6,15 +6,18 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   // Server-side implementation of course templates retrieval
+  console.log('API: Starting GET /api/course-templates');
   try {
     // Get query parameters
     const searchParams = new URL(request.url).searchParams;
     const isActive = searchParams.get('active');
     
+    console.log('API: Connecting to Supabase...');
+    
     let query = supabaseAdmin
       .from('course_templates')
       .select('*')
-      .order('title');
+      .order('created_at', { ascending: false });
     
     // Filter by active status if specified
     if (isActive !== null) {
@@ -22,9 +25,18 @@ export async function GET(request: NextRequest) {
       query = query.eq('is_active', activeBoolean);
     }
     
+    console.log('API: Executing Supabase query...');
     const { data, error } = await query;
     
-    if (error) throw error;
+    if (error) {
+      console.error('API: Supabase error:', error);
+      throw error;
+    }
+    
+    if (!data) {
+      console.error('API: No data returned from Supabase');
+      throw new Error('No data returned from database');
+    }
     
     console.log(`API: Fetched ${data.length} course templates`);
     
@@ -32,7 +44,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching course templates:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch course templates', details: error instanceof Error ? error.message : String(error) }, 
+      { 
+        error: 'Failed to fetch course templates', 
+        details: error instanceof Error ? error.message : JSON.stringify(error)
+      }, 
       { status: 500 }
     );
   }

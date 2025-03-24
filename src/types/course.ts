@@ -33,7 +33,7 @@ export interface CourseInstance {
   template?: Partial<CourseTemplate>;
   // Additional fields for instance-specific customization
   rich_description?: string | null;
-  price?: number | null; // Maps to 'amount' in the database
+  price?: number | null; // Price field in the database
 }
 
 // Alias for backward compatibility

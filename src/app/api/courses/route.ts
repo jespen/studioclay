@@ -75,7 +75,7 @@ const getCourses = async (published: string | null) => {
         ...instance,
         // If we have instance-specific values, use them - otherwise, use template values
         rich_description: instance.rich_description || (template ? template.rich_description : null),
-        price: instance.amount || (template ? template.price : null),
+        price: instance.price || (template ? template.price : null),
         location: 'Studio Clay Norrtullsgatan 65', // Always use this fixed location
         template: template ? {
           id: template.id,
@@ -203,7 +203,7 @@ export async function POST(request: Request) {
         is_published: body.is_published !== undefined ? body.is_published : false,
         // Store instance-specific customizations
         rich_description: body.rich_description || null,
-        amount: body.price || null // Map 'price' from API to 'amount' in DB
+        price: body.price || null // Använd price direkt
       }])
       .select()
       .single();
@@ -218,6 +218,7 @@ export async function POST(request: Request) {
     // Map the database fields to client format
     const processedCourse = {
       ...instance,
+      price: instance.amount, // For backward compatibility
       template: {
         id: template.id,
         title: template.categorie || '',

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Course, Category, Instructor, CourseInstance, CourseTemplate } from '../../../../types/course';
 import { TextField, Button, Box, Paper, Typography, FormControlLabel, Switch, Grid, MenuItem } from '@mui/material';
+import RichTextEditor from '../../../../components/common/RichTextEditor';
 
 type CourseFormProps = {
   course: Course | null;
@@ -34,12 +35,19 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
+        console.log('Fetching templates from API...');
         const response = await fetch('/api/templates/');
+        
         if (!response.ok) {
-          throw new Error('Kunde inte hämta kursmallar');
+          console.error(`Failed to fetch templates: ${response.status} ${response.statusText}`);
+          throw new Error(`Kunde inte hämta kursmallar: ${response.status} ${response.statusText}`);
         }
+        
         const data = await response.json();
+        console.log('Templates data received:', data);
+        
         const fetchedTemplates = Array.isArray(data.templates) ? data.templates : [];
+        console.log(`Loaded ${fetchedTemplates.length} templates`);
         setTemplates(fetchedTemplates);
         
         // If we have a templateId but no description, set the rich description from the template
@@ -51,7 +59,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
         }
       } catch (err) {
         console.error('Error fetching templates:', err);
-        setError('Kunde inte hämta kursmallar');
+        setError(err instanceof Error ? err.message : 'Kunde inte hämta kursmallar');
       } finally {
         setLoading(false);
       }
@@ -66,7 +74,8 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
       setTitle(course.title || '');
       setRichDescription(course.rich_description || course.template?.rich_description || '');
       setIsPublished(course.is_published || false);
-      setPrice(course.template?.price ? course.template.price.toString() : '');
+      // Hämta pris direkt från kursen först om det finns, annars från mallen
+      setPrice(course.price ? course.price.toString() : course.template?.price ? course.template.price.toString() : '');
       setTemplateId(course.template_id || '');
       setMaxParticipants(course.max_participants ? course.max_participants.toString() : '');
       
@@ -160,11 +169,11 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
       is_published: isPublished,
       template_id: templateId,
       rich_description: richDescription, // Store the rich description in the instance
-      price: parseFloat(price) // Store price in the instance (maps to 'amount' in DB)
+      price: parseFloat(price) // Store price in the price field (what is used in DB)
     };
     
-    // Log the price information for reference, though we don't store it in the database
-    console.log(`Course price set to ${price} SEK - this will be displayed in the UI but stored in the template`);
+    // Log the price information for reference
+    console.log(`Course price set to ${price} SEK - this price is stored in the 'price' field of the course instance`);
     
     // Call the onSave callback with the course data
     onSave(courseData);
@@ -349,36 +358,20 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           </Grid>
         </Grid>
         
-        {/* Rich Description - using simple textarea for now, could enhance with rich text editor */}
-        <TextField
-          fullWidth
-          required
-          id="richDescription"
-          name="richDescription"
-          label="Beskrivning (HTML stöds)"
-          value={richDescription}
-          onChange={(e) => setRichDescription(e.target.value)}
-          variant="outlined"
-          size="small"
-          multiline
-          rows={6}
-          sx={inputStyles}
-          placeholder="HTML formatering stöds, t.ex. <h2>Rubrik</h2>, <p>Paragraf</p>, <strong>Fetstil</strong>"
-          helperText="Denna beskrivning kommer från kursmallen men kan anpassas till denna specifika kurs."
-        />
-        
-        {/* Preview of rich text */}
-        {richDescription && (
-          <Box sx={{ mb: 3, mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1, color: primaryColor }}>
-              Förhandsgranskning:
-            </Typography>
-            <Box 
-              sx={{ p: 1 }}
-              dangerouslySetInnerHTML={{ __html: richDescription }}
-            />
-          </Box>
-        )}
+        {/* Rich Description - using our custom RichTextEditor component */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, color: primaryColor, fontWeight: 'medium' }}>
+            Beskrivning
+          </Typography>
+          <RichTextEditor
+            value={richDescription}
+            onChange={setRichDescription}
+            placeholder="Skriv eller klistra in din beskrivning här..."
+          />
+          <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
+            Denna beskrivning kommer från kursmallen men kan anpassas till denna specifika kurs.
+          </Typography>
+        </Box>
         
         {/* Published Status */}
         <Box sx={{ mb: 3 }}>

@@ -12,6 +12,7 @@ import {
   Switch,
   CircularProgress
 } from '@mui/material';
+import RichTextEditor from '../../../components/common/RichTextEditor';
 
 interface TemplateEditorProps {
   template: CourseTemplate | null;
@@ -196,32 +197,17 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template, onSave, onCan
           
           {/* Rich Description */}
           <Grid item xs={12}>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+            <Typography variant="subtitle1" sx={{ mb: 1, color: 'primary.main' }}>
               Detaljerad kursbeskrivning
             </Typography>
-            <Box sx={{ 
-              border: '1px solid', 
-              borderColor: 'divider', 
-              borderRadius: 1, 
-              mb: 1
-            }}>
-              <TextField
-                fullWidth
-                multiline
-                rows={10}
-                value={richDescription}
-                onChange={(e) => setRichDescription(e.target.value)}
-                placeholder="Skriv en detaljerad beskrivning. HTML-taggar som <h2>, <p>, <strong>, <ul>, <li> osv. stöds för formatering."
-                disabled={isSubmitting}
-                sx={{ 
-                  '& .MuiOutlinedInput-notchedOutline': { 
-                    border: 'none' 
-                  }
-                }}
-              />
-            </Box>
-            <Typography variant="caption" color="text.secondary">
-              Använd HTML-taggar för formatering. Exempel: &lt;h2&gt;Rubrik&lt;/h2&gt;, &lt;p&gt;Paragraf&lt;/p&gt;, &lt;strong&gt;Fetstil&lt;/strong&gt;, &lt;ul&gt;&lt;li&gt;Punktlista&lt;/li&gt;&lt;/ul&gt;
+            <RichTextEditor
+              value={richDescription}
+              onChange={setRichDescription}
+              placeholder="Skriv eller klistra in din beskrivning här..."
+              readOnly={isSubmitting}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              Redigera texten med formateringsverktygen ovan. Du kan klippa och klistra in text från Word eller andra källor.
             </Typography>
           </Grid>
           
