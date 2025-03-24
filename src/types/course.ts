@@ -34,6 +34,7 @@ export interface CourseInstance {
   // Additional fields for instance-specific customization
   rich_description?: string | null;
   price?: number | null; // Price field in the database
+  image_url?: string | null; // Image URL for the course instance
 }
 
 // Alias for backward compatibility

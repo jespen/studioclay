@@ -130,7 +130,8 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
             max_participants: courseData.max_participants,
             is_published: courseData.is_published,
             rich_description: courseData.rich_description,
-            price: courseData.price
+            price: courseData.price,
+            image_url: courseData.image_url
           }),
         });
 
@@ -153,7 +154,8 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
             is_published: courseData.is_published,
             template_id: courseData.template_id,
             rich_description: courseData.rich_description,
-            price: courseData.price
+            price: courseData.price,
+            image_url: courseData.image_url
           }),
         });
 

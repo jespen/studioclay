@@ -26,6 +26,7 @@ interface ApiCourse {
   template?: { 
     category?: { name: string };
     price?: number;
+    image_url?: string | null;
   };
 }
 
@@ -47,6 +48,11 @@ interface DisplayCourse {
   endDate: string | null;
   availableSpots: number | null;
   location: string;
+  imageUrl: string | null;
+  startDateFormatted: string;
+  endDateFormatted: string;
+  timeFormatted: string;
+  weekday: string;
 }
 
 const Courses = () => {
@@ -106,6 +112,35 @@ const Courses = () => {
     ];
   };
 
+  // Format date for display on cards
+  const formatDateForDisplay = (dateString: string | null): string => {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    // Format like: "7 APRIL"
+    return `${date.getDate()} ${date.toLocaleString('sv-SE', { month: 'long' }).toUpperCase()}`;
+  };
+  
+  // Get weekday in Swedish
+  const getWeekday = (dateString: string | null): string => {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    // Get weekday in Swedish: "MÅNDAG"
+    return date.toLocaleString('sv-SE', { weekday: 'long' }).toUpperCase();
+  };
+  
+  // Format time range like "18.00-21.00"
+  const formatTimeRange = (startDate: string | null, endDate: string | null): string => {
+    if (!startDate || !endDate) return '';
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // Format like: "18.00-21.00"
+    return `${start.getHours().toString().padStart(2, '0')}.${start.getMinutes().toString().padStart(2, '0')}-${end.getHours().toString().padStart(2, '0')}.${end.getMinutes().toString().padStart(2, '0')}`;
+  };
+
   // Function to convert API course to display course
   const mapApiCourseToDisplayCourse = (course: ApiCourse): DisplayCourse => {
     // Check if the course is fully booked
@@ -129,8 +164,20 @@ const Courses = () => {
       availableSpots: availableSpots,
       isFullyBooked: isFullyBooked,
       category: course.template?.category?.name,
-      title: course.title
+      title: course.title,
+      courseImageUrl: course.image_url,
+      templateImageUrl: course.template?.image_url
     });
+    
+    // Get the image URL from the course or template
+    const imageUrl = course.image_url || course.template?.image_url || null;
+    console.log(`Final image URL for course ${course.id}: ${imageUrl}`);
+    
+    // Format dates and time for display
+    const startDateFormatted = formatDateForDisplay(course.start_date);
+    const endDateFormatted = formatDateForDisplay(course.end_date);
+    const timeFormatted = formatTimeRange(course.start_date, course.end_date);
+    const weekday = getWeekday(course.start_date);
     
     return {
       id: course.id,
@@ -148,7 +195,12 @@ const Courses = () => {
       startDate: course.start_date,
       endDate: course.end_date,
       availableSpots: availableSpots,
-      location: 'Studio Clay Norrtullsgatan 65' // Fixed location for all courses
+      location: 'Studio Clay Norrtullsgatan 65', // Fixed location for all courses
+      imageUrl: imageUrl,
+      startDateFormatted,
+      endDateFormatted,
+      timeFormatted,
+      weekday
     };
   };
 
@@ -251,61 +303,37 @@ const Courses = () => {
             {tryCourses.length > 0 && (
               <div className={styles.categorySection}>
                 <h3 className={styles.categoryTitle}>Prova på</h3>
-                <div className={styles.courseScroll}>
-                  <div className={styles.courseScrollInner}>
-                    {tryCourses.map((course) => (
-                      <div 
-                        key={course.id} 
-                        className={`${styles.courseCard} ${course.isPopular ? styles.popularCourse : ''}`}
-                      >
-                        {course.isPopular && (
-                          <div className={styles.popularTag}>
-                            {course.isFullyBooked ? 'Fullbokad' : 'Populär'}
+                <div className={styles.courseGrid}>
+                  {tryCourses.map((course) => (
+                    <div 
+                      key={course.id} 
+                      className={`${styles.courseCard} ${course.isFullyBooked ? styles.soldOutCourse : ''}`}
+                    >
+                      <div className={styles.courseImageContainer} style={{ backgroundImage: `url(${course.imageUrl || '/pictures/gronvas.jpg'})` }}>
+                        <div className={styles.courseImageOverlay}>
+                          <div className={styles.courseDate}>
+                            <div className={styles.weekday}>{course.weekday}</div>
+                            <div className={styles.dateRange}>
+                              {course.startDateFormatted}-{course.endDateFormatted.split(' ')[0]} {course.endDateFormatted.split(' ')[1]}
+                            </div>
+                            <div className={styles.courseTime}>{course.timeFormatted}</div>
+                          </div>
+                        </div>
+                        
+                        {course.isFullyBooked && (
+                          <div className={styles.soldOutTag}>
+                            Slutsåld
                           </div>
                         )}
-
+                      </div>
+                      
+                      <div className={styles.courseInfo}>
                         <h3 className={styles.courseName}>{course.name}</h3>
                         <div className={styles.coursePrice}>
                           <span className={styles.priceValue}>{course.price}</span>
                           <span className={styles.priceFrequency}>{course.frequency}</span>
                         </div>
-                        <div className={styles.sessionCount}>{course.sessionCount}</div>
-                        <p className={styles.courseDescription}>{course.description}</p>
-                        {course.availableSpots !== null && !course.isFullyBooked && (
-                          <div className={styles.availableSpots}>
-                            <span>{course.availableSpots} platser kvar</span>
-                          </div>
-                        )}
-
-                        <ul className={styles.featuresList}>
-                          {course.features.map((feature, index) => (
-                            <li 
-                              key={index} 
-                              className={`${styles.featureItem} ${!feature.included ? styles.disabledFeature : ''}`}
-                            >
-                              <svg 
-                                className={styles.featureIcon}
-                                xmlns="http://www.w3.org/2000/svg" 
-                                width="16" 
-                                height="16" 
-                                viewBox="0 0 24 24" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                strokeWidth="2" 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round"
-                              >
-                                {feature.included ? (
-                                  <path d="M20 6L9 17l-5-5" />
-                                ) : (
-                                  <path d="M18 6L6 18M6 6l12 12" />
-                                )}
-                              </svg>
-                              {feature.text}
-                            </li>
-                          ))}
-                        </ul>
-
+                        
                         <div className={styles.cardFooter}>
                           <Link 
                             href={course.buttonLink} 
@@ -315,8 +343,8 @@ const Courses = () => {
                           </Link>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -324,61 +352,37 @@ const Courses = () => {
             {longerCourses.length > 0 && (
               <div className={styles.categorySection}>
                 <h3 className={styles.categoryTitle}>Längre kurser</h3>
-                <div className={styles.courseScroll}>
-                  <div className={styles.courseScrollInner}>
-                    {longerCourses.map((course) => (
-                      <div 
-                        key={course.id} 
-                        className={`${styles.courseCard} ${course.isPopular ? styles.popularCourse : ''}`}
-                      >
-                        {course.isPopular && (
-                          <div className={styles.popularTag}>
-                            {course.isFullyBooked ? 'Fullbokad' : 'Populär'}
+                <div className={styles.courseGrid}>
+                  {longerCourses.map((course) => (
+                    <div 
+                      key={course.id} 
+                      className={`${styles.courseCard} ${course.isFullyBooked ? styles.soldOutCourse : ''}`}
+                    >
+                      <div className={styles.courseImageContainer} style={{ backgroundImage: `url(${course.imageUrl || '/pictures/gronvas.jpg'})` }}>
+                        <div className={styles.courseImageOverlay}>
+                          <div className={styles.courseDate}>
+                            <div className={styles.weekday}>{course.weekday}</div>
+                            <div className={styles.dateRange}>
+                              {course.startDateFormatted}-{course.endDateFormatted.split(' ')[0]} {course.endDateFormatted.split(' ')[1]}
+                            </div>
+                            <div className={styles.courseTime}>{course.timeFormatted}</div>
+                          </div>
+                        </div>
+                        
+                        {course.isFullyBooked && (
+                          <div className={styles.soldOutTag}>
+                            Slutsåld
                           </div>
                         )}
-
+                      </div>
+                      
+                      <div className={styles.courseInfo}>
                         <h3 className={styles.courseName}>{course.name}</h3>
                         <div className={styles.coursePrice}>
                           <span className={styles.priceValue}>{course.price}</span>
                           <span className={styles.priceFrequency}>{course.frequency}</span>
                         </div>
-                        <div className={styles.sessionCount}>{course.sessionCount}</div>
-                        <p className={styles.courseDescription}>{course.description}</p>
-                        {course.availableSpots !== null && !course.isFullyBooked && (
-                          <div className={styles.availableSpots}>
-                            <span>{course.availableSpots} platser kvar</span>
-                          </div>
-                        )}
-
-                        <ul className={styles.featuresList}>
-                          {course.features.map((feature, index) => (
-                            <li 
-                              key={index} 
-                              className={`${styles.featureItem} ${!feature.included ? styles.disabledFeature : ''}`}
-                            >
-                              <svg 
-                                className={styles.featureIcon}
-                                xmlns="http://www.w3.org/2000/svg" 
-                                width="16" 
-                                height="16" 
-                                viewBox="0 0 24 24" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                strokeWidth="2" 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round"
-                              >
-                                {feature.included ? (
-                                  <path d="M20 6L9 17l-5-5" />
-                                ) : (
-                                  <path d="M18 6L6 18M6 6l12 12" />
-                                )}
-                              </svg>
-                              {feature.text}
-                            </li>
-                          ))}
-                        </ul>
-
+                        
                         <div className={styles.cardFooter}>
                           <Link 
                             href={course.buttonLink} 
@@ -388,8 +392,8 @@ const Courses = () => {
                           </Link>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

@@ -77,11 +77,13 @@ const getCourses = async (published: string | null) => {
         rich_description: instance.rich_description || (template ? template.rich_description : null),
         price: instance.price || (template ? template.price : null),
         location: 'Studio Clay Norrtullsgatan 65', // Always use this fixed location
+        image_url: instance.image_url || (template ? template.image_url : null), // Include image_url
         template: template ? {
           id: template.id,
           title: template.title || template.categorie || '',
           category: template.category || '',
-          rich_description: template.rich_description
+          rich_description: template.rich_description,
+          image_url: template.image_url
         } : null
       };
       
@@ -96,7 +98,8 @@ const getCourses = async (published: string | null) => {
         template_id: processedCourses[0].template_id,
         is_published: processedCourses[0].is_published,
         start_date: processedCourses[0].start_date,
-        has_rich_description: Boolean(processedCourses[0].rich_description || processedCourses[0].template?.rich_description)
+        has_rich_description: Boolean(processedCourses[0].rich_description || processedCourses[0].template?.rich_description),
+        image_url: processedCourses[0].image_url
       })}`);
     }
     
@@ -126,7 +129,9 @@ export async function GET(request: Request) {
         start_date: courses[0].start_date,
         max_participants: courses[0].max_participants,
         current_participants: courses[0].current_participants,
-        availableSpots: courses[0].max_participants ? courses[0].max_participants - courses[0].current_participants : null
+        availableSpots: courses[0].max_participants ? courses[0].max_participants - courses[0].current_participants : null,
+        image_url: courses[0].image_url,
+        template_image_url: courses[0].template?.image_url
       });
     }
 
@@ -203,7 +208,8 @@ export async function POST(request: Request) {
         is_published: body.is_published !== undefined ? body.is_published : false,
         // Store instance-specific customizations
         rich_description: body.rich_description || null,
-        price: body.price || null // Använd price direkt
+        price: body.price || null, // Använd price direkt
+        image_url: body.image_url || null // Säkerställ att image_url sparas
       }])
       .select()
       .single();
@@ -218,18 +224,21 @@ export async function POST(request: Request) {
     // Map the database fields to client format
     const processedCourse = {
       ...instance,
-      price: instance.amount, // For backward compatibility
+      price: instance.price || template.price, // Fix: Use price directly, not amount
+      image_url: instance.image_url || template.image_url, // Fix: Inkludera image_url
       template: {
         id: template.id,
         title: template.categorie || '',
         rich_description: template.rich_description || '',
         is_published: template.published || false,
-        category: null // For backward compatibility
+        category: null, // For backward compatibility
+        image_url: template.image_url || null // Inkludera template image_url
       },
       availableSpots: instance.max_participants - instance.current_participants
     };
 
     console.log('Final processed course:', processedCourse);
+    console.log('Course image URL:', processedCourse.image_url);
 
     return NextResponse.json({ course: processedCourse });
   } catch (error) {

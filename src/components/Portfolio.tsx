@@ -191,7 +191,7 @@ const Portfolio = () => {
         </div>
 
         {/* Filter Buttons */}
-        <div className={styles.filterContainer}>
+        {/* <div className={styles.filterContainer}>
           {filters.map(filter => (
             <button
               key={filter.id}
@@ -201,7 +201,7 @@ const Portfolio = () => {
               {filter.label}
             </button>
           ))}
-        </div>
+        </div> */}
 
         {/* Portfolio Masonry Grid */}
         <div className={styles.masonryGrid}>

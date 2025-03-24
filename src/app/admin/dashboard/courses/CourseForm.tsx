@@ -2,8 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { Course, Category, Instructor, CourseInstance, CourseTemplate } from '../../../../types/course';
-import { TextField, Button, Box, Paper, Typography, FormControlLabel, Switch, Grid, MenuItem } from '@mui/material';
+import { TextField, Button, Box, Paper, Typography, FormControlLabel, Switch, Grid, MenuItem, IconButton, Select, FormControl, InputLabel, SelectChangeEvent } from '@mui/material';
 import RichTextEditor from '../../../../components/common/RichTextEditor';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import ClearIcon from '@mui/icons-material/Clear';
+import { createClient } from '@supabase/supabase-js';
+import Image from 'next/image';
+
+// Initialize Supabase client with public key for storage operations
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 type CourseFormProps = {
   course: Course | null;
@@ -28,8 +37,47 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
+  // Image state
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  
+  // Gallery images
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [selectedGalleryImage, setSelectedGalleryImage] = useState<string>('');
+  const [loadingImages, setLoadingImages] = useState(false);
+  
   // Primary color from globals.css
   const primaryColor = '#547264';
+  
+  // Fetch images from API
+  useEffect(() => {
+    const fetchImages = async () => {
+      try {
+        setLoadingImages(true);
+        const response = await fetch('/api/images');
+        
+        if (!response.ok) {
+          console.error(`Failed to fetch images: ${response.status} ${response.statusText}`);
+          return;
+        }
+        
+        const data = await response.json();
+        console.log('Images data received:', data);
+        
+        if (Array.isArray(data.images)) {
+          setGalleryImages(data.images);
+        }
+      } catch (error) {
+        console.error('Error fetching images:', error);
+      } finally {
+        setLoadingImages(false);
+      }
+    };
+    
+    fetchImages();
+  }, []);
   
   // Fetch templates
   useEffect(() => {
@@ -79,6 +127,17 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
       setTemplateId(course.template_id || '');
       setMaxParticipants(course.max_participants ? course.max_participants.toString() : '');
       
+      // Set image preview if course has an image
+      if (course.image_url) {
+        setImagePreview(course.image_url);
+        setSelectedGalleryImage(course.image_url);
+        console.log('Setting image from course:', course.image_url);
+      } else if (course.template?.image_url) {
+        setImagePreview(course.template.image_url);
+        setSelectedGalleryImage(course.template.image_url);
+        console.log('Setting image from template:', course.template.image_url);
+      }
+      
       // Handle dates with proper timezone handling
       if (course.start_date) {
         const startDateTime = new Date(course.start_date);
@@ -94,6 +153,25 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     }
   }, [course]);
   
+  // Update selected image when galleryImages loads
+  useEffect(() => {
+    // If we already have a selected image URL but it wasn't in the gallery before
+    if (selectedGalleryImage && galleryImages.length > 0) {
+      // Check if the selected image exists in the gallery now
+      const imageExists = galleryImages.includes(selectedGalleryImage);
+      if (!imageExists) {
+        // If the image exists in the file system but wasn't in our hardcoded list before
+        const imageFromSamePath = galleryImages.find(img => 
+          img.startsWith(selectedGalleryImage.split('/').slice(0, -1).join('/'))
+        );
+        if (imageFromSamePath) {
+          setSelectedGalleryImage(imageFromSamePath);
+          setImagePreview(imageFromSamePath);
+        }
+      }
+    }
+  }, [galleryImages, selectedGalleryImage]);
+  
   // Helper functions for date formatting
   const formatDateForInput = (date: Date): string => {
     return date.toISOString().split('T')[0];
@@ -103,8 +181,94 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     return date.toLocaleTimeString('sv-SE').substring(0, 5);
   };
   
+  // Image handling functions
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      
+      // Validate file type
+      if (!file.type.includes('image/')) {
+        alert('Endast bildfiler är tillåtna (jpg, png, etc)');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Bilden är för stor. Max storlek är 5MB.');
+        return;
+      }
+      
+      setSelectedImage(file);
+      const objectUrl = URL.createObjectURL(file);
+      setImagePreview(objectUrl);
+      
+      // Clean up on unmount
+      return () => URL.revokeObjectURL(objectUrl);
+    }
+  };
+  
+  const clearImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+  };
+  
+  const uploadImage = async (): Promise<string | null> => {
+    if (!selectedImage) return null;
+    
+    try {
+      setUploading(true);
+      
+      // Generate a unique filename
+      const fileExt = selectedImage.name.split('.').pop();
+      const fileName = `course-images/${Date.now()}.${fileExt}`;
+      
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('course-assets')
+        .upload(fileName, selectedImage, {
+          cacheControl: '3600',
+          upsert: false
+        });
+      
+      if (error) {
+        console.error('Error uploading image:', error);
+        alert(`Kunde inte ladda upp bilden: ${error.message}`);
+        return null;
+      }
+      
+      // Get the public URL for the uploaded image
+      const { data: { publicUrl } } = supabase.storage
+        .from('course-assets')
+        .getPublicUrl(fileName);
+      
+      return publicUrl;
+    } catch (err) {
+      console.error('Unexpected error during upload:', err);
+      alert('Ett fel uppstod vid uppladdning av bilden');
+      return null;
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+  
+  // Handle gallery image selection
+  const handleGalleryImageChange = (event: SelectChangeEvent<string>) => {
+    const imagePath = event.target.value;
+    console.log('Selected gallery image:', imagePath);
+    if (imagePath) {
+      setSelectedGalleryImage(imagePath);
+      setImagePreview(imagePath);
+      setSelectedImage(null); // Clear any uploaded image
+    } else {
+      // If user selects "Ingen galleribild", clear the preview
+      setSelectedGalleryImage('');
+      setImagePreview(null);
+    }
+  };
+  
   // Form submission
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Enhanced validation - all fields are mandatory
@@ -158,6 +322,23 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     // Calculate duration in minutes
     const durationMinutes = Math.round((combinedEndDate.getTime() - combinedStartDate.getTime()) / 60000);
     
+    // Upload image if selected, otherwise use gallery image
+    let imageUrl = selectedGalleryImage || imagePreview;
+    
+    console.log('Image selection status:', {
+      selectedGalleryImage,
+      imagePreview,
+      selectedImage: selectedImage ? selectedImage.name : null,
+      finalImageUrl: imageUrl
+    });
+    
+    if (selectedImage) {
+      const uploadedUrl = await uploadImage();
+      if (uploadedUrl) {
+        imageUrl = uploadedUrl;
+      }
+    }
+    
     // Create course data with required values - save everything to the instance
     const courseData: Partial<CourseInstance> = {
       id: course?.id || undefined,
@@ -169,11 +350,13 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
       is_published: isPublished,
       template_id: templateId,
       rich_description: richDescription, // Store the rich description in the instance
-      price: parseFloat(price) // Store price in the price field (what is used in DB)
+      price: parseFloat(price), // Store price in the price field (what is used in DB)
+      image_url: imageUrl // Store the image URL
     };
     
     // Log the price information for reference
     console.log(`Course price set to ${price} SEK - this price is stored in the 'price' field of the course instance`);
+    console.log(`Course image set to: ${imageUrl}`);
     
     // Call the onSave callback with the course data
     onSave(courseData);
@@ -238,6 +421,10 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
               // Set default price and other details if available
               if (selectedTemplate.price) setPrice(selectedTemplate.price.toString());
               if (selectedTemplate.max_participants) setMaxParticipants(selectedTemplate.max_participants.toString());
+              // Set image from template if available
+              if (selectedTemplate.image_url) {
+                setImagePreview(selectedTemplate.image_url);
+              }
             }
           }}
           variant="outlined"
@@ -252,25 +439,182 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           ))}
         </TextField>
         
-        {/* Date and Time */}
-        <Typography variant="subtitle2" sx={{ mb: 1, color: primaryColor, fontWeight: 'medium' }}>
-          Datum och tid
-        </Typography>
+        {/* Course Image Selection */}
+        <Box sx={{ mb: 3, mt: 2 }}>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>Kursbild</Typography>
+          
+          {/* Gallery Image Selection */}
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel id="gallery-image-label">Välj bild från galleri</InputLabel>
+            <Select
+              labelId="gallery-image-label"
+              id="gallery-image"
+              value={selectedGalleryImage}
+              onChange={handleGalleryImageChange}
+              label="Välj bild från galleri"
+              displayEmpty
+              size="small"
+              sx={inputStyles}
+              MenuProps={{
+                PaperProps: {
+                  style: {
+                    maxHeight: 400,
+                    overflow: 'auto'
+                  }
+                },
+                anchorOrigin: {
+                  vertical: 'bottom',
+                  horizontal: 'left'
+                },
+                transformOrigin: {
+                  vertical: 'top',
+                  horizontal: 'left'
+                }
+              }}
+              disabled={loadingImages}
+            >
+              <MenuItem value="">Ingen galleribild</MenuItem>
+              
+              {loadingImages && (
+                <MenuItem disabled>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                    Laddar bilder...
+                  </Box>
+                </MenuItem>
+              )}
+              
+              {!loadingImages && galleryImages.length === 0 && (
+                <MenuItem disabled>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                    Inga bilder hittades
+                  </Box>
+                </MenuItem>
+              )}
+              
+              {galleryImages.map((image) => (
+                <MenuItem key={image} value={image} sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  gap: '10px',
+                  paddingY: '8px'
+                }}>
+                  <Box 
+                    component="img" 
+                    src={image} 
+                    alt="Gallery thumbnail" 
+                    sx={{ 
+                      width: '60px', 
+                      height: '45px', 
+                      objectFit: 'cover',
+                      borderRadius: '4px' 
+                    }} 
+                  />
+                  <Box sx={{ fontSize: '0.8rem', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {image.split('/').pop()}
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Eller ladda upp en ny bild:
+          </Typography>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Button
+              component="label"
+              variant="outlined"
+              startIcon={<CloudUploadIcon />}
+              sx={{ 
+                borderColor: primaryColor,
+                color: primaryColor,
+                '&:hover': { borderColor: primaryColor, backgroundColor: 'rgba(84, 114, 100, 0.04)' }
+              }}
+            >
+              Välj bild
+              <input 
+                type="file" 
+                accept="image/*" 
+                hidden 
+                onChange={handleImageChange} 
+                disabled={uploading}
+              />
+            </Button>
+            
+            {imagePreview && (
+              <IconButton 
+                onClick={clearImage} 
+                color="error" 
+                sx={{ ml: 1 }}
+                disabled={uploading}
+              >
+                <ClearIcon />
+              </IconButton>
+            )}
+          </Box>
+          
+          {/* Image Preview */}
+          {imagePreview && (
+            <Box sx={{ mt: 2, mb: 2, position: 'relative' }}>
+              <Box 
+                component="img" 
+                src={imagePreview} 
+                alt="Course preview" 
+                sx={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '200px', 
+                  borderRadius: 1,
+                  border: '1px solid #e0e0e0' 
+                }} 
+              />
+              
+              {uploading && (
+                <Box 
+                  sx={{ 
+                    position: 'absolute', 
+                    bottom: 0, 
+                    left: 0, 
+                    width: `${uploadProgress}%`, 
+                    height: '4px', 
+                    bgcolor: primaryColor,
+                    transition: 'width 0.3s ease'
+                  }} 
+                />
+              )}
+            </Box>
+          )}
+          
+          <Typography variant="caption" color="text.secondary">
+            Bilden kommer att visas ovanför kursinformationen. Max storlek: 5MB.
+          </Typography>
+        </Box>
         
+        {/* Rich Description */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>Beskrivning</Typography>
+          <RichTextEditor
+            value={richDescription}
+            onChange={setRichDescription}
+            placeholder="Skriv kursbeskrivning här..."
+          />
+        </Box>
+        
+        {/* Time and Date */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
               required
-              id="startDate"
-              name="startDate"
+              id="start-date"
+              name="start-date"
               label="Startdatum"
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               variant="outlined"
               size="small"
-              InputLabelProps={{ shrink: true }}
               sx={inputStyles}
             />
           </Grid>
@@ -278,15 +622,15 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
             <TextField
               fullWidth
               required
-              id="startTime"
-              name="startTime"
+              id="start-time"
+              name="start-time"
               label="Starttid"
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               variant="outlined"
               size="small"
-              InputLabelProps={{ shrink: true }}
               sx={inputStyles}
             />
           </Grid>
@@ -294,15 +638,15 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
             <TextField
               fullWidth
               required
-              id="endDate"
-              name="endDate"
+              id="end-date"
+              name="end-date"
               label="Slutdatum"
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               variant="outlined"
               size="small"
-              InputLabelProps={{ shrink: true }}
               sx={inputStyles}
             />
           </Grid>
@@ -310,21 +654,21 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
             <TextField
               fullWidth
               required
-              id="endTime"
-              name="endTime"
+              id="end-time"
+              name="end-time"
               label="Sluttid"
               type="time"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               variant="outlined"
               size="small"
-              InputLabelProps={{ shrink: true }}
               sx={inputStyles}
             />
           </Grid>
         </Grid>
         
-        {/* Price and Max Participants */}
+        {/* Price and Max participants */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={6}>
             <TextField
@@ -345,8 +689,8 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
             <TextField
               fullWidth
               required
-              id="maxParticipants"
-              name="maxParticipants"
+              id="max-participants"
+              name="max-participants"
               label="Max antal deltagare"
               type="number"
               value={maxParticipants}
@@ -358,83 +702,49 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           </Grid>
         </Grid>
         
-        {/* Rich Description - using our custom RichTextEditor component */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1, color: primaryColor, fontWeight: 'medium' }}>
-            Beskrivning
-          </Typography>
-          <RichTextEditor
-            value={richDescription}
-            onChange={setRichDescription}
-            placeholder="Skriv eller klistra in din beskrivning här..."
-          />
-          <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
-            Denna beskrivning kommer från kursmallen men kan anpassas till denna specifika kurs.
-          </Typography>
-        </Box>
+        {/* Published status */}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={isPublished}
+              onChange={(e) => setIsPublished(e.target.checked)}
+              color="primary"
+              sx={{ 
+                '& .MuiSwitch-switchBase.Mui-checked': {
+                  color: primaryColor
+                },
+                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                  backgroundColor: primaryColor
+                }
+              }}
+            />
+          }
+          label="Publicera kurs"
+          sx={{ mb: 3 }}
+        />
         
-        {/* Published Status */}
-        <Box sx={{ mb: 3 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={isPublished}
-                onChange={(e) => setIsPublished(e.target.checked)}
-                color="primary"
-                sx={{
-                  '& .MuiSwitch-switchBase.Mui-checked': {
-                    color: primaryColor,
-                    '&:hover': {
-                      backgroundColor: 'rgba(84, 114, 100, 0.08)',
-                    },
-                  },
-                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                    backgroundColor: primaryColor,
-                  },
-                }}
-              />
-            }
-            label="Publicera kurs (synlig för besökare)"
-          />
-        </Box>
-        
-        {/* Form Actions */}
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'flex-end', 
-          gap: 2, 
-          mt: 4, 
-          pt: 2, 
-          borderTop: '1px solid', 
-          borderColor: 'divider' 
-        }}>
-          <Button
-            variant="outlined"
-            onClick={onCancel}
-            size="medium"
-            sx={{
-              borderColor: primaryColor,
-              color: primaryColor,
-              '&:hover': {
-                borderColor: primaryColor,
-                backgroundColor: 'rgba(84, 114, 100, 0.08)',
-              },
+        {/* Buttons */}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+          <Button 
+            onClick={onCancel} 
+            sx={{ 
+              mr: 2,
+              color: 'text.secondary',
+              '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' }
             }}
           >
             Avbryt
           </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            size="medium"
-            sx={{
-              backgroundColor: primaryColor,
-              '&:hover': {
-                backgroundColor: '#3D544A', // Darker shade of the primary color
-              },
+          <Button 
+            type="submit" 
+            variant="contained" 
+            sx={{ 
+              bgcolor: primaryColor,
+              '&:hover': { bgcolor: '#3e5349' }
             }}
+            disabled={uploading}
           >
-            {course ? 'Uppdatera' : 'Skapa'}
+            {uploading ? 'Laddar upp...' : (course ? 'Spara ändringar' : 'Skapa kurs')}
           </Button>
         </Box>
       </Box>
