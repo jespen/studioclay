@@ -118,8 +118,8 @@ export async function sendServerInvoiceEmail(params: {
           <p><strong>Totalt pris:</strong> ${totalPrice.toFixed(2)} kr</p>
         </div>
         
-        <p>Vänligen betala fakturan inom 10 dagar till vårt bankgiro: 123-4567.</p>
-        <p>Ange fakturanumret ${params.invoiceNumber} som referens vid betalning.</p>
+        <p>Vänligen betala fakturan inom 10 dagar till vårt bankgiro: 5938-4560.</p>
+        <p>Ange ditt namn (${params.userInfo.firstName} ${params.userInfo.lastName}) som referens vid betalning.</p>
         
         <p>Om du har några frågor, vänligen kontakta oss på <a href="mailto:eva@studioclay.se">eva@studioclay.se</a> eller ring 079-312 06 05.</p>
         <p>Vänliga hälsningar,<br>Studio Clay</p>

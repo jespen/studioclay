@@ -4,15 +4,15 @@ import { UserInfo } from '@/types/booking';
 // Company details
 const COMPANY_INFO = {
   name: 'Studio Clay',
-  address: 'Ringvägen 50A',
-  postalCode: '118 63',
+  address: 'Norrtullsgatan 65',
+  postalCode: '113 45',
   city: 'Stockholm',
   email: 'eva@studioclay.se',
-  phone: '070-1234567',
+  phone: '079-312 06 05',
   website: 'www.studioclay.se',
-  orgNr: '123456-7890',
-  bankgiro: '123-4567',
-  vatNr: 'SE1234567890'
+  orgNr: '559393-4234',
+  bankgiro: '5938-4560',
+  vatNr: 'SE559393423401'
 };
 
 // Function to generate a Swish QR code URL
@@ -132,7 +132,7 @@ export async function generateInvoicePDF(
   // Customer information
   const customerY = margin + 45;
   doc.setFontSize(11);
-  doc.text('Fakturaadress:', margin, customerY);
+  doc.text('Fakturamottagare:', margin, customerY);
   
   doc.setFontSize(10);
   doc.text([
@@ -161,7 +161,7 @@ export async function generateInvoicePDF(
   doc.text('Antal', margin + 90, tableY + 5);
   doc.text('Pris', margin + 110, tableY + 5);
   doc.text('Moms', margin + 130, tableY + 5);
-  doc.text('Summa', margin + 150, tableY + 5, { align: 'right' });
+  doc.text('Summa', margin + 160, tableY + 5, { align: 'right' });
   
   // Table content
   doc.setFont('helvetica', 'normal');
@@ -194,7 +194,7 @@ export async function generateInvoicePDF(
   doc.text('25%', margin + 130, itemY);
   
   const totalPrice = numParticipants * coursePrice;
-  doc.text(`${totalPrice.toFixed(2)} kr`, margin + 150, itemY, { align: 'right' });
+  doc.text(`${totalPrice.toFixed(2)} kr`, margin + 160, itemY, { align: 'right' });
   
   // Separate VAT calculations (Sweden typically includes VAT)
   const vatAmount = totalPrice * 0.2; // 25% VAT = 20% of total
@@ -206,24 +206,28 @@ export async function generateInvoicePDF(
   doc.line(margin, summaryY - 10, margin + contentWidth, summaryY - 10);
   
   // Total summary
-  doc.text('Summa exkl. moms:', margin + 110, summaryY);
-  doc.text(`${priceExcludingVat.toFixed(2)} kr`, margin + 150, summaryY, { align: 'right' });
+  doc.text('Summa exkl. moms:', margin + 90, summaryY);
+  doc.text(`${priceExcludingVat.toFixed(2)} kr`, margin + 160, summaryY, { align: 'right' });
   
-  doc.text('Moms 25%:', margin + 110, summaryY + 7);
-  doc.text(`${vatAmount.toFixed(2)} kr`, margin + 150, summaryY + 7, { align: 'right' });
+  doc.text('Moms 25%:', margin + 90, summaryY + 7);
+  doc.text(`${vatAmount.toFixed(2)} kr`, margin + 160, summaryY + 7, { align: 'right' });
   
   doc.setFont('helvetica', 'bold');
-  doc.text('Att betala:', margin + 110, summaryY + 14);
-  doc.text(`${totalPrice.toFixed(2)} kr`, margin + 150, summaryY + 14, { align: 'right' });
+  doc.text('Att betala:', margin + 90, summaryY + 14);
+  doc.text(`${totalPrice.toFixed(2)} kr`, margin + 160, summaryY + 14, { align: 'right' });
   
   // Payment information
   const paymentY = summaryY + 30;
   doc.setFont('helvetica', 'bold');
   doc.text('Betalningsinformation', margin, paymentY);
   doc.setFont('helvetica', 'normal');
+  
+  // Using the customer name as reference
+  const customerFullName = `${invoiceData.customerInfo.firstName} ${invoiceData.customerInfo.lastName}`;
+  
   doc.text([
     `Bankgiro: ${COMPANY_INFO.bankgiro}`,
-    `OCR/Referens: ${invoiceData.invoiceNumber}`,
+    `Referens: ${customerFullName}`,
     `Förfallodatum: ${invoiceData.dueDate}`,
     `Summa att betala: ${totalPrice.toFixed(2)} kr`
   ], margin, paymentY + 7);
