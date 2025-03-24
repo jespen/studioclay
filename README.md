@@ -240,3 +240,86 @@ ngrok http 3000
 ```
 
 Then update the `NEXT_PUBLIC_BASE_URL` environment variable with the generated ngrok URL.
+
+## Booking System Documentation
+
+### Overview
+The booking system provides functionality to display, filter, and manage course bookings in the admin interface. It consists of several key components that work together to provide a complete booking management experience.
+
+### Main Components
+
+#### 1. BookingsTable Component
+`BookingsTable` serves as a container component that filters bookings by status and renders them using the `BookingsList` component.
+
+**Features:**
+- Filters bookings by status (confirmed, pending, or cancelled)
+- Displays loading states with a spinner when data is being fetched
+- Shows appropriate error messages when data fetching fails
+- Provides empty state UI when no bookings match the current filter
+- Passes filtered bookings to the BookingsList component for rendering
+
+**Props:**
+- `title`: String title for the bookings table section
+- `bookings`: Array of ExtendedBooking objects
+- `loading`: Boolean indicating if data is being loaded
+- `error`: Error message string or null
+- `status`: Filter value ('confirmed', 'pending', or 'cancelled')
+- `onBookingUpdate`: Callback function triggered when bookings are updated
+- `participantInfo`: Optional string with additional participant information
+
+#### 2. BookingsList Component
+`BookingsList` renders bookings in a table format with various actions for managing them.
+
+**Features:**
+- Displays bookings in a table with sortable columns
+- Provides actions to edit and cancel bookings
+- Shows payment status with option to update it
+- Supports viewing and editing booking details
+
+**Key Functionality:**
+- Edit booking information (customer details, participants count)
+- Cancel bookings with confirmation dialog
+- Update payment status
+- View booking details including payment method and references
+
+### Data Model
+
+The booking system uses several key data types:
+
+**ExtendedBooking**: 
+Extends the base Booking type with additional information needed for display and management in the admin interface.
+
+Key fields:
+- `id`: Unique identifier for the booking
+- `status`: Current booking status ('pending', 'confirmed', or 'cancelled')
+- `customer_name`: Name of the customer who made the booking
+- `customer_email`: Customer's email address
+- `customer_phone`: Customer's phone number
+- `number_of_participants`: Number of people included in this booking
+- `course_id`: ID of the course instance booked
+- `payment_status`: Status of the payment ('CREATED', 'PAID', 'DECLINED', 'ERROR')
+- `payment_method`: Payment method used ('swish', 'invoice', etc.)
+- `booking_reference`: Reference number for the booking
+- `created_at`: Timestamp when booking was created
+
+### API Integration
+
+The booking system interacts with several API endpoints:
+
+1. **GET /api/bookings** - Fetches booking list with optional filters
+2. **GET /api/bookings/[id]** - Retrieves a specific booking by ID
+3. **PATCH /api/bookings/[id]** - Updates booking information
+4. **DELETE /api/bookings/[id]** - Cancels a booking
+
+The API returns bookings with course information joined, allowing the UI to display relevant course details alongside booking information.
+
+### Troubleshooting
+
+**Common Issues:**
+1. **Bookings not displaying**: Check network requests to ensure API endpoints are being called correctly
+2. **Payment status not updating**: Verify the payment service is running and callbacks are being received
+3. **Empty booking lists**: Confirm that the status filter is correctly set and that bookings exist with that status
+
+For deeper debugging, check browser console logs and server-side logs for any errors during API calls.
+
+For more detailed technical documentation on the booking system, please refer to [BOOKING-SYSTEM.md](./BOOKING-SYSTEM.md).

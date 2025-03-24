@@ -57,7 +57,7 @@ export interface Booking {
   message?: string;
 }
 
-export interface ExtendedBooking extends Omit<Booking, 'course' | 'payments'> {
+export interface ExtendedBooking extends Omit<Booking, 'course' | 'payments' | 'payment_status'> {
   course: {
     id: string;
     title: string;
@@ -67,4 +67,7 @@ export interface ExtendedBooking extends Omit<Booking, 'course' | 'payments'> {
     capacity: number;
   };
   payments?: Array<Payment>;
+  payment_method: string;
+  booking_reference: string;
+  payment_status: PaymentStatus;
 } 
