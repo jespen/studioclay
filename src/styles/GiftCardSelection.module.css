@@ -1,0 +1,148 @@
+.container {
+  margin-top: 2rem;
+}
+
+.giftCardPreview {
+  height: 100%;
+  overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.giftCardPreview:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.giftCardImageContainer {
+  position: relative;
+  width: 100%;
+  padding-top: 50%; /* 2:1 aspect ratio */
+  overflow: hidden;
+}
+
+.giftCardImage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.giftCardImageOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.7) 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 1.5rem;
+}
+
+.giftCardLabel {
+  color: white;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+}
+
+.giftCardAmount {
+  color: white;
+  font-size: 2rem;
+  font-weight: 700;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+}
+
+.amountSection {
+  margin: 1.5rem 0;
+}
+
+.amountButtons {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.amountButton {
+  flex: 1;
+  padding: 0.75rem;
+  border: 2px solid #E5E7EB;
+  border-radius: 0.5rem;
+  background-color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.amountButton:hover {
+  border-color: var(--primary-light);
+}
+
+.amountSelected {
+  border-color: var(--primary);
+  background-color: rgba(var(--primary-rgb), 0.05);
+}
+
+.infoPanel {
+  height: 100%;
+  padding: 2rem;
+}
+
+.featureList {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.featureItem {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.featureIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: rgba(var(--primary-rgb), 0.1);
+  border-radius: 50%;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.featureText {
+  flex: 1;
+}
+
+.actionContainer {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.continueButton {
+  max-width: 400px;
+  padding: 0.75rem;
+  font-weight: 600;
+}
+
+/* For small screens */
+@media (max-width: 600px) {
+  .amountButtons {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .actionContainer {
+    padding: 0 1rem;
+  }
+} 

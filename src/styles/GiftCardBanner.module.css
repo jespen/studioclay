@@ -1,5 +1,5 @@
 .section {
-  padding: 2.5rem 0;
+  padding: 3.5rem 0;
   background-color: #f7f7f7; /* Matching the gray used in the kurser section */
 }
 
@@ -16,36 +16,92 @@
 .bannerContent {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 1.75rem;
   background-color: white;
   border-radius: 1rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  max-width: 48rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-width: 60rem;
   margin: 0 auto;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.bannerContent:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
 }
 
 .dark .bannerContent {
   background-color: #1F2937;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
+/* New image container styles */
+.imageContainer {
+  position: relative;
+  width: 100%;
+  padding-top: 40%; /* 5:2 aspect ratio */
+  background-color: #f3f4f6;
+  overflow: hidden;
+}
+
+.bannerImage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imageOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.7) 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 2rem;
+}
+
+.overlayLabel {
+  color: white;
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+}
+
+.overlayPrice {
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+}
+
+/* Text content styles */
 .textContent {
   text-align: center;
   width: 100%;
+  padding: 2.5rem;
 }
 
 .title {
   font-size: 2rem;
   font-weight: 700;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
   color: var(--primary);
 }
 
 .description {
   font-size: 1.125rem;
   color: #6B7280;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .dark .description {
@@ -58,7 +114,7 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 1.5rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
   text-align: center;
   margin-left: auto;
   margin-right: auto;
@@ -69,7 +125,12 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: 0.975rem;
+  color: #4B5563;
+}
+
+.dark .featureItem {
+  color: #D1D5DB;
 }
 
 .featureIcon {
@@ -80,19 +141,23 @@
 .ctaButton {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   background-color: var(--primary);
   color: white;
   font-weight: 600;
-  padding: 0.75rem 1.5rem;
+  padding: 1rem 2rem;
   border-radius: 0.5rem;
   transition: all 0.2s ease;
+  width: 100%;
+  max-width: 320px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .ctaButton:hover {
   background-color: var(--primary-dark);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
 }
 
 .buttonIcon {
@@ -105,19 +170,42 @@
 
 @media (min-width: 768px) {
   .bannerContent {
-    padding: 2rem;
+    flex-direction: row;
+    align-items: stretch;
+    max-width: 80rem;
+  }
+  
+  .imageContainer {
+    width: 50%;
+    padding-top: 0;
+    height: auto;
+  }
+  
+  .textContent {
+    width: 50%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 3rem;
+    text-align: left;
   }
   
   .title {
     font-size: 2.25rem;
+    text-align: left;
+  }
+  
+  .description {
+    text-align: left;
+    margin-left: 0;
   }
   
   .features {
-    gap: 2rem;
-    margin-bottom: 1.75rem;
+    justify-content: flex-start;
+    margin-left: 0;
   }
   
-  .featureItem {
-    font-size: 1rem;
+  .ctaButton {
+    align-self: flex-start;
   }
 } 

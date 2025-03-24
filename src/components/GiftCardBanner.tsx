@@ -8,8 +8,20 @@ const GiftCardBanner = () => {
     <section id="presentkort" className={styles.section}>
       <div className={styles.container}>
         <div className={styles.bannerContent}>
+          <div className={styles.imageContainer}>
+            <img 
+              src="/pictures/finavaser.jpg"
+              alt="Studio Clay presentkort"
+              className={styles.bannerImage}
+            />
+            <div className={styles.imageOverlay}>
+              <div className={styles.overlayLabel}>Presentkort</div>
+              <div className={styles.overlayPrice}>Från 500 kr</div>
+            </div>
+          </div>
+          
           <div className={styles.textContent}>
-            <h2 className={styles.title}>Presentkort</h2>
+            <h2 className={styles.title}>Ge bort en kreativ upplevelse</h2>
             <p className={styles.description}>
               Ge bort upplevelsen av drejning till någon du tycker om. Perfekt som present för den som vill utforska keramikens värld eller om du vill ge bort ett konstverk.
             </p>
@@ -33,7 +45,7 @@ const GiftCardBanner = () => {
                 <span>Skickas direkt via e-post</span>
               </div>
             </div>
-            <Link href="/gift-card" className={styles.ctaButton}>
+            <Link href="/gift-card-flow" className={styles.ctaButton}>
               Köp presentkort
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="16" height="16" className={styles.buttonIcon}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
