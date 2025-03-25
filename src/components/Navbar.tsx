@@ -103,7 +103,7 @@ const Navbar = () => {
                   <Link
                     key={link.id}
                     href={link.href || '/'}
-                    className={`${styles.navLink} ${activeSection === link.id ? styles.activeLink : ''}`}
+                    className={`${styles.navLink} ${styles.contactButton} ${activeSection === link.id ? styles.activeLink : ''}`}
                     onClick={closeMenu}
                   >
                     {link.label}
@@ -151,7 +151,7 @@ const Navbar = () => {
                   <Link
                     key={link.id}
                     href={link.href || '/'}
-                    className={`${styles.mobileNavLink} ${activeSection === link.id ? styles.activeLink : ''}`}
+                    className={`${styles.mobileNavLink} ${styles.mobileContactButton} ${activeSection === link.id ? styles.activeLink : ''}`}
                     onClick={closeMenu}
                   >
                     {link.label}
