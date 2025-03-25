@@ -4,6 +4,7 @@ import { generateBookingReference } from '@/utils/booking';
 import { sendServerBookingConfirmationEmail } from '@/utils/serverEmail';
 import { SwishCallbackData, SwishPaymentStatus } from '@/types/payment';
 import { PaymentStatus } from '@/types/booking';
+import { validateSwishRequest } from '@/utils/security';
 
 // Create a Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -15,7 +16,20 @@ export async function POST(request: Request) {
   console.log('Timestamp:', new Date().toISOString());
   
   try {
-    const data: SwishCallbackData = await request.json();
+    // Klona request body för signaturvalidering
+    const rawBody = await request.text();
+    const data: SwishCallbackData = JSON.parse(rawBody);
+    
+    // Validera Swish signatur
+    const isValid = await validateSwishRequest(request.headers, rawBody);
+    if (!isValid) {
+      console.error('Invalid Swish signature');
+      return NextResponse.json(
+        { success: false, error: 'Invalid signature' },
+        { status: 401 }
+      );
+    }
+
     console.log('Swish callback data received:', data);
 
     const paymentReference = data.payeePaymentReference;

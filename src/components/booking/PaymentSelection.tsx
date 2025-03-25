@@ -47,6 +47,7 @@ import GenericFlowContainer from '../common/GenericFlowContainer';
 import StyledButton from '../common/StyledButton';
 import { FormCheckboxField, FormTextField } from '../common/FormField';
 import { sendBookingConfirmationEmail } from '@/utils/confirmationEmail';
+import { v4 as uuidv4 } from 'uuid';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -206,8 +207,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
         errors.swishPhone = 'Telefonnummer är obligatoriskt för Swish-betalning';
         isValid = false;
       } else {
-        // Clean the phone number first
-        const cleanPhone = paymentDetails.swishPhone.replace(/\s+/g, '');
+        // Clean the phone number first (remove spaces and dashes)
+        const cleanPhone = paymentDetails.swishPhone.replace(/[- ]/g, '');
         console.log('Cleaned phone number:', cleanPhone);
         // Check for valid Swedish phone format (9 or 10 digits starting with 0)
         if (!/^0\d{8,9}$/.test(cleanPhone)) {
@@ -241,20 +242,37 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     return isValid;
   };
 
+  // Format phone number for Swish API
+  const formatSwishPhone = (phone: string): string => {
+    // Remove any spaces, dashes or other characters
+    const cleanPhone = phone.replace(/[- ]/g, '');
+    // Remove leading 0 and add 46 prefix
+    return '46' + cleanPhone.substring(1);
+  };
+
   // Create a Swish payment request
   const createSwishPayment = async (): Promise<{success: boolean, reference: string | null}> => {
     try {
-      console.log('Creating Swish payment with phone number:', paymentDetails.swishPhone);
+      const formattedPhone = formatSwishPhone(paymentDetails.swishPhone || '');
+      console.log('Creating Swish payment with formatted phone number:', formattedPhone);
+      
+      // Generera en unik idempotency key
+      const idempotencyKey = uuidv4();
       
       const response = await fetch('/api/payments/swish/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey
         },
         body: JSON.stringify({
-          courseId,
-          userInfo,
-          phoneNumber: paymentDetails.swishPhone,
+          phone_number: formattedPhone,
+          payment_method: 'swish',
+          product_type: 'course',
+          product_id: courseDetail.id,
+          amount: calculatePrice(),
+          quantity: parseInt(userInfo?.numberOfParticipants || '1'),
+          user_info: userInfo // Optional user info for reference
         }),
       });
 
@@ -277,10 +295,78 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
       
       // Store in localStorage for persistence
       localStorage.setItem('currentPaymentReference', reference);
+      localStorage.setItem('currentPaymentIdempotencyKey', idempotencyKey);
       
       return { success: true, reference };
     } catch (error) {
       console.error('Error in payment creation:', error);
+      return { success: false, reference: null };
+    }
+  };
+
+  // Create an invoice payment request
+  const createInvoicePayment = async (): Promise<{success: boolean, reference: string | null}> => {
+    try {
+      // Generera en unik idempotency key
+      const idempotencyKey = uuidv4();
+      
+      const response = await fetch('/api/payments/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey
+        },
+        body: JSON.stringify({
+          user_info: {
+            firstName: userInfo?.firstName,
+            lastName: userInfo?.lastName,
+            email: userInfo?.email,
+            phone: userInfo?.phone
+          },
+          product_type: 'course',
+          product_id: courseId,
+          amount: calculatePrice(),
+          quantity: parseInt(userInfo?.numberOfParticipants || '1'),
+          payment_method: 'invoice'
+        }),
+      });
+
+      const result = await response.json();
+      console.log('Payment API response:', result);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to create payment');
+      }
+
+      // Store payment reference and idempotency key
+      localStorage.setItem('currentPaymentReference', result.reference);
+      localStorage.setItem('currentPaymentIdempotencyKey', idempotencyKey);
+
+      // Create invoice
+      const invoiceResponse = await fetch('/api/invoice/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `${idempotencyKey}-invoice`
+        },
+        body: JSON.stringify({
+          courseId,
+          userInfo,
+          paymentDetails: {
+            ...paymentDetails,
+            reference: result.reference
+          }
+        }),
+      });
+
+      const invoiceResult = await invoiceResponse.json();
+      if (!invoiceResult.success) {
+        throw new Error(invoiceResult.error || 'Failed to create invoice');
+      }
+
+      return { success: true, reference: result.reference };
+    } catch (error) {
+      console.error('Error in invoice creation:', error);
       return { success: false, reference: null };
     }
   };
@@ -447,7 +533,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     try {
       if (paymentDetails.method === 'swish') {
         console.log('Processing Swish payment');
-        // Create Swish payment
         const paymentResult = await createSwishPayment();
         console.log('Payment creation result:', paymentResult);
         
@@ -455,58 +540,18 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
           throw new Error('Payment creation failed');
         }
         
-        // Show payment dialog after successful payment creation
         setPaymentStatus(PaymentStatus.CREATED);
         setShowPaymentDialog(true);
         
-        // The payment reference was already set by createSwishPayment
-        // The useEffect will handle polling automatically
-        console.log('Dialog shown, polling will start automatically');
       } else {
-        // Invoice payment - store details and create invoice
         console.log('Processing invoice payment');
+        const paymentResult = await createInvoicePayment();
         
-        try {
-          // Call our invoice API
-          console.log('Calling /api/invoice/create with data:', {
-            courseId,
-            userInfo,
-            paymentDetails
-          });
-          
-          const response = await fetch('/api/invoice/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              courseId,
-              userInfo,
-              paymentDetails
-            })
-          });
-          
-          const data = await response.json();
-          console.log('Invoice API response:', data);
-          
-          if (!data.success) {
-            console.error('API reported error:', data.error);
-            throw new Error(data.error || 'Could not create invoice');
-          }
-          
-          console.log('Invoice created successfully with number:', data.invoiceNumber);
-          
-          // Store payment details with invoice number in localStorage
-          localStorage.setItem('paymentDetails', JSON.stringify({
-            ...paymentDetails,
-            bookingId: data.bookingId,
-            emailSent: data.emailSent
-          }));
-          
-          // Navigate to next step
-          router.push(`/book-course/${courseId}/confirmation`);
-        } catch (error) {
-          console.error('Error creating invoice:', error);
-          setSubmitError('Det gick inte att skapa fakturan. Försök igen senare.');
+        if (!paymentResult.success) {
+          throw new Error('Invoice creation failed');
         }
+        
+        router.push(`/book-course/${courseId}/confirmation`);
       }
     } catch (error) {
       console.error('Error in handleSubmit:', error);

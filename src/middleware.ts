@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { checkRateLimit } from './utils/security';
 
 // Define public paths that don't require authentication
 const publicPaths = [
@@ -20,6 +21,23 @@ const publicPaths = [
   '/api/auth/set-auth-cookie',
   '/api/auth/supabase-auth-test',
   '/api/auth/local-login',
+  '/api/payments/swish/create',  // Add Swish payment endpoint
+  '/api/payments/swish/callback',  // Add Swish callback endpoint
+  '/api/payments/swish/test',  // Add Swish test endpoint
+  '/api/payments/swish/test-payment'  // Add Swish test payment endpoint
+];
+
+// Endpoints som kräver rate limiting
+const RATE_LIMITED_ENDPOINTS = [
+  '/api/payments/create',
+  '/api/payments/swish/create',
+  '/api/payments/status',
+];
+
+// Endpoints som kräver idempotency key
+const IDEMPOTENCY_REQUIRED_ENDPOINTS = [
+  '/api/payments/create',
+  '/api/payments/swish/create',
 ];
 
 export async function middleware(request: NextRequest) {
@@ -67,7 +85,9 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/webhooks/') ||
     pathname.startsWith('/api/admin/') ||
     pathname.startsWith('/api/checkout/') ||
-    pathname.startsWith('/api/auth/')
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/api/payments/status/') ||  // Add status endpoint with dynamic parameters
+    pathname.startsWith('/api/payments/swish/callback/')  // Add callback endpoint with dynamic parameters
   );
 
   // Skip auth check for public paths
@@ -95,6 +115,51 @@ export async function middleware(request: NextRequest) {
     const redirectUrl = new URL('/admin', request.url);
     redirectUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(redirectUrl);
+  }
+
+  // Kontrollera om detta är en API route som behöver rate limiting
+  if (RATE_LIMITED_ENDPOINTS.some(endpoint => pathname.startsWith(endpoint))) {
+    // Hämta IP från headers eller forwarded headers
+    const ip = request.headers.get('x-real-ip') || 
+               request.headers.get('x-forwarded-for')?.split(',')[0] || 
+               'unknown';
+               
+    const isAllowed = await checkRateLimit(ip, pathname);
+    
+    if (!isAllowed) {
+      return new NextResponse(
+        JSON.stringify({
+          success: false,
+          error: 'Too many requests'
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+  }
+  
+  // Kontrollera om detta är en route som kräver idempotency key
+  if (IDEMPOTENCY_REQUIRED_ENDPOINTS.some(endpoint => pathname.startsWith(endpoint))) {
+    const idempotencyKey = request.headers.get('Idempotency-Key');
+    
+    if (!idempotencyKey) {
+      return new NextResponse(
+        JSON.stringify({
+          success: false,
+          error: 'Missing Idempotency-Key header'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
   }
 
   return response;
@@ -131,6 +196,7 @@ export const config = {
     '/admin/:path*',
     '/api/admin/:path*',
     '/api/courses/admin/:path*',  // Only protect admin course routes
-    '/api/bookings/:path*'
+    '/api/bookings/:path*',
+    '/api/payments/:path*'
   ]
 }; 
