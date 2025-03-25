@@ -6,10 +6,7 @@ import { z } from 'zod';
 import { createSwishPayment } from '@/lib/swish';
 import { logDebug, logError } from '@/lib/logging';
 import https from 'https';
-import axios from 'axios';
-import { swishConfig } from '@/config/swish';
 import crypto from 'crypto';
-import forge from 'node-forge';
 import { v4 as uuidv4 } from 'uuid';
 import fetch from 'node-fetch';
 
