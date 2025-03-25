@@ -48,6 +48,7 @@ import StyledButton from '../common/StyledButton';
 import { FormCheckboxField, FormTextField } from '../common/FormField';
 import { sendBookingConfirmationEmail } from '@/utils/confirmationEmail';
 import { v4 as uuidv4 } from 'uuid';
+import { PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -85,14 +86,6 @@ interface FormErrors {
   'invoiceDetails.postalCode'?: string;
   'invoiceDetails.city'?: string;
   swishPhone?: string;
-}
-
-// Payment status enum
-enum PaymentStatus {
-  CREATED = 'CREATED',
-  PAID = 'PAID',
-  DECLINED = 'DECLINED',
-  ERROR = 'ERROR'
 }
 
 const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
@@ -379,7 +372,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     
     if (!reference || reference === 'undefined' || reference === 'null') {
       console.error('No valid payment reference available to check status');
-      return PaymentStatus.ERROR;
+      return PAYMENT_STATUS.ERROR;
     }
     
     try {
@@ -392,7 +385,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
       
       if (!data.success) {
         console.error('Status API reported error:', data);
-        return PaymentStatus.ERROR;
+        return PAYMENT_STATUS.ERROR;
       }
       
       // Check if booking was created and store reference
@@ -407,25 +400,25 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
       
       if (!status) {
         console.error('No payment status found in response');
-        return PaymentStatus.ERROR;
+        return PAYMENT_STATUS.ERROR;
       }
       
       // Map the status from the API to our enum
       switch (status.toUpperCase()) {
         case 'PAID':
-          return PaymentStatus.PAID;
+          return PAYMENT_STATUS.PAID;
         case 'DECLINED':
-          return PaymentStatus.DECLINED;
+          return PAYMENT_STATUS.DECLINED;
         case 'ERROR':
-          return PaymentStatus.ERROR;
+          return PAYMENT_STATUS.ERROR;
         case 'CREATED':
-          return PaymentStatus.CREATED;
+          return PAYMENT_STATUS.CREATED;
         default:
-          return PaymentStatus.CREATED;
+          return PAYMENT_STATUS.CREATED;
       }
     } catch (error) {
       console.error('Error checking payment status:', error);
-      return PaymentStatus.ERROR;
+      return PAYMENT_STATUS.ERROR;
     }
   };
 
@@ -441,7 +434,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
       
       if (attempts >= maxAttempts) {
         console.log('Status check timed out after max attempts');
-        setPaymentStatus(PaymentStatus.ERROR);
+        setPaymentStatus(PAYMENT_STATUS.ERROR);
         clearInterval(intervalId);
         return;
       }
@@ -449,7 +442,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
       const currentReference = paymentReference || localStorage.getItem('currentPaymentReference');
       if (!currentReference || currentReference === 'undefined' || currentReference === 'null') {
         console.log('No valid reference available for polling');
-        setPaymentStatus(PaymentStatus.ERROR);
+        setPaymentStatus(PAYMENT_STATUS.ERROR);
         clearInterval(intervalId);
         return;
       }
@@ -467,7 +460,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
           setPaymentStatus(status);
         }
         
-        if (status === PaymentStatus.PAID) {
+        if (status === PAYMENT_STATUS.PAID) {
           console.log('Payment is PAID, clearing interval and preparing redirect');
           clearInterval(intervalId);
           
@@ -476,7 +469,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
             console.log('Redirecting to confirmation page');
             router.push(`/book-course/${courseId}/confirmation`);
           }, 1500);
-        } else if (status === PaymentStatus.DECLINED || status === PaymentStatus.ERROR) {
+        } else if (status === PAYMENT_STATUS.DECLINED || status === PAYMENT_STATUS.ERROR) {
           console.log('Payment failed or declined, clearing interval');
           clearInterval(intervalId);
         }
@@ -507,7 +500,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
   // Handle closing the payment dialog
   const handleClosePaymentDialog = () => {
     // Only allow closing if there's an error or payment is declined
-    if (paymentStatus === PaymentStatus.ERROR || paymentStatus === PaymentStatus.DECLINED) {
+    if (paymentStatus === PAYMENT_STATUS.ERROR || paymentStatus === PAYMENT_STATUS.DECLINED) {
       setShowPaymentDialog(false);
       setPaymentStatus(null);
       // Clean up the stored reference
@@ -540,7 +533,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
           throw new Error('Payment creation failed');
         }
         
-        setPaymentStatus(PaymentStatus.CREATED);
+        setPaymentStatus(PAYMENT_STATUS.CREATED);
         setShowPaymentDialog(true);
         
       } else {
@@ -946,7 +939,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
           Swish-betalning
         </DialogTitle>
         <DialogContent>
-          {paymentStatus === PaymentStatus.CREATED && (
+          {paymentStatus === PAYMENT_STATUS.CREATED && (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
               <CircularProgress sx={{ mb: 2 }} />
               <Typography variant="body1" gutterBottom>
@@ -955,7 +948,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
             </Box>
           )}
 
-          {paymentStatus === PaymentStatus.PAID && (
+          {paymentStatus === PAYMENT_STATUS.PAID && (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
               <CheckCircleIcon color="success" sx={{ fontSize: 48, mb: 2 }} />
               <Typography variant="body1" gutterBottom>
@@ -967,7 +960,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
             </Box>
           )}
 
-          {paymentStatus === PaymentStatus.DECLINED && (
+          {paymentStatus === PAYMENT_STATUS.DECLINED && (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
               <CancelIcon color="error" sx={{ fontSize: 48, mb: 2 }} />
               <Typography variant="body1" gutterBottom>
@@ -979,7 +972,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
             </Box>
           )}
 
-          {paymentStatus === PaymentStatus.ERROR && (
+          {paymentStatus === PAYMENT_STATUS.ERROR && (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
               <ErrorIcon color="error" sx={{ fontSize: 48, mb: 2 }} />
               <Typography variant="body1" gutterBottom>
@@ -992,7 +985,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
           )}
         </DialogContent>
         <DialogActions>
-          {(paymentStatus === PaymentStatus.DECLINED || paymentStatus === PaymentStatus.ERROR) && (
+          {(paymentStatus === PAYMENT_STATUS.DECLINED || paymentStatus === PAYMENT_STATUS.ERROR) && (
             <Button onClick={handleClosePaymentDialog}>Stäng</Button>
           )}
         </DialogActions>

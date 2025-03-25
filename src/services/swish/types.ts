@@ -148,3 +148,11 @@ export type PaymentStatus =
   | 'PAID'      // Payment confirmed by Swish
   | 'ERROR'     // Payment failed
   | 'DECLINED'; // Payment declined by user or Swish 
+
+// Payment status values as a constant object
+export const PAYMENT_STATUS = {
+  CREATED: 'CREATED',
+  PAID: 'PAID',
+  ERROR: 'ERROR',
+  DECLINED: 'DECLINED'
+} as const; 
