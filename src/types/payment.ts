@@ -1,72 +1,51 @@
-// Swish API Types
+// User information structure
 export interface UserInfo {
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
   numberOfParticipants?: string;
-  specialRequirements?: string;
 }
 
-export interface SwishPaymentParams {
-  userInfo: UserInfo;
-  courseId: string;
-  amount: number;
-  phoneNumber: string;
-}
+// Basic product type definition
+export type ProductType = 'course';  // Simplified as we only handle courses currently
 
-export interface SwishPaymentResult {
-  success: boolean;
-  paymentId?: string;
-  error?: string;
-}
-
-export interface SwishStatusResult {
-  success: boolean;
-  status: string;
-  error?: string;
-  bookingReference?: string;
-}
-
-export type ProductType = 'course' | 'gift_card' | 'shop_item';
-
-export interface PaymentCreateRequest {
-  user_info: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone: string;
-  };
+// Payment request structure from frontend
+export interface PaymentRequest {
+  phone_number: string;      // Format: "0739000001"
+  payment_method: "swish";   // Currently only supporting Swish
   product_type: ProductType;
   product_id: string;
   amount: number;
   quantity: number;
-  payment_method: 'swish' | 'invoice';
+  user_info: UserInfo;
 }
 
-// Swish payment statuses (exactly as provided by Swish)
-export type SwishPaymentStatus = 
-  | 'CREATED'   // Initial state
-  | 'PAID'      // Payment completed successfully
-  | 'DECLINED'  // Payment declined by payer or Swish
-  | 'ERROR';    // Technical error
-
-// Swish callback data structure
+// Swish callback data structure (from Swish API)
 export interface SwishCallbackData {
-  payeePaymentReference: string;
-  status: SwishPaymentStatus;
+  payeePaymentReference: string;  // Our payment reference
+  paymentReference: string;       // Swish payment reference
+  status: PaymentStatus;
   amount: string;
   currency: string;
-  message?: string;
+  timestamp: string;
   errorCode?: string;
   errorMessage?: string;
 }
 
+// Payment status values that are actually used
+export type PaymentStatus = 
+  | 'CREATED'   // Initial state when payment is created
+  | 'PAID'      // Payment confirmed by Swish
+  | 'ERROR'     // Payment failed
+  | 'DECLINED'; // Payment declined by user or Swish
+
+// Payment record structure (database)
 export interface Payment {
   id: string;
   created_at: string;
   status: PaymentStatus;
-  payment_method: PaymentMethod;
+  payment_method: 'swish';
   amount: number;
   currency: string;
   payment_reference: string;
@@ -74,42 +53,24 @@ export interface Payment {
   product_id: string;
   user_info: UserInfo;
   metadata?: PaymentMetadata;
-  bookings?: Booking[];
+  phone_number: string;
 }
 
+// Metadata structure for payments
 export interface PaymentMetadata {
-  swish_id?: string;
-  swish_status?: SwishStatus;
   idempotency_key?: string;
-  quantity?: number;
+  swish_reference?: string;
   [key: string]: any;
 }
 
+// Booking structure (for response data)
 export interface Booking {
   id: string;
   reference: string;
   status: BookingStatus;
 }
 
-export type PaymentStatus = 
-  | 'CREATED'
-  | 'PENDING'
-  | 'PAID'
-  | 'DECLINED'
-  | 'ERROR'
-  | 'CANCELLED'
-  | 'REFUNDED';
-
-export type SwishStatus =
-  | 'CREATED'
-  | 'PAID'
-  | 'DECLINED'
-  | 'ERROR'
-  | 'CANCELLED';
-
-export type PaymentMethod = 'swish' | 'invoice';
-
+// Booking status values
 export type BookingStatus = 
-  | 'PENDING'
   | 'CONFIRMED'
   | 'CANCELLED'; 
