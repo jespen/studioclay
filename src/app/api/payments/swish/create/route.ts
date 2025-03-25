@@ -3,12 +3,13 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createSwishPayment } from '@/lib/swish';
 import { logDebug, logError } from '@/lib/logging';
 import https from 'https';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import fetch from 'node-fetch';
+import { SwishService } from '@/services/swish/swishService';
+import { SwishPaymentData } from '@/services/swish/types';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -200,29 +201,17 @@ export async function POST(request: Request) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const callbackUrl = baseUrl.replace('http://', 'https://') + '/api/payments/swish/callback';
 
-    // Format phone number for Swish
-    let payerAlias = phone_number.replace(/[^0-9]/g, '');
-    if (payerAlias.startsWith('0')) {
-      payerAlias = '46' + payerAlias.substring(1);
-    }
-
-    // Prepare Swish payment data
-    const paymentData = {
+    // Use SwishService to create payment
+    const swishService = SwishService.getInstance();
+    const result = await swishService.createPayment({
       payeePaymentReference: paymentReference,
       callbackUrl: callbackUrl,
-      payeeAlias: process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true' 
-        ? process.env.SWISH_TEST_PAYEE_ALIAS! 
-        : process.env.SWISH_PROD_PAYEE_ALIAS!,
+      payeeAlias: swishService.getPayeeAlias(),
       amount: amount.toFixed(2),
       currency: "SEK",
       message: `Betalning för ${product_id}`.substring(0, 50), // Max 50 chars
-      payerAlias: payerAlias
-    };
-
-    logDebug('Payment data:', paymentData);
-
-    // Make request to Swish API
-    const result = await makeSwishRequest(paymentData);
+      payerAlias: swishService.formatPhoneNumber(phone_number)
+    });
 
     if (!result.success) {
       // If Swish request fails, update payment status to ERROR
@@ -243,19 +232,6 @@ export async function POST(request: Request) {
         details: result.data
       }, { status: 400 });
     }
-
-    // Update payment with Swish reference but keep status as CREATED
-    // Status will be updated to PAID when we get the callback from Swish
-    const swishId = result.data?.reference;
-    await supabase
-      .from('payments')
-      .update({ 
-        metadata: {
-          ...payment.metadata,
-          swish_id: swishId
-        }
-      })
-      .eq('payment_reference', paymentReference);
 
     return NextResponse.json({
       success: true,
