@@ -249,4 +249,30 @@
   .courseGrid {
     grid-template-columns: 1fr;
   }
+}
+
+.availableSpots {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  z-index: 1;
+}
+
+.availableSpots.low {
+  background-color: rgba(239, 68, 68, 0.8);
+}
+
+.availableSpots.medium {
+  background-color: rgba(234, 179, 8, 0.8);
+}
+
+.availableSpots.high {
+  background-color: var(--primary);
+  opacity: 0.8;
 } 

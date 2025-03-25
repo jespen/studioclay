@@ -24,9 +24,9 @@ const Hero = ({
             </h1>
             <p className={styles.description}>{description}</p>
             <div className={styles.buttonContainer}>
-              <Link href="/book-course" className={styles.primaryButton}>
+              {/* <Link href="/book-course" className={styles.primaryButton}>
                 Boka en kurs
-              </Link>
+              </Link> */}
               <Link href="/contact" className={styles.secondaryButton}>
                 Kontakta mig för skräddarsydda kurser
               </Link>

@@ -276,6 +276,13 @@ const Courses = () => {
     }
   };
 
+  const getSpotsClass = (spots: number | null): string => {
+    if (spots === null) return '';
+    if (spots <= 2) return styles.low;
+    if (spots <= 5) return styles.medium;
+    return styles.high;
+  };
+
   useEffect(() => {
     fetchCourses();
   }, []);
@@ -310,6 +317,11 @@ const Courses = () => {
                       className={`${styles.courseCard} ${course.isFullyBooked ? styles.soldOutCourse : ''}`}
                     >
                       <div className={styles.courseImageContainer} style={{ backgroundImage: `url(${course.imageUrl || '/pictures/gronvas.jpg'})` }}>
+                        {!course.isFullyBooked && course.availableSpots !== null && (
+                          <div className={`${styles.availableSpots} ${getSpotsClass(course.availableSpots)}`}>
+                            {course.availableSpots} plats{course.availableSpots !== 1 ? 'er' : ''} kvar
+                          </div>
+                        )}
                         <div className={styles.courseImageOverlay}>
                           <div className={styles.courseDate}>
                             <div className={styles.weekday}>{course.weekday}</div>
@@ -359,6 +371,11 @@ const Courses = () => {
                       className={`${styles.courseCard} ${course.isFullyBooked ? styles.soldOutCourse : ''}`}
                     >
                       <div className={styles.courseImageContainer} style={{ backgroundImage: `url(${course.imageUrl || '/pictures/gronvas.jpg'})` }}>
+                        {!course.isFullyBooked && course.availableSpots !== null && (
+                          <div className={`${styles.availableSpots} ${getSpotsClass(course.availableSpots)}`}>
+                            {course.availableSpots} plats{course.availableSpots !== 1 ? 'er' : ''} kvar
+                          </div>
+                        )}
                         <div className={styles.courseImageOverlay}>
                           <div className={styles.courseDate}>
                             <div className={styles.weekday}>{course.weekday}</div>
