@@ -1,9 +1,9 @@
-import { SwishRequestData, SwishApiResponse } from './types';
+import { SwishRequestData, SwishApiResponse, SwishValidationError, SwishApiError, SwishCertificateError, SwishError } from './types';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import fetch from 'node-fetch';
-import { logDebug } from '@/lib/logging';
+import { logDebug, logError } from '@/lib/logging';
 
 export class SwishService {
   private static instance: SwishService;
@@ -29,7 +29,38 @@ export class SwishService {
       : process.env.SWISH_PROD_KEY_PATH!;
     this.caPath = isTestMode 
       ? process.env.SWISH_TEST_CA_PATH!
-      : process.env.SWISH_PROD_CA_PATH!;
+      : process.env.SWISH_PROD_CERT_PATH!;
+
+    // Validate environment variables
+    this.validateEnvironment();
+  }
+
+  private validateEnvironment(): void {
+    const requiredVars = [
+      { name: 'payeeAlias', value: this.payeeAlias },
+      { name: 'certPath', value: this.certPath },
+      { name: 'keyPath', value: this.keyPath },
+      { name: 'caPath', value: this.caPath }
+    ];
+
+    for (const { name, value } of requiredVars) {
+      if (!value) {
+        throw new SwishValidationError(`Missing required environment variable for ${name}`);
+      }
+    }
+
+    // Validate certificate files exist
+    const files = [
+      { path: this.certPath, name: 'certificate' },
+      { path: this.keyPath, name: 'private key' },
+      { path: this.caPath, name: 'CA certificate' }
+    ];
+
+    for (const { path: filePath, name } of files) {
+      if (!fs.existsSync(path.resolve(process.cwd(), filePath))) {
+        throw new SwishCertificateError(`Missing ${name} file at ${filePath}`);
+      }
+    }
   }
 
   public static getInstance(): SwishService {
@@ -50,10 +81,22 @@ export class SwishService {
    * Formats a phone number for Swish API
    * Converts Swedish phone numbers to the format required by Swish
    * Example: "0739000001" -> "46739000001"
+   * @throws {SwishValidationError} If the phone number is invalid
    */
   public formatPhoneNumber(phone: string): string {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
-    return cleanPhone.startsWith('0') ? '46' + cleanPhone.substring(1) : cleanPhone;
+    
+    if (!cleanPhone.startsWith('0') && !cleanPhone.startsWith('46')) {
+      throw new SwishValidationError('Invalid phone number format. Must start with 0 or 46');
+    }
+
+    const formatted = cleanPhone.startsWith('0') ? '46' + cleanPhone.substring(1) : cleanPhone;
+
+    if (formatted.length < 11 || formatted.length > 12) {
+      throw new SwishValidationError('Invalid phone number length. Must be 11-12 digits including country code');
+    }
+
+    return formatted;
   }
 
   /**
@@ -94,7 +137,7 @@ export class SwishService {
       if (response.status === 201) {
         const location = response.headers.get('location');
         if (!location) {
-          throw new Error('No Location header in response');
+          throw new SwishApiError('No Location header in response');
         }
         const reference = location.split('/').pop();
         return { success: true, data: { reference } };
@@ -109,23 +152,19 @@ export class SwishService {
         errorData = responseText;
       }
 
-      logDebug('Swish API error response:', {
+      logError('Swish API error response:', {
         status: response.status,
         statusText: response.statusText,
         data: errorData
       });
 
-      return {
-        success: false,
-        error: `Swish API error: ${response.status} ${response.statusText}`,
-        data: errorData
-      };
+      throw new SwishApiError(`Swish API error: ${response.status} ${response.statusText}`, response.status);
     } catch (error) {
-      logDebug('Error in makeSwishRequest:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
+      logError('Error in makeSwishRequest:', error);
+      if (error instanceof SwishError) {
+        throw error;
+      }
+      throw new SwishApiError(error instanceof Error ? error.message : 'Unknown error');
     }
   }
 
@@ -139,13 +178,6 @@ export class SwishService {
       // Make request to Swish API
       const result = await this.makeSwishRequest(data);
 
-      if (!result.success) {
-        return {
-          success: false,
-          error: result.error
-        };
-      }
-
       return {
         success: true,
         data: {
@@ -153,7 +185,7 @@ export class SwishService {
         }
       };
     } catch (error) {
-      logDebug('Error in createPayment:', error);
+      logError('Error in createPayment:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'

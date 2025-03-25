@@ -53,3 +53,35 @@ export type PaymentStatus =
   | 'PAID'      // Payment confirmed by Swish
   | 'ERROR'     // Payment failed
   | 'DECLINED'; // Payment declined by user or Swish 
+
+// Custom error types for better error handling
+export class SwishError extends Error {
+  constructor(message: string, public code?: string) {
+    super(message);
+    this.name = 'SwishError';
+  }
+}
+
+export class SwishValidationError extends SwishError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SwishValidationError';
+    this.code = 'VALIDATION_ERROR';
+  }
+}
+
+export class SwishApiError extends SwishError {
+  constructor(message: string, public statusCode?: number) {
+    super(message);
+    this.name = 'SwishApiError';
+    this.code = 'API_ERROR';
+  }
+}
+
+export class SwishCertificateError extends SwishError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SwishCertificateError';
+    this.code = 'CERTIFICATE_ERROR';
+  }
+} 
