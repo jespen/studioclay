@@ -408,7 +408,37 @@ const POLLING_INTERVAL = 2000;     // 2 seconds
 const MAX_POLLING_ATTEMPTS = 30;   // Total timeout: 60 seconds
 ```
 
-2. **Swish Payment Creator** (`src/app/api/payments/swish/create/route.ts`):
+2. **Swish Service** (`src/services/swish/swishService.ts`):
+```typescript
+// ✅ Working Swish service implementation
+class SwishService {
+  private static instance: SwishService;
+  private readonly payeeAlias: string;
+  private readonly baseUrl: string;
+  private readonly certPath: string;
+  private readonly keyPath: string;
+  private readonly caPath: string;
+
+  // Singleton pattern for consistent configuration
+  public static getInstance(): SwishService {
+    if (!SwishService.instance) {
+      SwishService.instance = new SwishService();
+    }
+    return SwishService.instance;
+  }
+
+  // Handles phone number formatting and API requests
+  public formatPhoneNumber(phone: string): string {
+    // Converts "0739000001" to "46739000001"
+  }
+
+  public async createPayment(data: SwishPaymentData): Promise<SwishPaymentResponse> {
+    // Handles Swish API communication
+  }
+}
+```
+
+3. **Swish Payment Creator** (`src/app/api/payments/swish/create/route.ts`):
 ```typescript
 // ✅ Working Swish API configuration
 const baseUrl = isTestMode 
@@ -430,7 +460,7 @@ const paymentData = {
 };
 ```
 
-3. **Status Checker** (`src/app/api/payments/status/[reference]/route.ts`):
+4. **Status Checker** (`src/app/api/payments/status/[reference]/route.ts`):
 ```typescript
 // ✅ Working status check implementation
 export async function GET(
@@ -459,7 +489,7 @@ export async function GET(
 }
 ```
 
-4. **Callback Handler** (`src/app/api/payments/swish/callback/route.ts`):
+5. **Callback Handler** (`src/app/api/payments/swish/callback/route.ts`):
 ```typescript
 // ✅ Working callback data format from Swish
 interface SwishCallbackData {
@@ -492,10 +522,20 @@ interface SwishCallbackData {
     /components
       /booking
         PaymentSelection.tsx ✅ Working
-    /config
-      swish.ts             ❌ Not used (can be removed)
+    /services
+      /swish
+        swishService.ts      ✅ New: Handles all Swish-specific logic
+        types.ts            ✅ New: Contains Swish-related types
     /utils
-      swish.ts            ❌ Not used (can be removed)
+      /admin/              ✅ Working
+      apiUtils.ts          ✅ Working
+      booking.ts           ✅ Working
+      confirmationEmail.ts ✅ Working
+      invoiceEmail.ts      ✅ Working
+      invoicePDF.ts        ✅ Working
+      security.ts          ✅ Working
+      serverEmail.ts       ✅ Working
+      supabase.ts          ✅ Working
   /certs
     /swish
       /test               ✅ Required for test environment
@@ -507,6 +547,24 @@ interface SwishCallbackData {
         [KEY].key
         [CA].pem
 ```
+
+### 🔄 Recent Changes
+1. **New Service Layer**:
+   - Added `SwishService` class for centralized Swish handling
+   - Moved phone number formatting and API communication to service
+   - Implemented singleton pattern for consistent configuration
+
+2. **Removed Files**:
+   - Removed `src/utils/payments.ts` (functionality moved to `SwishService`)
+   - Removed `src/lib/swish.ts` (functionality moved to `SwishService`)
+   - Removed empty `src/lib/swish` directory
+   - Removed unused Swish configuration files
+
+3. **Code Organization**:
+   - Better separation of concerns
+   - Improved type safety with dedicated types file
+   - More maintainable and testable code structure
+   - All Swish-related code now centralized in `services/swish`
 
 ### 🔐 Required Environment Variables
 ```bash
