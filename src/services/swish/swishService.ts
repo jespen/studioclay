@@ -1,4 +1,5 @@
 import { SwishRequestData, SwishApiResponse, SwishValidationError, SwishApiError, SwishCertificateError, SwishError } from './types';
+import { SwishConfig } from './config';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
@@ -7,53 +8,19 @@ import { logDebug, logError } from '@/lib/logging';
 
 export class SwishService {
   private static instance: SwishService;
-  private readonly baseUrl: string;
-  private readonly payeeAlias: string;
-  private readonly certPath: string;
-  private readonly keyPath: string;
-  private readonly caPath: string;
+  private readonly config: SwishConfig;
 
   private constructor() {
-    const isTestMode = process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true';
-    this.baseUrl = isTestMode 
-      ? 'https://mss.cpc.getswish.net'
-      : 'https://cpc.getswish.net';
-    this.payeeAlias = isTestMode 
-      ? process.env.SWISH_TEST_PAYEE_ALIAS!
-      : process.env.SWISH_PROD_PAYEE_ALIAS!;
-    this.certPath = isTestMode 
-      ? process.env.SWISH_TEST_CERT_PATH!
-      : process.env.SWISH_PROD_CERT_PATH!;
-    this.keyPath = isTestMode 
-      ? process.env.SWISH_TEST_KEY_PATH!
-      : process.env.SWISH_PROD_KEY_PATH!;
-    this.caPath = isTestMode 
-      ? process.env.SWISH_TEST_CA_PATH!
-      : process.env.SWISH_PROD_CERT_PATH!;
-
-    // Validate environment variables
+    this.config = SwishConfig.getInstance();
     this.validateEnvironment();
   }
 
   private validateEnvironment(): void {
-    const requiredVars = [
-      { name: 'payeeAlias', value: this.payeeAlias },
-      { name: 'certPath', value: this.certPath },
-      { name: 'keyPath', value: this.keyPath },
-      { name: 'caPath', value: this.caPath }
-    ];
-
-    for (const { name, value } of requiredVars) {
-      if (!value) {
-        throw new SwishValidationError(`Missing required environment variable for ${name}`);
-      }
-    }
-
     // Validate certificate files exist
     const files = [
-      { path: this.certPath, name: 'certificate' },
-      { path: this.keyPath, name: 'private key' },
-      { path: this.caPath, name: 'CA certificate' }
+      { path: this.config.certPath, name: 'certificate' },
+      { path: this.config.keyPath, name: 'private key' },
+      { path: this.config.caPath, name: 'CA certificate' }
     ];
 
     for (const { path: filePath, name } of files) {
@@ -74,7 +41,7 @@ export class SwishService {
    * Gets the current payee alias (Swish number)
    */
   public getPayeeAlias(): string {
-    return this.payeeAlias;
+    return this.config.payeeAlias;
   }
 
   /**
@@ -104,21 +71,20 @@ export class SwishService {
    */
   private async makeSwishRequest(data: any): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-      const endpoint = '/swish-cpcapi/api/v1/paymentrequests';
-      const url = `${this.baseUrl}${endpoint}`;
+      const url = this.config.getEndpointUrl('createPayment');
 
       // Log certificate paths and check if they exist
       logDebug('Certificate paths:', {
-        certPath: path.resolve(process.cwd(), this.certPath),
-        keyPath: path.resolve(process.cwd(), this.keyPath),
-        caPath: path.resolve(process.cwd(), this.caPath)
+        certPath: path.resolve(process.cwd(), this.config.certPath),
+        keyPath: path.resolve(process.cwd(), this.config.keyPath),
+        caPath: path.resolve(process.cwd(), this.config.caPath)
       });
 
       // Create HTTPS agent with certificates
       const agent = new https.Agent({
-        cert: fs.readFileSync(path.resolve(process.cwd(), this.certPath)),
-        key: fs.readFileSync(path.resolve(process.cwd(), this.keyPath)),
-        ca: fs.readFileSync(path.resolve(process.cwd(), this.caPath)),
+        cert: fs.readFileSync(path.resolve(process.cwd(), this.config.certPath)),
+        key: fs.readFileSync(path.resolve(process.cwd(), this.config.keyPath)),
+        ca: fs.readFileSync(path.resolve(process.cwd(), this.config.caPath)),
         minVersion: 'TLSv1.2'
       });
 
