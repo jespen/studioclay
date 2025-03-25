@@ -21,23 +21,19 @@ const publicPaths = [
   '/api/auth/set-auth-cookie',
   '/api/auth/supabase-auth-test',
   '/api/auth/local-login',
-  '/api/payments/swish/create',  // Add Swish payment endpoint
-  '/api/payments/swish/callback',  // Add Swish callback endpoint
-  '/api/payments/swish/test',  // Add Swish test endpoint
-  '/api/payments/swish/test-payment'  // Add Swish test payment endpoint
+  '/api/payments/swish/create',    // Verified Swish endpoint
+  '/api/payments/swish/callback',  // Verified Swish callback endpoint
 ];
 
 // Endpoints som kräver rate limiting
 const RATE_LIMITED_ENDPOINTS = [
-  '/api/payments/create',
-  '/api/payments/swish/create',
-  '/api/payments/status',
+  '/api/payments/swish/create',    // Only rate limit Swish create endpoint
+  '/api/payments/status',          // Rate limit status checks
 ];
 
 // Endpoints som kräver idempotency key
 const IDEMPOTENCY_REQUIRED_ENDPOINTS = [
-  '/api/payments/create',
-  '/api/payments/swish/create',
+  '/api/payments/swish/create',    // Only require idempotency for Swish create
 ];
 
 export async function middleware(request: NextRequest) {
@@ -86,8 +82,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/admin/') ||
     pathname.startsWith('/api/checkout/') ||
     pathname.startsWith('/api/auth/') ||
-    pathname.startsWith('/api/payments/status/') ||  // Add status endpoint with dynamic parameters
-    pathname.startsWith('/api/payments/swish/callback/')  // Add callback endpoint with dynamic parameters
+    pathname.startsWith('/api/payments/status/') ||       // Allow dynamic status checks
+    pathname.startsWith('/api/payments/swish/callback/')  // Allow Swish callbacks
   );
 
   // Skip auth check for public paths
