@@ -106,20 +106,19 @@ CREATE TABLE payments (
   amount INTEGER NOT NULL,
   currency TEXT NOT NULL DEFAULT 'SEK',
   payment_reference TEXT NOT NULL,
-  product_type TEXT NOT NULL,
+  product_type TEXT NOT NULL CHECK (product_type IN ('course', 'gift_card', 'shop_item')),
   product_id UUID NOT NULL,
   user_info JSONB NOT NULL,
   metadata JSONB,
+  booking_id UUID REFERENCES bookings(id),
   phone_number TEXT NOT NULL
 );
 
--- Valid payment statuses
-CREATE TYPE payment_status AS ENUM (
-  'CREATED',   -- Initial state
-  'PAID',      -- Payment confirmed
-  'ERROR',     -- Technical error
-  'DECLINED'   -- Payment declined
-);
+-- Valid Payment Status Values (matching Swish API)
+-- 'CREATED'   - Initial state when payment is created
+-- 'PAID'      - Payment confirmed by Swish
+-- 'ERROR'     - Payment failed (technical error)
+-- 'DECLINED'  - Payment declined by user or Swish
 ```
 
 ### Security Implementation
@@ -228,30 +227,11 @@ CREATE TABLE payments (
     phone_number TEXT NOT NULL -- Required for Swish payments
 );
 
--- Payment Status History (for audit)
-CREATE TABLE payment_status_history (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    payment_id UUID NOT NULL REFERENCES payments(id),
-    status TEXT NOT NULL,
-    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    metadata JSONB
-);
-
--- Valid Status Values
-CREATE TABLE status (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE
-);
-
-INSERT INTO status (name) VALUES
-    ('CREATED'),   -- Initial payment record created
-    ('PENDING'),   -- Payment initiated with provider
-    ('PAID'),      -- Payment confirmed
-    ('DECLINED'),  -- Payment declined by provider/user
-    ('ERROR'),     -- Technical error occurred
-    ('CANCELLED'), -- Payment cancelled
-    ('REFUNDED')   -- Payment refunded
-ON CONFLICT (name) DO NOTHING;
+-- Valid Payment Status Values (matching Swish API)
+-- 'CREATED'   - Initial state when payment is created
+-- 'PAID'      - Payment confirmed by Swish
+-- 'ERROR'     - Payment failed (technical error)
+-- 'DECLINED'  - Payment declined by user or Swish
 ```
 
 ## Payment Flow
@@ -270,53 +250,26 @@ interface SwishPaymentRequest {
   product_id: string;
   amount: number;
   quantity: number;
-  user_info?: {  // Optional user info for reference
+  user_info: {  // Required user info
     firstName: string;
     lastName: string;
     email: string;
     phone: string;
+    numberOfParticipants: string;
   };
 }
 ```
-
-For other payment methods (`/api/payments/create`):
-```typescript
-interface PaymentCreateRequest {
-  user_info: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone: string;
-  };
-  product_type: "course" | "gift_card" | "shop_item";
-  product_id: string;
-  amount: number;
-  quantity: number;
-  payment_method: "invoice";
-}
-```
-- Backend checks for existing payment with same idempotency key
-- If found, returns existing payment details
-- If not found, creates new payment record with status "CREATED"
-- Returns payment reference and next steps
 
 ### 2. Payment Method Specific Flow
 
 #### Swish Flow
 1. Backend calls Swish API with payment details
-2. Payment status set to "PENDING"
+2. Payment status set to "CREATED"
 3. Frontend shows Swish payment dialog
 4. User completes payment in Swish app
 5. Swish calls our callback endpoint
 6. Backend verifies payment with Swish
 7. Payment status updated to "PAID" or "DECLINED"
-
-#### Invoice Flow
-1. Backend generates invoice
-2. Payment status set to "PENDING"
-3. Invoice sent to user's email
-4. Admin manually confirms payment
-5. Payment status updated to "PAID"
 
 ### 3. Post-Payment Actions
 When payment status becomes "PAID":
@@ -332,40 +285,28 @@ When payment status becomes "PAID":
 
 ### Payment Creation and Management
 ```typescript
-// Create new payment
-POST /api/payments/create
-Body: PaymentCreateRequest
-Returns: { success: boolean, paymentId: string, nextAction: PaymentAction }
-
-// Get available payment methods
-GET /api/payments/methods
-Returns: PaymentMethod[]
-
-// Get payment status
-GET /api/payments/status/[reference]
-Returns: { status: PaymentStatus, details: PaymentDetails }
-
-// Process refund
-POST /api/payments/refund
-Body: { paymentId: string, amount: number, reason: string }
-Returns: { success: boolean, refundId: string }
-```
-
-### Payment Provider Specific
-```typescript
-// Swish payment creation
+// Create new Swish payment
 POST /api/payments/swish/create
 Body: SwishPaymentRequest
 Returns: { success: boolean, paymentReference: string }
 
-// Payment provider callbacks
-POST /api/payments/callback
-Body: Provider specific
-Returns: { success: boolean }
+// Get payment status
+GET /api/payments/status/[reference]
+Returns: { 
+  success: boolean, 
+  data: {
+    payment: {
+      reference: string,
+      status: "CREATED" | "PAID" | "ERROR" | "DECLINED",
+      amount: number
+    },
+    booking: BookingData | null
+  }
+}
 
-// Generic webhook handler
-POST /api/payments/webhook
-Body: Provider specific
+// Payment provider callbacks
+POST /api/payments/swish/callback
+Body: SwishCallbackData
 Returns: { success: boolean }
 ```
 
@@ -373,7 +314,7 @@ Returns: { success: boolean }
 
 ### Payment Errors
 - Technical errors: Status set to "ERROR"
-- User cancellation: Status set to "CANCELLED"
+- User cancellation: Status set to "DECLINED"
 - Provider decline: Status set to "DECLINED"
 
 ### Recovery Procedures
@@ -382,7 +323,7 @@ Returns: { success: boolean }
    - Original response returned if payment exists
 2. For user cancellation:
    - New idempotency key required for new attempt
-   - Original payment marked as cancelled
+   - Original payment marked as declined
 3. For declined payments:
    - New idempotency key required for new attempt
    - Original payment marked as declined
@@ -417,9 +358,9 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ### Test Environment
 - All development uses Swish MSS (Merchant Swish Simulator)
 - Test phone numbers:
-  - `46739000001`: Successful payment
-  - `46739000002`: Declined payment
-  - `46739000003`: Technical error
+  - `0739000001`: Successful payment (status: PAID)
+  - `0739000002`: Declined payment (status: DECLINED)
+  - `0739000003`: Technical error (status: ERROR)
 
 ### Test Scenarios
 1. Happy path: Complete payment flow
@@ -427,7 +368,6 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 3. Error handling: Technical errors
 4. Timeout: Payment timeout handling
 5. Duplicate requests: Idempotency handling (using same key)
-6. Refund flow: Complete refund process
 
 NEXT_PUBLIC_SWISH_TEST_MODE=true
 SWISH_TEST_API_URL=https://mss.cpc.getswish.net/swish-cpcapi/api/v2
@@ -601,9 +541,9 @@ CREATE TABLE payments (
 -- ✅ VERIFIED WORKING STATUS VALUES
 -- Only these statuses are currently used and working:
 -- 'CREATED'  - Initial state when payment is created
--- 'PAID'     - Payment confirmed by Swish
--- 'ERROR'    - Payment failed
--- 'DECLINED' - Payment declined by user or Swish
+-- 'PAID'     - Payment confirmed
+-- 'ERROR'    - Technical error
+-- 'DECLINED' - Payment declined
 ```
 
 ### 🔄 Working Payment Flow
