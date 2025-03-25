@@ -6,18 +6,15 @@ import { checkRateLimit } from './utils/security';
 // Define public paths that don't require authentication
 const publicPaths = [
   '/',
-  '/admin',
+  '/admin',  // Login page
   '/login',
   '/register',
   '/courses',
   '/courses/public',
-  '/course/',  // Only the base of course detail pages
+  '/course/',  // Course detail pages
   '/checkout',
-  '/api/courses',  // Add the base courses API endpoint
   '/api/courses/public',
   '/api/checkout',
-  '/api/webhooks',
-  '/api/admin',
   '/api/auth/set-auth-cookie',
   '/api/auth/supabase-auth-test',
   '/api/auth/local-login',
@@ -78,8 +75,6 @@ export async function middleware(request: NextRequest) {
     pathname === path || 
     pathname.startsWith('/api/courses/public') || 
     pathname.startsWith('/course/') ||
-    pathname.startsWith('/api/webhooks/') ||
-    pathname.startsWith('/api/admin/') ||
     pathname.startsWith('/api/checkout/') ||
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/api/payments/status/') ||       // Allow dynamic status checks
@@ -179,7 +174,6 @@ async function isUserAuthenticated(request: NextRequest, supabase: any): Promise
   const hasActiveSessionCookie = request.cookies.has('admin-session-active');
 
   if (hasSessionCookie && hasActiveSessionCookie) {
-    // In a production app, you would verify these token are valid, not just present
     return true;
   }
   
@@ -189,10 +183,14 @@ async function isUserAuthenticated(request: NextRequest, supabase: any): Promise
 // Configure the middleware to run on specific paths
 export const config = {
   matcher: [
+    // Admin routes
     '/admin/:path*',
     '/api/admin/:path*',
-    '/api/courses/admin/:path*',  // Only protect admin course routes
+    '/api/courses/admin/:path*',
+    
+    // Protected API routes (excluding public payment endpoints)
     '/api/bookings/:path*',
-    '/api/payments/:path*'
+    '/api/payments/refund/:path*',     // Protected payment endpoints
+    '/api/payments/admin/:path*',      // Protected admin payment endpoints
   ]
 }; 
