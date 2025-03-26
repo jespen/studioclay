@@ -38,9 +38,6 @@ import CreditCardIcon from '@mui/icons-material/CreditCard';
 import HomeIcon from '@mui/icons-material/Home';
 import LocationCityIcon from '@mui/icons-material/LocationCity';
 import MarkunreadMailboxIcon from '@mui/icons-material/MarkunreadMailbox';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CancelIcon from '@mui/icons-material/Cancel';
-import ErrorIcon from '@mui/icons-material/Error';
 
 import { GenericStep, FlowType } from '../common/BookingStepper';
 import GenericFlowContainer from '../common/GenericFlowContainer';
@@ -48,11 +45,7 @@ import StyledButton from '../common/StyledButton';
 import { FormCheckboxField, FormTextField } from '../common/FormField';
 import { sendBookingConfirmationEmail } from '@/utils/confirmationEmail';
 import { v4 as uuidv4 } from 'uuid';
-import { PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
 import SwishPaymentSection, { SwishPaymentSectionRef } from './SwishPaymentSection';
-import { useSwishPaymentStatus } from '@/hooks/useSwishPaymentStatus';
-import { SwishPaymentService } from '@/services/swish/swishPaymentService';
-import SwishPaymentForm from './SwishPaymentForm';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -76,12 +69,7 @@ interface InvoiceDetails {
 
 interface PaymentDetails {
   method: string;
-  swishPhone?: string;
   invoiceDetails?: InvoiceDetails;
-  paymentReference?: string;
-  paymentStatus?: PaymentStatus;
-  bookingReference?: string;
-  emailSent?: boolean;
 }
 
 interface FormErrors {
@@ -89,7 +77,6 @@ interface FormErrors {
   'invoiceDetails.address'?: string;
   'invoiceDetails.postalCode'?: string;
   'invoiceDetails.city'?: string;
-  swishPhone?: string;
 }
 
 const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
@@ -110,14 +97,10 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
       postalCode: '',
       city: '',
       reference: '',
-    },
-    swishPhone: ''
+    }
   });
   
   const [formErrors, setFormErrors] = useState<FormErrors>({});
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-  const [paymentReference, setPaymentReference] = useState<string>('');
   const swishPaymentRef = useRef<SwishPaymentSectionRef>(null);
 
   useEffect(() => {
@@ -126,12 +109,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     const storedCourseDetail = localStorage.getItem('courseDetail');
     
     if (storedUserInfo) {
-      const userInfoData = JSON.parse(storedUserInfo);
-      setUserInfo(userInfoData);
-      setPaymentDetails(prev => ({
-        ...prev,
-        swishPhone: userInfoData.phone || ''
-      }));
+      setUserInfo(JSON.parse(storedUserInfo));
     }
     
     if (storedCourseDetail) {
@@ -143,15 +121,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     const { name, value } = e.target;
     setPaymentDetails(prev => ({ ...prev, [name]: value }));
     // Clear error when user selects
-    if (formErrors[name as keyof FormErrors]) {
-      setFormErrors(prev => ({ ...prev, [name]: undefined }));
-    }
-  };
-
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    setPaymentDetails(prev => ({ ...prev, [name]: checked }));
-    // Clear error when user checks
     if (formErrors[name as keyof FormErrors]) {
       setFormErrors(prev => ({ ...prev, [name]: undefined }));
     }
@@ -174,19 +143,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     }
   };
 
-  const handleSwishPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { value } = e.target;
-    setPaymentDetails(prev => ({
-      ...prev,
-      swishPhone: value
-    }));
-    
-    // Clear any swish phone error
-    if (formErrors.swishPhone) {
-      setFormErrors(prev => ({ ...prev, swishPhone: undefined }));
-    }
-  };
-
   const validateForm = (): boolean => {
     console.log('validateForm called, payment method:', paymentDetails.method);
     const errors: FormErrors = {};
@@ -196,25 +152,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     if (!paymentDetails.method) {
       errors.method = 'Välj en betalningsmetod';
       isValid = false;
-    }
-
-    // Validate Swish phone number if Swish is selected
-    if (paymentDetails.method === 'swish') {
-      console.log('Validating Swish phone:', paymentDetails.swishPhone);
-      if (!paymentDetails.swishPhone) {
-        errors.swishPhone = 'Telefonnummer är obligatoriskt för Swish-betalning';
-        isValid = false;
-      } else {
-        // Clean the phone number first (remove spaces and dashes)
-        const cleanPhone = paymentDetails.swishPhone.replace(/[- ]/g, '');
-        console.log('Cleaned phone number:', cleanPhone);
-        // Check for valid Swedish phone format (9 or 10 digits starting with 0)
-        if (!/^0\d{8,9}$/.test(cleanPhone)) {
-          console.log('Phone validation failed: does not match regex pattern');
-          errors.swishPhone = 'Ange ett giltigt svenskt mobilnummer (9-10 siffror som börjar med 0)';
-          isValid = false;
-        }
-      }
     }
 
     // Validate invoice details if invoice is selected
@@ -238,68 +175,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     console.log('Form validation result:', isValid, 'errors:', errors);
     setFormErrors(errors);
     return isValid;
-  };
-
-  // Format phone number for Swish API
-  const formatSwishPhone = (phone: string): string => {
-    // Remove any spaces, dashes or other characters
-    const cleanPhone = phone.replace(/[- ]/g, '');
-    // Remove leading 0 and add 46 prefix
-    return '46' + cleanPhone.substring(1);
-  };
-
-  // Create a Swish payment request
-  const createSwishPayment = async (): Promise<{success: boolean, reference: string | null}> => {
-    try {
-      const formattedPhone = formatSwishPhone(paymentDetails.swishPhone || '');
-      console.log('Creating Swish payment with formatted phone number:', formattedPhone);
-      
-      // Generera en unik idempotency key
-      const idempotencyKey = uuidv4();
-      
-      const response = await fetch('/api/payments/swish/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': idempotencyKey
-        },
-        body: JSON.stringify({
-          phone_number: formattedPhone,
-          payment_method: 'swish',
-          product_type: 'course',
-          product_id: courseDetail.id,
-          amount: calculatePrice(),
-          quantity: parseInt(userInfo?.numberOfParticipants || '1'),
-          user_info: userInfo // Optional user info for reference
-        }),
-      });
-
-      const result = await response.json();
-      console.log('Payment API response:', result);
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create payment');
-      }
-
-      // Extract reference from the nested data structure
-      const reference = result.data?.reference;
-      
-      if (!reference) {
-        throw new Error('No payment reference received');
-      }
-
-      // Set payment reference in component state
-      setPaymentReference(reference);
-      
-      // Store in localStorage for persistence
-      localStorage.setItem('currentPaymentReference', reference);
-      localStorage.setItem('currentPaymentIdempotencyKey', idempotencyKey);
-      
-      return { success: true, reference };
-    } catch (error) {
-      console.error('Error in payment creation:', error);
-      return { success: false, reference: null };
-    }
   };
 
   // Create an invoice payment request
@@ -366,150 +241,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     } catch (error) {
       console.error('Error in invoice creation:', error);
       return { success: false, reference: null };
-    }
-  };
-
-  // Check payment status
-  const checkPaymentStatus = async (directReference?: string): Promise<PaymentStatus> => {
-    // Use direct reference if provided, otherwise try state or localStorage
-    const reference = directReference || paymentReference || localStorage.getItem('currentPaymentReference');
-    console.log('checkPaymentStatus called with reference:', reference);
-    
-    if (!reference || reference === 'undefined' || reference === 'null') {
-      console.error('No valid payment reference available to check status');
-      return PAYMENT_STATUS.ERROR;
-    }
-    
-    try {
-      // Call our status API
-      console.log(`Checking status for payment: ${reference}`);
-      const response = await fetch(`/api/payments/status/${reference}`);
-      const data = await response.json();
-      
-      console.log('Status check response:', data);
-      
-      if (!data.success) {
-        console.error('Status API reported error:', data);
-        return PAYMENT_STATUS.ERROR;
-      }
-      
-      // Check if booking was created and store reference
-      if (data.data?.booking?.reference) {
-        console.log('Booking reference received:', data.data.booking.reference);
-        localStorage.setItem('bookingReference', data.data.booking.reference);
-      }
-      
-      // Map status string to enum
-      const status = data.data?.payment?.status as string;
-      console.log(`Payment status: ${status}`);
-      
-      if (!status) {
-        console.error('No payment status found in response');
-        return PAYMENT_STATUS.ERROR;
-      }
-      
-      // Map the status from the API to our enum
-      switch (status.toUpperCase()) {
-        case 'PAID':
-          return PAYMENT_STATUS.PAID;
-        case 'DECLINED':
-          return PAYMENT_STATUS.DECLINED;
-        case 'ERROR':
-          return PAYMENT_STATUS.ERROR;
-        case 'CREATED':
-          return PAYMENT_STATUS.CREATED;
-        default:
-          return PAYMENT_STATUS.CREATED;
-      }
-    } catch (error) {
-      console.error('Error checking payment status:', error);
-      return PAYMENT_STATUS.ERROR;
-    }
-  };
-
-  // Start polling payment status
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-    let attempts = 0;
-    const maxAttempts = 30; // Check for up to 1 minute (30 * 2 sec)
-    let redirectTimeout: NodeJS.Timeout;
-
-    const pollStatus = async () => {
-      if (!showPaymentDialog) return;
-      
-      if (attempts >= maxAttempts) {
-        console.log('Status check timed out after max attempts');
-        setPaymentStatus(PAYMENT_STATUS.ERROR);
-        clearInterval(intervalId);
-        return;
-      }
-
-      const currentReference = paymentReference || localStorage.getItem('currentPaymentReference');
-      if (!currentReference || currentReference === 'undefined' || currentReference === 'null') {
-        console.log('No valid reference available for polling');
-        setPaymentStatus(PAYMENT_STATUS.ERROR);
-        clearInterval(intervalId);
-        return;
-      }
-
-      attempts++;
-      console.log(`Payment status check attempt ${attempts}/${maxAttempts} for reference: ${currentReference}`);
-      
-      try {
-        const status = await checkPaymentStatus(currentReference);
-        console.log('Poll received status:', status);
-        
-        // Only update status if it's different from current status
-        if (status !== paymentStatus) {
-          console.log('Updating payment status from', paymentStatus, 'to', status);
-          setPaymentStatus(status);
-        }
-        
-        if (status === PAYMENT_STATUS.PAID) {
-          console.log('Payment is PAID, clearing interval and preparing redirect');
-          clearInterval(intervalId);
-          
-          // Set up redirect after showing success message
-          redirectTimeout = setTimeout(() => {
-            console.log('Redirecting to confirmation page');
-            router.push(`/book-course/${courseId}/confirmation`);
-          }, 1500);
-        } else if (status === PAYMENT_STATUS.DECLINED || status === PAYMENT_STATUS.ERROR) {
-          console.log('Payment failed or declined, clearing interval');
-          clearInterval(intervalId);
-        }
-      } catch (error) {
-        console.error('Error in pollStatus:', error);
-      }
-    };
-
-    // Only start polling if we have a payment reference and dialog is shown
-    if (showPaymentDialog && (paymentReference || localStorage.getItem('currentPaymentReference'))) {
-      console.log('Starting payment status polling');
-      pollStatus(); // Check immediately
-      intervalId = setInterval(pollStatus, 2000); // Then every 2 seconds
-    }
-
-    // Cleanup function
-    return () => {
-      console.log('Cleaning up payment polling');
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-      if (redirectTimeout) {
-        clearTimeout(redirectTimeout);
-      }
-    };
-  }, [showPaymentDialog, paymentReference, paymentStatus, courseId, router]);
-
-  // Handle closing the payment dialog
-  const handleClosePaymentDialog = () => {
-    // Only allow closing if there's an error or payment is declined
-    if (paymentStatus === PAYMENT_STATUS.ERROR || paymentStatus === PAYMENT_STATUS.DECLINED) {
-      setShowPaymentDialog(false);
-      setPaymentStatus(null);
-      // Clean up the stored reference
-      localStorage.removeItem('currentPaymentReference');
     }
   };
 
