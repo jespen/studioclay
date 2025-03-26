@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { 
@@ -49,9 +49,10 @@ import { FormCheckboxField, FormTextField } from '../common/FormField';
 import { sendBookingConfirmationEmail } from '@/utils/confirmationEmail';
 import { v4 as uuidv4 } from 'uuid';
 import { PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
-import SwishPaymentDialog from './SwishPaymentDialog';
+import SwishPaymentSection, { SwishPaymentSectionRef } from './SwishPaymentSection';
 import { useSwishPaymentStatus } from '@/hooks/useSwishPaymentStatus';
 import { SwishPaymentService } from '@/services/swish/swishPaymentService';
+import SwishPaymentForm from './SwishPaymentForm';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -117,6 +118,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [paymentReference, setPaymentReference] = useState<string>('');
+  const swishPaymentRef = useRef<SwishPaymentSectionRef>(null);
 
   useEffect(() => {
     // Get the user info from localStorage
@@ -529,31 +531,14 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     try {
       if (paymentDetails.method === 'swish') {
         console.log('Processing Swish payment');
-        const swishService = SwishPaymentService.getInstance();
-        const paymentResult = await swishService.createSwishPayment(
-          paymentDetails.swishPhone || '',
-          courseId,
-          calculatePrice(),
-          parseInt(userInfo?.numberOfParticipants || '1'),
-          userInfo || {
-            firstName: '',
-            lastName: '',
-            email: '',
-            phone: '',
-            numberOfParticipants: '1'
+        if (swishPaymentRef.current) {
+          const success = await swishPaymentRef.current.handleCreatePayment();
+          if (!success) {
+            throw new Error('Payment creation failed');
           }
-        );
-        
-        console.log('Payment creation result:', paymentResult);
-        
-        if (!paymentResult.success || !paymentResult.reference) {
-          throw new Error('Payment creation failed');
+        } else {
+          throw new Error('Swish payment section not initialized');
         }
-        
-        setPaymentReference(paymentResult.reference);
-        setPaymentStatus(PAYMENT_STATUS.CREATED);
-        setShowPaymentDialog(true);
-        
       } else {
         console.log('Processing invoice payment');
         const paymentResult = await createInvoicePayment();
@@ -653,43 +638,24 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
                           } 
                           label={
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <Box sx={{ mr: 2, height: 30, width: 100, position: 'relative' }}>
-                                <Image
-                                  src={swishLogoSrc}
-                                  alt="Swish"
-                                  fill
-                                  style={{ objectFit: 'contain' }}
-                                />
-                              </Box>
                               <Typography>Betala med Swish</Typography>
                             </Box>
                           } 
                           sx={{ width: '100%' }}
                         />
                         {paymentDetails.method === 'swish' && userInfo && (
-                          <Box sx={{ ml: 4, mt: 2 }}>
-                            <Typography variant="body2" sx={{ mb: 1 }}>
-                              Vi kommer skicka en betalningsförfrågan till följande telefonnummer:
-                            </Typography>
-                            <FormTextField
-                              name="swishPhone"
-                              label="Telefonnummer för Swish"
-                              fullWidth
-                              value={paymentDetails.swishPhone}
-                              onChange={handleSwishPhoneChange}
-                              error={formErrors.swishPhone}
-                              helperText={formErrors.swishPhone || "T.ex. 0701234567 eller 070123456"}
-                              InputProps={{
-                                startAdornment: (
-                                  <PhoneIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                                ),
-                              }}
-                              sx={{ maxWidth: '300px' }}
-                            />
-                            <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
-                              Betalning sker efter att bokningen har bekräftats.
-                            </Typography>
-                          </Box>
+                          <SwishPaymentSection
+                            ref={swishPaymentRef}
+                            userInfo={userInfo}
+                            courseId={courseId}
+                            amount={calculatePrice()}
+                            onPaymentComplete={(success) => {
+                              if (success) {
+                                router.push(`/book-course/${courseId}/confirmation`);
+                              }
+                            }}
+                            disabled={isSubmitting}
+                          />
                         )}
                       </CardContent>
                     </Card>
@@ -945,12 +911,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
           </Box>
         </Paper>
       </GenericFlowContainer>
-
-      <SwishPaymentDialog
-        open={showPaymentDialog}
-        onClose={handleClosePaymentDialog}
-        paymentStatus={paymentStatus}
-      />
     </>
   );
 };
