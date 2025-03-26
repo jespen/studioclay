@@ -1,16 +1,14 @@
-import React, { useState, forwardRef, useImperativeHandle } from 'react';
-import { Box, Grid, TextField, Typography } from '@mui/material';
+import React, { forwardRef, useImperativeHandle, useState } from 'react';
+import { Box, TextField, Typography, Grid } from '@mui/material';
 import { InvoicePaymentService } from '@/services/invoice/invoicePaymentService';
-import { PaymentStatus } from '@/services/swish/types';
+import InvoicePaymentDialog from './InvoicePaymentDialog';
 import HomeIcon from '@mui/icons-material/Home';
 import LocationCityIcon from '@mui/icons-material/LocationCity';
 import MarkunreadMailboxIcon from '@mui/icons-material/MarkunreadMailbox';
+import DescriptionIcon from '@mui/icons-material/Description';
 
 export interface InvoicePaymentSectionRef {
   handleCreatePayment: () => Promise<boolean>;
-  address: string;
-  postalCode: string;
-  city: string;
 }
 
 interface InvoicePaymentSectionProps {
@@ -30,14 +28,8 @@ interface InvoicePaymentSectionProps {
     address?: string;
     postalCode?: string;
     city?: string;
+    reference?: string;
   };
-}
-
-interface InvoiceDetails {
-  address: string;
-  postalCode: string;
-  city: string;
-  reference?: string;
 }
 
 const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymentSectionProps>(({
@@ -49,105 +41,67 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
   disabled = false,
   errors = {},
 }, ref) => {
-  const [invoiceDetails, setInvoiceDetails] = useState<InvoiceDetails>({
-    address: '',
-    postalCode: '',
-    city: '',
-    reference: ''
-  });
-  const [error, setError] = useState<string>();
-  const [paymentReference, setPaymentReference] = useState<string>('');
-
-  const validateInvoiceDetails = (details: InvoiceDetails): boolean => {
-    if (!details.address?.trim()) {
-      const error = 'Adress är obligatoriskt';
-      setError(error);
-      onValidationError?.(error);
-      return false;
-    }
-
-    if (!details.postalCode?.trim()) {
-      const error = 'Postnummer är obligatoriskt';
-      setError(error);
-      onValidationError?.(error);
-      return false;
-    }
-
-    const cleanPostalCode = details.postalCode.replace(/\s/g, '');
-    if (!/^\d{3}\s?\d{2}$/.test(cleanPostalCode)) {
-      const error = 'Ange ett giltigt postnummer (XXX XX)';
-      setError(error);
-      onValidationError?.(error);
-      return false;
-    }
-
-    if (!details.city?.trim()) {
-      const error = 'Stad är obligatoriskt';
-      setError(error);
-      onValidationError?.(error);
-      return false;
-    }
-
-    setError(undefined);
-    return true;
-  };
-
-  const handleInvoiceDetailChange = (field: keyof InvoiceDetails) => (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const value = event.target.value;
-    setInvoiceDetails(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    
-    if (error) {
-      validateInvoiceDetails({
-        ...invoiceDetails,
-        [field]: value
-      });
-    }
-  };
+  const [address, setAddress] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [city, setCity] = useState('');
+  const [reference, setReference] = useState('');
+  const [showDialog, setShowDialog] = useState(false);
+  const [dialogStatus, setDialogStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>();
+  const [bookingReference, setBookingReference] = useState<string>();
 
   const handleCreatePayment = async (): Promise<boolean> => {
-    if (!validateInvoiceDetails(invoiceDetails)) {
+    // Validate form
+    if (!address || !postalCode || !city) {
+      onValidationError?.('Alla fält är obligatoriska');
       return false;
     }
+
+    // Show loading dialog
+    setDialogStatus('loading');
+    setShowDialog(true);
 
     try {
       const invoiceService = InvoicePaymentService.getInstance();
-      const paymentResult = await invoiceService.createInvoicePayment(
+      const result = await invoiceService.createInvoicePayment(
         courseId,
         amount,
         parseInt(userInfo.numberOfParticipants || '1'),
         userInfo,
-        invoiceDetails
+        { address, postalCode, city, reference }
       );
 
-      if (!paymentResult.success || !paymentResult.reference) {
-        const error = 'Det gick inte att skapa fakturan. Försök igen senare.';
-        setError(error);
-        onValidationError?.(error);
+      if (!result.success) {
+        setDialogStatus('error');
         return false;
       }
 
-      setPaymentReference(paymentResult.reference);
+      // Show success state
+      setDialogStatus('success');
+      setInvoiceNumber(result.invoiceNumber);
+      setBookingReference(result.reference);
+
+      // Notify parent of success
       onPaymentComplete(true);
+
       return true;
     } catch (error) {
-      console.error('Error creating invoice payment:', error);
-      const errorMessage = 'Det gick inte att skapa fakturan. Försök igen senare.';
-      setError(errorMessage);
-      onValidationError?.(errorMessage);
+      console.error('Error creating invoice:', error);
+      setDialogStatus('error');
       return false;
     }
   };
 
+  const handleCloseDialog = () => {
+    setShowDialog(false);
+    if (dialogStatus === 'success') {
+      // Navigate to confirmation page
+      window.location.href = `/book-course/${courseId}/confirmation`;
+    }
+  };
+
   useImperativeHandle(ref, () => ({
-    handleCreatePayment,
-    address: invoiceDetails.address,
-    postalCode: invoiceDetails.postalCode,
-    city: invoiceDetails.city
+    handleCreatePayment
   }));
 
   return (
@@ -155,11 +109,10 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
       <Grid container spacing={2}>
         <Grid item xs={12}>
           <TextField
-            name="address"
-            label="Adress *"
             fullWidth
-            value={invoiceDetails.address}
-            onChange={handleInvoiceDetailChange('address')}
+            label="Adress *"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
             error={!!errors.address}
             helperText={errors.address}
             disabled={disabled}
@@ -173,11 +126,10 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
         
         <Grid item xs={12} sm={6}>
           <TextField
-            name="postalCode"
-            label="Postnummer *"
             fullWidth
-            value={invoiceDetails.postalCode}
-            onChange={handleInvoiceDetailChange('postalCode')}
+            label="Postnummer *"
+            value={postalCode}
+            onChange={(e) => setPostalCode(e.target.value)}
             error={!!errors.postalCode}
             helperText={errors.postalCode}
             disabled={disabled}
@@ -191,11 +143,10 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
         
         <Grid item xs={12} sm={6}>
           <TextField
-            name="city"
-            label="Stad *"
             fullWidth
-            value={invoiceDetails.city}
-            onChange={handleInvoiceDetailChange('city')}
+            label="Stad *"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
             error={!!errors.city}
             helperText={errors.city}
             disabled={disabled}
@@ -206,24 +157,32 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
             }}
           />
         </Grid>
-        
+
         <Grid item xs={12}>
           <TextField
-            name="reference"
-            label="Fakturareferens (valfritt)"
             fullWidth
-            value={invoiceDetails.reference}
-            onChange={handleInvoiceDetailChange('reference')}
+            label="Fakturareferens (valfritt)"
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            error={!!errors.reference}
+            helperText={errors.reference}
             disabled={disabled}
+            InputProps={{
+              startAdornment: (
+                <DescriptionIcon sx={{ mr: 1, color: 'text.secondary' }} />
+              ),
+            }}
           />
         </Grid>
       </Grid>
-      
-      {error && (
-        <Typography color="error" variant="caption" sx={{ mt: 2, display: 'block' }}>
-          {error}
-        </Typography>
-      )}
+
+      <InvoicePaymentDialog
+        open={showDialog}
+        onClose={handleCloseDialog}
+        status={dialogStatus}
+        invoiceNumber={invoiceNumber}
+        bookingReference={bookingReference}
+      />
     </Box>
   );
 });

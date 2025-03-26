@@ -85,11 +85,9 @@ export interface InvoiceRequestData {
 
 export interface InvoiceApiResponse {
   success: boolean;
-  data?: {
-    reference: string;
-    invoiceNumber: string;
-  };
-  error?: string;
+  invoiceNumber: string;
+  reference: string;
+  message?: string;
 }
 
 export interface InvoiceStatusResponse {

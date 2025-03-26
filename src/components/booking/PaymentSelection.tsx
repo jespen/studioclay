@@ -1,3 +1,75 @@
+/**
+ * PaymentSelection Component
+ * 
+ * This component handles the payment selection and processing flow in the booking process.
+ * It's one of the most complex parts of the application, coordinating between different
+ * payment methods (Swish and Invoice) and their respective components.
+ * 
+ * Key Responsibilities:
+ * 1. Display payment method selection (Swish/Invoice)
+ * 2. Coordinate between payment components
+ * 3. Handle form validation
+ * 4. Manage payment state and errors
+ * 5. Handle navigation after successful payment
+ * 
+ * Component Structure:
+ * - PaymentSelection (this file)
+ *   ├── SwishPaymentSection (handles Swish-specific logic)
+ *   └── InvoicePaymentSection (handles Invoice-specific logic)
+ * 
+ * Recent Changes and Architecture Decisions:
+ * 1. Separation of Concerns:
+ *    - Moved Swish-specific logic to SwishPaymentSection
+ *    - Moved Invoice-specific logic to InvoicePaymentSection
+ *    - PaymentSelection now acts as a coordinator
+ * 
+ * 2. Payment Flow:
+ *    Swish:
+ *    - User selects Swish payment
+ *    - Enters phone number
+ *    - Clicks "Slutför bokning"
+ *    - SwishPaymentSection creates payment and shows dialog
+ *    - User approves in Swish app
+ *    - Status updates via polling
+ *    - Redirect to confirmation on success
+ * 
+ *    Invoice:
+ *    - User selects Invoice payment
+ *    - Fills in invoice details
+ *    - Clicks "Slutför bokning"
+ *    - InvoicePaymentSection validates and creates invoice
+ *    - On success, redirects to confirmation
+ * 
+ * 3. State Management:
+ *    - Payment method selection
+ *    - Form validation state
+ *    - Submission state
+ *    - Error handling
+ * 
+ * 4. Validation:
+ *    - Basic form validation (payment method selected)
+ *    - Swish validation handled by SwishPaymentSection
+ *    - Invoice validation handled by InvoicePaymentSection
+ * 
+ * 5. Error Handling:
+ *    - Form validation errors
+ *    - Payment processing errors
+ *    - API errors
+ * 
+ * Important Notes:
+ * - Each payment method has its own component for better maintainability
+ * - PaymentSelection uses refs to communicate with child components
+ * - Navigation after successful payment is handled differently for each method
+ * - Swish requires user interaction (approval in app)
+ * - Invoice is processed immediately
+ * 
+ * Dependencies:
+ * - SwishPaymentSection: Handles Swish payment flow
+ * - InvoicePaymentSection: Handles Invoice payment flow
+ * - useSwishPaymentStatus: Manages Swish payment status
+ * - Various MUI components for UI
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -157,25 +229,11 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     }
 
     if (paymentDetails.method === 'swish') {
-      if (!paymentDetails.invoiceDetails?.address) {
-        newErrors['invoiceDetails.address'] = 'Adress är obligatoriskt';
-      }
-      
-      if (!paymentDetails.invoiceDetails?.postalCode) {
-        newErrors['invoiceDetails.postalCode'] = 'Postnummer är obligatoriskt';
-      }
-      
-      if (!paymentDetails.invoiceDetails?.city) {
-        newErrors['invoiceDetails.city'] = 'Stad är obligatoriskt';
-      }
-
-      // Validate postal code format if provided
-      if (paymentDetails.invoiceDetails?.postalCode) {
-        const cleanPostalCode = paymentDetails.invoiceDetails.postalCode.replace(/\s/g, '');
-        if (!/^\d{3}\s?\d{2}$/.test(cleanPostalCode)) {
-          newErrors['invoiceDetails.postalCode'] = 'Ange ett giltigt postnummer (XXX XX)';
-        }
-      }
+      // Swish validation is handled in SwishPaymentSection
+      return true;
+    } else if (paymentDetails.method === 'invoice') {
+      // Invoice validation is handled in InvoicePaymentSection
+      return true;
     }
 
     setFormErrors(newErrors);
@@ -195,13 +253,18 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
       let success = false;
       
       if (paymentDetails.method === 'swish') {
+        // For Swish, we just need to trigger the payment creation
+        // The dialog and status handling is managed by SwishPaymentSection
         success = await swishPaymentRef.current?.handleCreatePayment() || false;
       } else if (paymentDetails.method === 'invoice') {
+        // For Invoice, we trigger the payment creation and wait for success
+        // The InvoicePaymentSection handles the validation and creation
         success = await invoicePaymentRef.current?.handleCreatePayment() || false;
       }
 
-      if (success) {
-        router.push(`/book-course/${courseId}/confirmation`);
+      // Only show error if both payment methods failed
+      if (!success) {
+        setSubmitError('Det gick inte att skapa betalningen. Försök igen senare.');
       }
     } catch (error) {
       console.error('Payment error:', error);

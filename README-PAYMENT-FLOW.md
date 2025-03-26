@@ -4,111 +4,80 @@
 The payment system is designed as a generic solution that works across multiple product types:
 - Course bookings
 - Gift cards
-(Future expansion possible for other product types)
+- Shop items
 
-## Component Structure
+## Current Implementation
+
+### Component Structure
 ```
-/src/
-├── components/
-│   ├── booking/
-│   │   ├── PaymentSelection.tsx      # Generic payment selection component
-│   │   ├── SwishPaymentSection.tsx   # Swish-specific payment logic
-│   │   └── InvoicePaymentSection.tsx # Invoice-specific payment logic
-│   └── gift-cards/
-│       └── GiftCardPayment.tsx       # Gift card payment handling
-├── services/
-│   ├── payment/
-│   │   ├── types.ts                  # Shared payment types
-│   │   ├── BasePaymentHandler.ts     # Abstract payment handler
-│   │   ├── CourseInvoiceHandler.ts   # Course-specific invoice handling
-│   │   └── GiftCardInvoiceHandler.ts # Gift card-specific invoice handling
-│   └── swish/
-│       └── [existing swish files]
+/src/components/booking/
+  ├── PaymentSelection.tsx      # Main payment selection component
+  ├── SwishPaymentSection.tsx   # Handles Swish-specific payment logic
+  ├── SwishPaymentForm.tsx      # Swish phone number input form
+  └── SwishPaymentDialog.tsx    # Dialog showing payment status
 ```
 
-## Payment Handlers
+### Key Components
 
-### Common Interface
-```typescript
-interface CommonPaymentFields {
-  payment_method: 'invoice' | 'swish';
-  payment_status: 'CREATED' | 'PAID' | 'DECLINED' | 'ERROR';
-  invoice_number?: string;
-  invoice_address?: string;
-  invoice_postal_code?: string;
-  invoice_city?: string;
-  invoice_reference?: string;
-}
+1. **PaymentSelection**
+   - Main component for payment method selection
+   - Handles both Swish and invoice payments
+   - Manages form state and validation
+   - Coordinates between different payment methods
 
-interface InvoicePaymentHandler<T extends CommonPaymentFields> {
-  createPayment(data: PaymentData): Promise<T>;
-  generateInvoiceNumber(): string;
-  handlePaymentSuccess(item: T): Promise<void>;
-  handlePaymentError(item: T): Promise<void>;
-}
-```
+2. **SwishPaymentSection**
+   - Handles all Swish-specific payment logic
+   - Manages phone number validation
+   - Creates and monitors Swish payments
+   - Exposes payment creation via ref
 
-### Product-Specific Implementations
-Each product type (courses, gift cards) has its own implementation of the payment handler, allowing for custom logic while maintaining a consistent interface.
+3. **useSwishPaymentStatus**
+   - Custom hook for managing Swish payment status
+   - Handles polling and status updates
+   - Manages payment dialog state
+   - Handles success/failure redirects
 
-## Database Structure
+### Payment Flow
 
-### Bookings Table
-```sql
-CREATE TABLE bookings (
-  -- Existing fields
-  payment_method: text,
-  payment_status: text NOT NULL,
-  invoice_number: text,
-  invoice_address: text,
-  invoice_postal_code: text,
-  invoice_city: text,
-  invoice_reference: text
-);
-```
+1. **Payment Creation**
+   ```typescript
+   // In SwishPaymentSection
+   const handleCreatePayment = async (): Promise<boolean> => {
+     // Validate phone number
+     // Create payment via SwishPaymentService
+     // Show payment dialog
+     // Start status polling
+   };
+   ```
 
-### Gift Cards Table
-```sql
-CREATE TABLE gift_cards (
-  -- Existing fields
-  payment_method: text,
-  payment_status: text,
-  invoice_number: text,
-  invoice_address: text,
-  invoice_postal_code: text,
-  invoice_city: text,
-  invoice_reference: text
-);
-```
+2. **Status Monitoring**
+   ```typescript
+   // In useSwishPaymentStatus
+   useEffect(() => {
+     // Poll status every 2 seconds
+     // Update dialog state
+     // Handle success/failure
+   }, [paymentReference]);
+   ```
 
-## Payment Flow
+3. **Payment Completion**
+   - User approves in Swish app
+   - Status updates via polling
+   - Redirect to confirmation on success
 
-1. **Payment Initiation**
-   - User selects product type and payment method
-   - PaymentSelection component loads appropriate handler
-   - Handler validates input and prepares payment
-
-2. **Payment Processing**
-   - For Swish: Create payment in payments table and handle status updates
-   - For Invoice: Create record directly in product-specific table
-   - Generate invoice number and handle PDF generation
-
-3. **Completion and Confirmation**
-   - Update status in appropriate table
-   - Send confirmation emails
-   - Redirect to confirmation page
-
-## API Endpoints
+### API Endpoints
 
 ```typescript
-// Create invoice payment
-POST /api/payments/invoice/create
+// Create Swish payment
+POST /api/payments/swish/create
 Body: {
-  productType: 'course' | 'gift_card';
-  productId: string;
+  phone_number: string;
+  payment_method: "swish";
+  product_type: "course";
+  product_id: string;
   amount: number;
-  userInfo: UserInfo;
-  paymentDetails: PaymentDetails;
+  quantity: number;
+  user_info: UserInfo;
 }
 
 // Check payment status
@@ -116,42 +85,91 @@ GET /api/payments/status/[reference]
 Response: {
   success: boolean;
   data: {
-    status: PaymentStatus;
-    productType: string;
-    productId: string;
-    reference: string;
+    payment: {
+      reference: string;
+      status: "CREATED" | "PAID" | "ERROR" | "DECLINED";
+      amount: number;
+    };
+    booking: BookingData | null;
   }
 }
 ```
 
-## Recent Changes
-1. **Generic Payment Handling**
-   - Introduced common payment interface
-   - Created product-specific handlers
-   - Standardized payment status handling
+### Environment Variables
+```bash
+# Swish Configuration
+NEXT_PUBLIC_SWISH_TEST_MODE=true|false
+SWISH_TEST_API_URL=https://mss.cpc.getswish.net/swish-cpcapi/api/v1
+SWISH_TEST_PAYEE_ALIAS=1234679304
+SWISH_TEST_CERT_PATH=certs/swish/test/Swish_Merchant_TestCertificate_1234679304.pem
+SWISH_TEST_KEY_PATH=certs/swish/test/Swish_Merchant_TestCertificate_1234679304.key
+SWISH_TEST_CA_PATH=certs/swish/test/Swish_TLS_RootCA.pem
+```
+
+### Database Schema
+```sql
+CREATE TABLE payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    status TEXT NOT NULL DEFAULT 'CREATED',
+    payment_method TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'SEK',
+    payment_reference TEXT NOT NULL,
+    product_type TEXT NOT NULL,
+    product_id UUID NOT NULL,
+    user_info JSONB NOT NULL,
+    metadata JSONB,
+    phone_number TEXT NOT NULL
+);
+```
+
+### Recent Changes
+1. **Component Refactoring**
+   - Extracted Swish payment logic to dedicated components
+   - Implemented ref-based communication
+   - Improved error handling and validation
 
 2. **Code Organization**
-   - Separated payment logic by product type
-   - Maintained consistent interface
-   - Improved type safety and validation
+   - Separated concerns between components
+   - Created custom hook for payment status
+   - Improved type safety
 
-3. **Database Updates**
-   - Standardized payment fields across tables
-   - Consistent status handling
-   - Improved tracking and reporting
+3. **Payment Flow**
+   - Streamlined payment creation process
+   - Enhanced status monitoring
+   - Better error handling and user feedback
 
-## Next Steps
-1. **Implementation**
-   - Create and test handlers
-   - Update PaymentSelection component
-   - Implement error handling
+### Test Environment
+- Uses Swish MSS (Merchant Swish Simulator)
+- Test phone numbers:
+  - `0739000001`: Returns PAID
+  - `0739000002`: Returns DECLINED
+  - `0739000003`: Returns ERROR
+
+### Security Considerations
+1. **Certificate Handling**
+   - Certificates stored in `/certs/swish/[test|prod]`
+   - Restricted file permissions (600)
+   - Restricted directory permissions (700)
+
+2. **Request Validation**
+   - Idempotency key required
+   - Rate limiting on endpoints
+   - Signature validation for callbacks
+
+### Next Steps
+1. **Code Cleanup**
+   - Remove unused Swish code from PaymentSelection
+   - Simplify validation logic
+   - Improve error messages
 
 2. **Testing**
-   - Test both payment methods
-   - Verify status handling
+   - Add unit tests for components
+   - Add integration tests for payment flow
    - Test error scenarios
 
 3. **Documentation**
+   - Add JSDoc comments
+   - Create component documentation
    - Update API documentation
-   - Document new components
-   - Create usage examples
