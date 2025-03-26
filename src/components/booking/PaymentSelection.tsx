@@ -49,6 +49,9 @@ import { FormCheckboxField, FormTextField } from '../common/FormField';
 import { sendBookingConfirmationEmail } from '@/utils/confirmationEmail';
 import { v4 as uuidv4 } from 'uuid';
 import { PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
+import SwishPaymentDialog from './SwishPaymentDialog';
+import { useSwishPaymentStatus } from '@/hooks/useSwishPaymentStatus';
+import { SwishPaymentService } from '@/services/swish/swishPaymentService';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -526,13 +529,28 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     try {
       if (paymentDetails.method === 'swish') {
         console.log('Processing Swish payment');
-        const paymentResult = await createSwishPayment();
+        const swishService = SwishPaymentService.getInstance();
+        const paymentResult = await swishService.createSwishPayment(
+          paymentDetails.swishPhone || '',
+          courseId,
+          calculatePrice(),
+          parseInt(userInfo?.numberOfParticipants || '1'),
+          userInfo || {
+            firstName: '',
+            lastName: '',
+            email: '',
+            phone: '',
+            numberOfParticipants: '1'
+          }
+        );
+        
         console.log('Payment creation result:', paymentResult);
         
         if (!paymentResult.success || !paymentResult.reference) {
           throw new Error('Payment creation failed');
         }
         
+        setPaymentReference(paymentResult.reference);
         setPaymentStatus(PAYMENT_STATUS.CREATED);
         setShowPaymentDialog(true);
         
@@ -928,68 +946,11 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
         </Paper>
       </GenericFlowContainer>
 
-      {/* Swish Payment Dialog */}
-      <Dialog 
-        open={showPaymentDialog} 
+      <SwishPaymentDialog
+        open={showPaymentDialog}
         onClose={handleClosePaymentDialog}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          Swish-betalning
-        </DialogTitle>
-        <DialogContent>
-          {paymentStatus === PAYMENT_STATUS.CREATED && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
-              <CircularProgress sx={{ mb: 2 }} />
-              <Typography variant="body1" gutterBottom>
-                Öppna Swish-appen på din mobil för att slutföra betalningen
-              </Typography>
-            </Box>
-          )}
-
-          {paymentStatus === PAYMENT_STATUS.PAID && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
-              <CheckCircleIcon color="success" sx={{ fontSize: 48, mb: 2 }} />
-              <Typography variant="body1" gutterBottom>
-                Betalningen är genomförd!
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Du kommer att omdirigeras till bekräftelsesidan...
-              </Typography>
-            </Box>
-          )}
-
-          {paymentStatus === PAYMENT_STATUS.DECLINED && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
-              <CancelIcon color="error" sx={{ fontSize: 48, mb: 2 }} />
-              <Typography variant="body1" gutterBottom>
-                Betalningen avbröts
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Du kan stänga detta fönster och försöka igen
-              </Typography>
-            </Box>
-          )}
-
-          {paymentStatus === PAYMENT_STATUS.ERROR && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
-              <ErrorIcon color="error" sx={{ fontSize: 48, mb: 2 }} />
-              <Typography variant="body1" gutterBottom>
-                Det uppstod ett tekniskt problem vid behandling av din betalning
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Försök igen senare eller välj en annan betalningsmetod
-              </Typography>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          {(paymentStatus === PAYMENT_STATUS.DECLINED || paymentStatus === PAYMENT_STATUS.ERROR) && (
-            <Button onClick={handleClosePaymentDialog}>Stäng</Button>
-          )}
-        </DialogActions>
-      </Dialog>
+        paymentStatus={paymentStatus}
+      />
     </>
   );
 };
