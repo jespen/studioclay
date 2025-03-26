@@ -144,7 +144,10 @@ export async function POST(request: NextRequest) {
         invoice_address: body.invoice_address || null,
         invoice_postal_code: body.invoice_postal_code || null,
         invoice_city: body.invoice_city || null,
-        invoice_reference: body.invoice_reference || null
+        invoice_reference: body.invoice_reference || null,
+        // Add price information
+        unit_price: body.unit_price || null,
+        total_price: body.total_price || null
       },
       participant_count: body.number_of_participants
     });

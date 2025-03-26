@@ -47,6 +47,17 @@ async function verifySwishSignature(request: Request): Promise<boolean> {
 async function createBooking(paymentId: string, courseId: string, userInfo: any) {
   const bookingReference = crypto.randomUUID();
   
+  // Get course price first
+  const { data: course, error: courseError } = await supabase
+    .from('course_instances')
+    .select('price')
+    .eq('id', courseId)
+    .single();
+
+  if (courseError) {
+    throw new Error(`Failed to fetch course price: ${courseError.message}`);
+  }
+  
   const { data: booking, error } = await supabase
     .from('bookings')
     .insert({
@@ -57,7 +68,9 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any)
       customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
       customer_email: userInfo.email,
       customer_phone: userInfo.phone,
-      number_of_participants: parseInt(userInfo.numberOfParticipants) || 1
+      number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
+      unit_price: course.price,
+      total_price: course.price * (parseInt(userInfo.numberOfParticipants) || 1)
     })
     .select()
     .single();

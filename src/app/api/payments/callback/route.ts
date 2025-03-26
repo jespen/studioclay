@@ -164,7 +164,9 @@ export async function POST(request: Request) {
             booking_date: new Date().toISOString(),
             status: 'confirmed',
             payment_status: 'PAID',
-            booking_reference: bookingReference
+            booking_reference: bookingReference,
+            unit_price: courseData.price,
+            total_price: courseData.price * (pendingBooking.number_of_participants || 1)
           })
           .select()
           .single();

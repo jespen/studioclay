@@ -55,6 +55,8 @@ export interface Booking {
   payments?: Payment[];
   course?: Course;
   message?: string;
+  unit_price?: number;
+  total_price?: number;
 }
 
 export interface ExtendedBooking extends Omit<Booking, 'course' | 'payments' | 'payment_status'> {

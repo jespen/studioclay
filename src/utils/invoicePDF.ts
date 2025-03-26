@@ -101,18 +101,22 @@ export async function generateInvoicePDF(
   
   // Add company logo
   // In a real implementation, you would add the company logo image here
-  // For now, we'll just add text
+  // For now, we'll just add text with improved styling
   doc.setFontSize(24);
   doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+  doc.setFont('helvetica', 'bold');
   doc.text('STUDIO CLAY', margin, margin);
   
-  // Add invoice title
+  // Add invoice title with improved styling
   doc.setFontSize(18);
   doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
   doc.text('FAKTURA', pageWidth - margin, margin, { align: 'right' });
   
-  // Add invoice number and date
+  // Add invoice number and date with improved styling
   doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 100, 100);
   doc.text(`Fakturanummer: ${invoiceData.invoiceNumber}`, pageWidth - margin, margin + 10, { align: 'right' });
   
   const today = new Date();
@@ -120,8 +124,10 @@ export async function generateInvoicePDF(
   doc.text(`Fakturadatum: ${formattedDate}`, pageWidth - margin, margin + 15, { align: 'right' });
   doc.text(`Förfallodatum: ${invoiceData.dueDate}`, pageWidth - margin, margin + 20, { align: 'right' });
   
-  // Company information
+  // Company information with improved styling
   doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'normal');
   doc.text([
     COMPANY_INFO.address,
     `${COMPANY_INFO.postalCode} ${COMPANY_INFO.city}`,
@@ -131,12 +137,16 @@ export async function generateInvoicePDF(
     `Bankgiro: ${COMPANY_INFO.bankgiro}`
   ], margin, margin + 15);
   
-  // Customer information
+  // Customer information with improved styling
   const customerY = margin + 45;
   doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
   doc.text('Fakturamottagare:', margin, customerY);
   
   doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
   doc.text([
     `${invoiceData.customerInfo.firstName} ${invoiceData.customerInfo.lastName}`,
     invoiceData.invoiceDetails.address,
@@ -145,30 +155,34 @@ export async function generateInvoicePDF(
     `Email: ${invoiceData.customerInfo.email}`
   ], margin, customerY + 7);
   
-  // Additional reference if provided
+  // Additional reference if provided with improved styling
   if (invoiceData.invoiceDetails.reference) {
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
     doc.text(`Er referens: ${invoiceData.invoiceDetails.reference}`, margin, customerY + 35);
   }
   
-  // Invoice items table
+  // Invoice items table with improved styling
   const tableY = customerY + 45;
   
-  // Table headers
+  // Table headers with improved styling
   doc.setFillColor(240, 240, 240);
   doc.rect(margin, tableY, contentWidth, 8, 'F');
   
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
   doc.text('Beskrivning', margin + 5, tableY + 5);
   doc.text('Antal', margin + 90, tableY + 5);
   doc.text('Pris', margin + 110, tableY + 5);
   doc.text('Moms', margin + 130, tableY + 5);
   doc.text('Summa', margin + 160, tableY + 5, { align: 'right' });
   
-  // Table content
+  // Table content with improved styling
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
   
-  // Course name and description
+  // Course name and description with improved styling
   const numParticipants = parseInt(invoiceData.customerInfo.numberOfParticipants) || 1;
   const courseDate = new Date(invoiceData.courseDetails.start_date).toLocaleDateString('sv-SE', {
     year: 'numeric',
@@ -202,12 +216,14 @@ export async function generateInvoicePDF(
   const vatAmount = totalPrice * 0.2; // 25% VAT = 20% of total
   const priceExcludingVat = totalPrice - vatAmount;
   
-  // Add a line
+  // Add a line with improved styling
   const summaryY = itemY + 30;
   doc.setDrawColor(200, 200, 200);
   doc.line(margin, summaryY - 10, margin + contentWidth, summaryY - 10);
   
-  // Total summary
+  // Total summary with improved styling
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
   doc.text('Summa exkl. moms:', margin + 90, summaryY);
   doc.text(`${priceExcludingVat.toFixed(2)} kr`, margin + 160, summaryY, { align: 'right' });
   
@@ -218,9 +234,10 @@ export async function generateInvoicePDF(
   doc.text('Att betala:', margin + 90, summaryY + 14);
   doc.text(`${totalPrice.toFixed(2)} kr`, margin + 160, summaryY + 14, { align: 'right' });
   
-  // Payment information
+  // Payment information with improved styling
   const paymentY = summaryY + 30;
   doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
   doc.text('Betalningsinformation', margin, paymentY);
   doc.setFont('helvetica', 'normal');
   
@@ -252,14 +269,16 @@ export async function generateInvoicePDF(
     console.error('Failed to add QR code:', error);
   }
   
-  // Footer
+  // Add footer with improved styling
   const footerY = pageHeight - margin;
   doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 100, 100);
   doc.text([
-    `${COMPANY_INFO.name} | ${COMPANY_INFO.address}, ${COMPANY_INFO.postalCode} ${COMPANY_INFO.city}`,
-    `Org.nr: ${COMPANY_INFO.orgNr} | Bankgiro: ${COMPANY_INFO.bankgiro} | Momsreg.nr: ${COMPANY_INFO.vatNr}`,
-    `Tel: ${COMPANY_INFO.phone} | Email: ${COMPANY_INFO.email} | ${COMPANY_INFO.website}`
-  ], pageWidth / 2, footerY, { align: 'center' });
+    'Studio Clay - Norrtullsgatan 65, 113 45 Stockholm',
+    `Org.nr: ${COMPANY_INFO.orgNr} | Moms.nr: ${COMPANY_INFO.vatNr}`,
+    'www.studioclay.se'
+  ], margin, footerY, { align: 'center' });
   
   // Return the PDF as a blob
   return doc.output('blob');

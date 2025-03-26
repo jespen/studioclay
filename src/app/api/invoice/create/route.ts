@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         description: courseData.description,
         start_date: courseData.start_date,
         location: courseData.location,
-        price: courseData.amount
+        price: courseData.price
       },
       invoiceDetails: paymentDetails.invoiceDetails || {
         address: '',
@@ -135,7 +135,10 @@ export async function POST(request: Request) {
         invoice_address: paymentDetails.invoiceDetails?.address,
         invoice_postal_code: paymentDetails.invoiceDetails?.postalCode,
         invoice_city: paymentDetails.invoiceDetails?.city,
-        invoice_reference: paymentDetails.invoiceDetails?.reference || null
+        invoice_reference: paymentDetails.invoiceDetails?.reference || null,
+        // Add price information
+        unit_price: courseData.price,
+        total_price: courseData.price * (parseInt(userInfo.numberOfParticipants) || 1)
       })
       .select()
       .single();
@@ -190,7 +193,7 @@ export async function POST(request: Request) {
         description: courseData.description,
         start_date: courseData.start_date,
         location: courseData.location,
-        price: courseData.amount
+        price: courseData.price
       },
       invoiceNumber,
       pdfBuffer // Pass the PDF buffer to the email function

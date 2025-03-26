@@ -66,7 +66,9 @@ export async function POST(request: Request) {
         customer_phone: customerInfo.phone,
         number_of_participants: customerInfo.numberOfParticipants,
         message: customerInfo.message || null,
-        booking_date: new Date().toISOString()
+        booking_date: new Date().toISOString(),
+        unit_price: course.price,
+        total_price: course.price * (customerInfo.numberOfParticipants || 1)
       })
       .select()
       .single();
