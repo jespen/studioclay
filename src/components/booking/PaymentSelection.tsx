@@ -46,6 +46,7 @@ import { FormCheckboxField, FormTextField } from '../common/FormField';
 import { sendBookingConfirmationEmail } from '@/utils/confirmationEmail';
 import { v4 as uuidv4 } from 'uuid';
 import SwishPaymentSection, { SwishPaymentSectionRef } from './SwishPaymentSection';
+import InvoicePaymentSection, { InvoicePaymentSectionRef } from './InvoicePaymentSection';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -73,10 +74,12 @@ interface PaymentDetails {
 }
 
 interface FormErrors {
-  method?: string;
+  paymentMethod?: string;
+  swishPhone?: string;
   'invoiceDetails.address'?: string;
   'invoiceDetails.postalCode'?: string;
   'invoiceDetails.city'?: string;
+  invoice?: string;
 }
 
 const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
@@ -102,6 +105,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
   
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const swishPaymentRef = useRef<SwishPaymentSectionRef>(null);
+  const invoicePaymentRef = useRef<InvoicePaymentSectionRef>(null);
 
   useEffect(() => {
     // Get the user info from localStorage
@@ -128,6 +132,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
 
   const handleInvoiceDetailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    console.log('Invoice detail change:', name, value);
+    
     setPaymentDetails(prev => ({
       ...prev,
       invoiceDetails: {
@@ -144,134 +150,63 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
   };
 
   const validateForm = (): boolean => {
-    console.log('validateForm called, payment method:', paymentDetails.method);
-    const errors: FormErrors = {};
-    let isValid = true;
-
-    // Validate payment method
+    const newErrors: FormErrors = {};
+    
     if (!paymentDetails.method) {
-      errors.method = 'Välj en betalningsmetod';
-      isValid = false;
+      newErrors.paymentMethod = 'Välj betalningsmetod';
     }
 
-    // Validate invoice details if invoice is selected
-    if (paymentDetails.method === 'invoice') {
+    if (paymentDetails.method === 'swish') {
       if (!paymentDetails.invoiceDetails?.address) {
-        errors['invoiceDetails.address'] = 'Adress är obligatoriskt';
-        isValid = false;
+        newErrors['invoiceDetails.address'] = 'Adress är obligatoriskt';
       }
       
       if (!paymentDetails.invoiceDetails?.postalCode) {
-        errors['invoiceDetails.postalCode'] = 'Postnummer är obligatoriskt';
-        isValid = false;
+        newErrors['invoiceDetails.postalCode'] = 'Postnummer är obligatoriskt';
       }
       
       if (!paymentDetails.invoiceDetails?.city) {
-        errors['invoiceDetails.city'] = 'Stad är obligatoriskt';
-        isValid = false;
+        newErrors['invoiceDetails.city'] = 'Stad är obligatoriskt';
+      }
+
+      // Validate postal code format if provided
+      if (paymentDetails.invoiceDetails?.postalCode) {
+        const cleanPostalCode = paymentDetails.invoiceDetails.postalCode.replace(/\s/g, '');
+        if (!/^\d{3}\s?\d{2}$/.test(cleanPostalCode)) {
+          newErrors['invoiceDetails.postalCode'] = 'Ange ett giltigt postnummer (XXX XX)';
+        }
       }
     }
 
-    console.log('Form validation result:', isValid, 'errors:', errors);
-    setFormErrors(errors);
-    return isValid;
-  };
-
-  // Create an invoice payment request
-  const createInvoicePayment = async (): Promise<{success: boolean, reference: string | null}> => {
-    console.log('=== Starting invoice payment creation ===');
-    console.log('User info:', userInfo);
-    console.log('Course ID:', courseId);
-    console.log('Payment details:', paymentDetails);
-    
-    try {
-      // Generera en unik idempotency key
-      const idempotencyKey = uuidv4();
-      console.log('Generated idempotency key:', idempotencyKey);
-      
-      console.log('Creating invoice...');
-      const response = await fetch('/api/invoice/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': idempotencyKey
-        },
-        body: JSON.stringify({
-          courseId,
-          userInfo,
-          paymentDetails: {
-            ...paymentDetails,
-            amount: calculatePrice()
-          }
-        }),
-      });
-
-      const result = await response.json();
-      console.log('Invoice API response:', result);
-
-      if (!result.success) {
-        console.error('Invoice creation failed:', result.error);
-        throw new Error(result.error || 'Failed to create invoice');
-      }
-
-      // Store booking reference
-      if (result.data?.bookingReference) {
-        console.log('Storing booking reference:', result.data.bookingReference);
-        localStorage.setItem('bookingReference', result.data.bookingReference);
-      }
-
-      console.log('=== Invoice creation completed successfully ===');
-      return { success: true, reference: result.data?.bookingReference || null };
-    } catch (error) {
-      console.error('=== Error in invoice creation ===');
-      console.error('Error details:', error);
-      return { success: false, reference: null };
-    }
+    setFormErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('=== Payment submission started ===');
-    console.log('Payment method:', paymentDetails.method);
     
     if (!validateForm()) {
-      console.log('Form validation failed');
-      console.log('Form errors:', formErrors);
       return;
     }
 
-    console.log('Form validation passed, proceeding with submission');
     setIsSubmitting(true);
-    setSubmitError(null);
 
     try {
+      let success = false;
+      
       if (paymentDetails.method === 'swish') {
-        console.log('Processing Swish payment');
-        if (swishPaymentRef.current) {
-          const success = await swishPaymentRef.current.handleCreatePayment();
-          if (!success) {
-            throw new Error('Payment creation failed');
-          }
-        } else {
-          throw new Error('Swish payment section not initialized');
-        }
-      } else {
-        console.log('Processing invoice payment');
-        const paymentResult = await createInvoicePayment();
-        
-        if (!paymentResult.success) {
-          console.error('Invoice payment failed');
-          throw new Error('Invoice creation failed');
-        }
-        
-        console.log('Invoice payment successful, redirecting to confirmation');
+        success = await swishPaymentRef.current?.handleCreatePayment() || false;
+      } else if (paymentDetails.method === 'invoice') {
+        success = await invoicePaymentRef.current?.handleCreatePayment() || false;
+      }
+
+      if (success) {
         router.push(`/book-course/${courseId}/confirmation`);
       }
     } catch (error) {
-      console.error('Error in handleSubmit:', error);
+      console.error('Payment error:', error);
       setSubmitError('Det gick inte att skapa betalningen. Försök igen senare.');
     } finally {
-      console.log('Payment submission completed');
       setIsSubmitting(false);
     }
   };
@@ -358,9 +293,18 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                               <Typography>Betala med Swish</Typography>
                             </Box>
+                            
                           } 
                           sx={{ width: '100%' }}
+                        />      
+                        <Box sx={{ mt: 2, height: 30, width: 100, position: 'relative' }}>
+                        <Image
+                          src={swishLogoSrc}
+                          alt="Swish"
+                          fill
+                          style={{ objectFit: 'contain' }}
                         />
+                      </Box>
                         {paymentDetails.method === 'swish' && userInfo && (
                           <SwishPaymentSection
                             ref={swishPaymentRef}
@@ -409,87 +353,33 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
                           sx={{ width: '100%' }}
                         />
                         
-                        {paymentDetails.method === 'invoice' && (
-                          <Box sx={{ mt: 2, ml: 4 }}>
-                            <Typography variant="body2" sx={{ mb: 2 }}>
-                              Vänligen fyll i din fakturaadress:
-                            </Typography>
-                            
-                            <Grid container spacing={2}>
-                              <Grid item xs={12}>
-                                <FormTextField
-                                  name="address"
-                                  label="Adress *"
-                                  fullWidth
-                                  value={paymentDetails.invoiceDetails?.address || ''}
-                                  onChange={handleInvoiceDetailChange}
-                                  error={formErrors['invoiceDetails.address']}
-                                  required
-                                  InputProps={{
-                                    startAdornment: (
-                                      <HomeIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                                    ),
-                                  }}
-                                />
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6}>
-                                <FormTextField
-                                  name="postalCode"
-                                  label="Postnummer *"
-                                  fullWidth
-                                  value={paymentDetails.invoiceDetails?.postalCode || ''}
-                                  onChange={handleInvoiceDetailChange}
-                                  error={formErrors['invoiceDetails.postalCode']}
-                                  required
-                                  InputProps={{
-                                    startAdornment: (
-                                      <MarkunreadMailboxIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                                    ),
-                                  }}
-                                />
-                              </Grid>
-                              
-                              <Grid item xs={12} sm={6}>
-                                <FormTextField
-                                  name="city"
-                                  label="Stad *"
-                                  fullWidth
-                                  value={paymentDetails.invoiceDetails?.city || ''}
-                                  onChange={handleInvoiceDetailChange}
-                                  error={formErrors['invoiceDetails.city']}
-                                  required
-                                  InputProps={{
-                                    startAdornment: (
-                                      <LocationCityIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                                    ),
-                                  }}
-                                />
-                              </Grid>
-                              
-                              <Grid item xs={12}>
-                                <FormTextField
-                                  name="reference"
-                                  label="Fakturareferens (valfritt)"
-                                  fullWidth
-                                  value={paymentDetails.invoiceDetails?.reference || ''}
-                                  onChange={handleInvoiceDetailChange}
-                                />
-                              </Grid>
-                            </Grid>
-                            
-                            <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
-                              Fakturan skickas till din e-postadress efter att bokningen har bekräftats.
-                            </Typography>
-                          </Box>
+                        {paymentDetails.method === 'invoice' && userInfo && (
+                          <InvoicePaymentSection
+                            ref={invoicePaymentRef}
+                            userInfo={userInfo}
+                            courseId={courseId}
+                            amount={calculatePrice()}
+                            onPaymentComplete={(success) => {
+                              if (success) {
+                                router.push(`/book-course/${courseId}/confirmation`);
+                              }
+                            }}
+                            onValidationError={(error) => setFormErrors(prev => ({ ...prev, invoice: error }))}
+                            disabled={isSubmitting}
+                            errors={{
+                              address: formErrors['invoiceDetails.address'],
+                              postalCode: formErrors['invoiceDetails.postalCode'],
+                              city: formErrors['invoiceDetails.city']
+                            }}
+                          />
                         )}
                       </CardContent>
                     </Card>
                   </RadioGroup>
                   
-                  {formErrors.method && (
+                  {formErrors.paymentMethod && (
                     <Typography color="error" variant="caption">
-                      {formErrors.method}
+                      {formErrors.paymentMethod}
                     </Typography>
                   )}
                 </FormControl>

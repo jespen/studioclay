@@ -38,6 +38,7 @@ const SwishPaymentForm: React.FC<SwishPaymentFormProps> = ({
 
   return (
     <Box sx={{ ml: 4, mt: 2 }}>
+
       <Typography variant="body2" sx={{ mb: 1 }}>
         Vi kommer skicka en betalningsförfrågan till följande telefonnummer:
       </Typography>
@@ -53,17 +54,11 @@ const SwishPaymentForm: React.FC<SwishPaymentFormProps> = ({
         helperText="Ange ett svenskt mobilnummer som är kopplat till Swish"
         required
       />
-      <Box sx={{ mt: 2, height: 30, width: 100, position: 'relative' }}>
-        <Image
-          src={swishLogoSrc}
-          alt="Swish"
-          fill
-          style={{ objectFit: 'contain' }}
-        />
-      </Box>
-      <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
+
+
+      {/* <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
         Betalning sker efter att bokningen har bekräftats.
-      </Typography>
+      </Typography> */}
     </Box>
   );
 };

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendServerInvoiceEmail } from '@/utils/serverEmail';
 import { UserInfo, PaymentDetails } from '@/types/booking';
 import { generateInvoicePDF } from '@/utils/invoicePDF';
+import { generateBookingReference } from '@/utils/booking';
 
 // Create a Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -59,10 +60,8 @@ export async function POST(request: Request) {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const invoiceNumber = `SC-${dateStr}-${randomSuffix}`;
     
-    // Generate a unique booking reference
-    const timestamp = new Date().getTime().toString().slice(-6);
-    const randomChars = Math.random().toString(36).substring(2, 5).toUpperCase();
-    const bookingReference = `SC-${randomChars}-${timestamp}`;
+    // Generate a unique booking reference using the shared function
+    const bookingReference = generateBookingReference();
     
     console.log('Generated invoice number:', invoiceNumber);
     console.log('Generated booking reference:', bookingReference);
