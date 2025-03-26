@@ -1,3 +1,11 @@
+// Payment status enum
+export enum PaymentStatus {
+  CREATED = 'CREATED',
+  PAID = 'PAID',
+  ERROR = 'ERROR',
+  DECLINED = 'DECLINED'
+}
+
 // User information structure
 export interface UserInfo {
   firstName: string;
@@ -32,13 +40,6 @@ export interface SwishCallbackData {
   errorCode?: string;
   errorMessage?: string;
 }
-
-// Payment status values that are actually used
-export type PaymentStatus = 
-  | 'CREATED'   // Initial state when payment is created
-  | 'PAID'      // Payment confirmed by Swish
-  | 'ERROR'     // Payment failed
-  | 'DECLINED'; // Payment declined by user or Swish
 
 // Payment record structure (database)
 export interface Payment {

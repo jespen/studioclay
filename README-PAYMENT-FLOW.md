@@ -20,17 +20,18 @@ The payment system is designed as a generic solution that works across multiple 
 │       │
 │       └── Invoice Flow/
 │           ├── InvoicePaymentSection.tsx # Invoice coordinator
-│           ├── InvoicePaymentForm.tsx    # Address input (to be created)
+│           ├── InvoicePaymentForm.tsx    # Address input
 │           └── InvoicePaymentDialog.tsx  # Payment status
 │
-├── services/
-│   ├── swish/
-│   │   ├── swishPaymentService.ts      # Swish API integration
-│   │   └── swishTypes.ts              # Swish type definitions
-│   │
-│   └── invoice/
-│       ├── invoicePaymentService.ts    # Invoice generation
-│       └── invoiceTypes.ts            # Invoice type definitions
+├── app/
+│   └── api/
+│       ├── invoice/
+│       │   └── create/
+│       │       └── route.ts           # Invoice creation and PDF generation
+│       └── payments/
+│           └── swish/
+│               └── create/
+│                   └── route.ts       # Swish payment creation
 │
 ├── utils/
 │   ├── invoicePDF.ts                  # PDF generation
@@ -80,16 +81,19 @@ The payment system is designed as a generic solution that works across multiple 
    - Provides download options
    - Handles success/error states
 
-### Services
-1. Swish Services
-   - API integration
-   - Payment creation
-   - Status monitoring
+### API Routes
+1. `/api/invoice/create`
+   - Genererar fakturanummer och bokningsreferens
+   - Skapar PDF-faktura
+   - Sparar PDF i Supabase storage
+   - Skapar bokningspost i databasen
+   - Uppdaterar kursens deltagarantal
+   - Skickar faktura via e-post
 
-2. Invoice Services
-   - Invoice generation
-   - PDF creation
-   - Email sending
+2. `/api/payments/swish/create`
+   - Skapar Swish-betalning
+   - Hanterar callbacks från Swish
+   - Uppdaterar betalningsstatus
 
 ## Data Flow
 
@@ -356,4 +360,3 @@ CREATE TABLE bookings (
    - Create component documentation
    - Update API documentation
    - Add invoice flow diagrams
-```

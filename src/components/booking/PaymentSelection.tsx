@@ -81,13 +81,6 @@ interface UserInfo {
   specialRequirements?: string;
 }
 
-interface InvoiceDetails {
-  address: string;
-  postalCode: string;
-  city: string;
-  reference: string;
-}
-
 const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
   const router = useRouter();
   const theme = useTheme();

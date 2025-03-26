@@ -1,7 +1,6 @@
 import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import { Box } from '@mui/material';
-import { SwishPaymentService } from '@/services/swish/swishPaymentService';
-import { PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
+import { PaymentStatus } from '@/types/payment';
 import SwishPaymentForm from './SwishPaymentForm';
 import SwishPaymentDialog from './SwishPaymentDialog';
 import { useSwishPaymentStatus } from '@/hooks/useSwishPaymentStatus';
@@ -82,24 +81,34 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     }
 
     try {
-      const swishService = SwishPaymentService.getInstance();
-      const paymentResult = await swishService.createSwishPayment(
-        phoneNumber,
-        courseId,
-        amount,
-        parseInt(userInfo.numberOfParticipants || '1'),
-        userInfo
-      );
+      const response = await fetch('/api/payments/swish/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID()
+        },
+        body: JSON.stringify({
+          phone_number: phoneNumber,
+          payment_method: 'swish',
+          product_type: 'course',
+          product_id: courseId,
+          amount: amount,
+          quantity: parseInt(userInfo.numberOfParticipants || '1'),
+          user_info: userInfo
+        })
+      });
 
-      if (!paymentResult.success || !paymentResult.reference) {
+      const result = await response.json();
+
+      if (!response.ok || !result.success || !result.data?.reference) {
         const error = 'Det gick inte att skapa betalningen. Försök igen senare.';
         setError(error);
         onValidationError?.(error);
         return false;
       }
 
-      setPaymentReference(paymentResult.reference);
-      setPaymentStatus(PAYMENT_STATUS.CREATED);
+      setPaymentReference(result.data.reference);
+      setPaymentStatus(PaymentStatus.CREATED);
       setShowPaymentDialog(true);
       return true;
     } catch (error) {
