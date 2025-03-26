@@ -8,6 +8,7 @@ import {
 import PhoneIcon from '@mui/icons-material/Phone';
 import Image from 'next/image';
 import { FormTextField } from '../common/FormField';
+import { isValidSwishPhoneNumber } from '@/utils/swish/phoneNumberFormatter';
 
 interface SwishPaymentFormProps {
   phoneNumber: string;
@@ -30,26 +31,27 @@ const SwishPaymentForm: React.FC<SwishPaymentFormProps> = ({
     ? '/Swish Logo Secondary Dark-BG SVG.svg'
     : '/Swish Logo Secondary Light-BG SVG.svg';
 
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    onPhoneNumberChange(value);
+  };
+
   return (
     <Box sx={{ ml: 4, mt: 2 }}>
       <Typography variant="body2" sx={{ mb: 1 }}>
         Vi kommer skicka en betalningsförfrågan till följande telefonnummer:
       </Typography>
       <FormTextField
-        name="swishPhone"
-        label="Telefonnummer för Swish"
+        name="phoneNumber"
+        label="Mobilnummer *"
         fullWidth
         value={phoneNumber}
-        onChange={(e) => onPhoneNumberChange(e.target.value)}
-        error={Boolean(error)}
-        helperText={error || "T.ex. 0701234567 eller 070123456"}
+        onChange={handlePhoneChange}
+        error={error}
         disabled={disabled}
-        InputProps={{
-          startAdornment: (
-            <PhoneIcon sx={{ mr: 1, color: 'text.secondary' }} />
-          ),
-        }}
-        sx={{ maxWidth: '300px' }}
+        placeholder="0700000000"
+        helperText="Ange ett svenskt mobilnummer som är kopplat till Swish"
+        required
       />
       <Box sx={{ mt: 2, height: 30, width: 100, position: 'relative' }}>
         <Image

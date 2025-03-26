@@ -1,5 +1,6 @@
 import { SwishRequestData, SwishApiResponse, SwishValidationError, SwishApiError, SwishCertificateError, SwishError } from './types';
 import { SwishConfig } from './config';
+import { formatSwishPhoneNumber } from '@/utils/swish/phoneNumberFormatter';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
@@ -82,19 +83,7 @@ export class SwishService {
    * @throws {SwishValidationError} If the phone number is invalid
    */
   public formatPhoneNumber(phone: string): string {
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    
-    if (!cleanPhone.startsWith('0') && !cleanPhone.startsWith('46')) {
-      throw new SwishValidationError('Invalid phone number format. Must start with 0 or 46');
-    }
-
-    const formatted = cleanPhone.startsWith('0') ? '46' + cleanPhone.substring(1) : cleanPhone;
-
-    if (formatted.length < 11 || formatted.length > 12) {
-      throw new SwishValidationError('Invalid phone number length. Must be 11-12 digits including country code');
-    }
-
-    return formatted;
+    return formatSwishPhoneNumber(phone);
   }
 
   /**
