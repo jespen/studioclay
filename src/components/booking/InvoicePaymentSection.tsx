@@ -1,11 +1,7 @@
-import React, { forwardRef, useImperativeHandle, useState } from 'react';
-import { Box, TextField, Typography, Grid } from '@mui/material';
-import { InvoicePaymentService } from '@/services/invoice/invoicePaymentService';
+import React, { useState, forwardRef, useImperativeHandle } from 'react';
+import { Box } from '@mui/material';
+import InvoicePaymentForm from './InvoicePaymentForm';
 import InvoicePaymentDialog from './InvoicePaymentDialog';
-import HomeIcon from '@mui/icons-material/Home';
-import LocationCityIcon from '@mui/icons-material/LocationCity';
-import MarkunreadMailboxIcon from '@mui/icons-material/MarkunreadMailbox';
-import DescriptionIcon from '@mui/icons-material/Description';
 
 export interface InvoicePaymentSectionRef {
   handleCreatePayment: () => Promise<boolean>;
@@ -24,12 +20,6 @@ interface InvoicePaymentSectionProps {
   onPaymentComplete: (success: boolean) => void;
   onValidationError?: (error: string) => void;
   disabled?: boolean;
-  errors?: {
-    address?: string;
-    postalCode?: string;
-    city?: string;
-    reference?: string;
-  };
 }
 
 const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymentSectionProps>(({
@@ -39,64 +29,96 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
   onPaymentComplete,
   onValidationError,
   disabled = false,
-  errors = {},
 }, ref) => {
   const [address, setAddress] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [city, setCity] = useState('');
   const [reference, setReference] = useState('');
+  const [errors, setErrors] = useState<{
+    address?: string;
+    postalCode?: string;
+    city?: string;
+    reference?: string;
+  }>({});
   const [showDialog, setShowDialog] = useState(false);
-  const [dialogStatus, setDialogStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [invoiceNumber, setInvoiceNumber] = useState<string>();
   const [bookingReference, setBookingReference] = useState<string>();
 
-  const handleCreatePayment = async (): Promise<boolean> => {
-    // Validate form
-    if (!address || !postalCode || !city) {
-      onValidationError?.('Alla fält är obligatoriska');
+  const validateFields = (): boolean => {
+    const newErrors: typeof errors = {};
+
+    if (!address.trim()) {
+      newErrors.address = 'Adress är obligatoriskt';
+    }
+
+    if (!postalCode.trim()) {
+      newErrors.postalCode = 'Postnummer är obligatoriskt';
+    } else if (!/^\d{3}\s?\d{2}$/.test(postalCode.replace(/\s/g, ''))) {
+      newErrors.postalCode = 'Ange ett giltigt postnummer (5 siffror)';
+    }
+
+    if (!city.trim()) {
+      newErrors.city = 'Stad är obligatoriskt';
+    }
+
+    setErrors(newErrors);
+    
+    if (Object.keys(newErrors).length > 0) {
+      onValidationError?.(Object.values(newErrors)[0]);
       return false;
     }
 
-    // Show loading dialog
-    setDialogStatus('loading');
-    setShowDialog(true);
+    return true;
+  };
+
+  const handleCreatePayment = async (): Promise<boolean> => {
+    if (!validateFields()) {
+      return false;
+    }
 
     try {
-      const invoiceService = InvoicePaymentService.getInstance();
-      const result = await invoiceService.createInvoicePayment(
-        courseId,
-        amount,
-        parseInt(userInfo.numberOfParticipants || '1'),
-        userInfo,
-        { address, postalCode, city, reference }
-      );
+      setShowDialog(true);
+      setStatus('loading');
 
-      if (!result.success) {
-        setDialogStatus('error');
-        return false;
+      const response = await fetch('/api/invoice/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          courseId,
+          userInfo,
+          paymentDetails: {
+            method: 'invoice',
+            invoiceDetails: {
+              address,
+              postalCode: postalCode.replace(/\s/g, ''),
+              city,
+              reference: reference.trim() || undefined,
+            }
+          },
+          amount,
+          numberOfParticipants: parseInt(userInfo.numberOfParticipants) || 1,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to create invoice');
       }
 
-      // Show success state
-      setDialogStatus('success');
-      setInvoiceNumber(result.invoiceNumber);
-      setBookingReference(result.reference);
-
-      // Notify parent of success
+      setInvoiceNumber(data.invoiceNumber);
+      setBookingReference(data.bookingReference);
+      setStatus('success');
       onPaymentComplete(true);
-
       return true;
     } catch (error) {
       console.error('Error creating invoice:', error);
-      setDialogStatus('error');
+      setStatus('error');
+      onValidationError?.('Det gick inte att skapa fakturan. Försök igen senare.');
       return false;
-    }
-  };
-
-  const handleCloseDialog = () => {
-    setShowDialog(false);
-    if (dialogStatus === 'success') {
-      // Navigate to confirmation page
-      window.location.href = `/book-course/${courseId}/confirmation`;
     }
   };
 
@@ -104,82 +126,31 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
     handleCreatePayment
   }));
 
+  const handleCloseDialog = () => {
+    if (status === 'success') {
+      setShowDialog(false);
+    }
+  };
+
   return (
-    <Box sx={{ mt: 2, ml: 4 }}>
-      <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <TextField
-            fullWidth
-            label="Adress *"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            error={!!errors.address}
-            helperText={errors.address}
-            disabled={disabled}
-            InputProps={{
-              startAdornment: (
-                <HomeIcon sx={{ mr: 1, color: 'text.secondary' }} />
-              ),
-            }}
-          />
-        </Grid>
-        
-        <Grid item xs={12} sm={6}>
-          <TextField
-            fullWidth
-            label="Postnummer *"
-            value={postalCode}
-            onChange={(e) => setPostalCode(e.target.value)}
-            error={!!errors.postalCode}
-            helperText={errors.postalCode}
-            disabled={disabled}
-            InputProps={{
-              startAdornment: (
-                <MarkunreadMailboxIcon sx={{ mr: 1, color: 'text.secondary' }} />
-              ),
-            }}
-          />
-        </Grid>
-        
-        <Grid item xs={12} sm={6}>
-          <TextField
-            fullWidth
-            label="Stad *"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            error={!!errors.city}
-            helperText={errors.city}
-            disabled={disabled}
-            InputProps={{
-              startAdornment: (
-                <LocationCityIcon sx={{ mr: 1, color: 'text.secondary' }} />
-              ),
-            }}
-          />
-        </Grid>
-
-        <Grid item xs={12}>
-          <TextField
-            fullWidth
-            label="Fakturareferens (valfritt)"
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-            error={!!errors.reference}
-            helperText={errors.reference}
-            disabled={disabled}
-            InputProps={{
-              startAdornment: (
-                <DescriptionIcon sx={{ mr: 1, color: 'text.secondary' }} />
-              ),
-            }}
-          />
-        </Grid>
-      </Grid>
-
+    <Box>
+      <InvoicePaymentForm
+        address={address}
+        postalCode={postalCode}
+        city={city}
+        reference={reference}
+        onAddressChange={setAddress}
+        onPostalCodeChange={setPostalCode}
+        onCityChange={setCity}
+        onReferenceChange={setReference}
+        errors={errors}
+        disabled={disabled}
+      />
+      
       <InvoicePaymentDialog
         open={showDialog}
         onClose={handleCloseDialog}
-        status={dialogStatus}
+        status={status}
         invoiceNumber={invoiceNumber}
         bookingReference={bookingReference}
       />

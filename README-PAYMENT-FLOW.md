@@ -8,13 +8,104 @@ The payment system is designed as a generic solution that works across multiple 
 
 ## Component Structure
 ```
-/src/components/booking/
-  ├── PaymentSelection.tsx      # Main payment selection component
-  ├── SwishPaymentSection.tsx   # Handles Swish-specific payment logic
-  ├── SwishPaymentForm.tsx      # Swish phone number input form
-  ├── SwishPaymentDialog.tsx    # Dialog showing payment status
-  └── InvoicePaymentSection.tsx # Handles invoice-specific payment logic
+/src/
+├── components/
+│   └── booking/
+│       ├── PaymentSelection.tsx        # Main payment coordinator
+│       │
+│       ├── Swish Flow/
+│       │   ├── SwishPaymentSection.tsx # Swish coordinator
+│       │   ├── SwishPaymentForm.tsx    # Phone number input
+│       │   └── SwishPaymentDialog.tsx  # Payment status
+│       │
+│       └── Invoice Flow/
+│           ├── InvoicePaymentSection.tsx # Invoice coordinator
+│           ├── InvoicePaymentForm.tsx    # Address input (to be created)
+│           └── InvoicePaymentDialog.tsx  # Payment status
+│
+├── services/
+│   ├── swish/
+│   │   ├── swishPaymentService.ts      # Swish API integration
+│   │   └── swishTypes.ts              # Swish type definitions
+│   │
+│   └── invoice/
+│       ├── invoicePaymentService.ts    # Invoice generation
+│       └── invoiceTypes.ts            # Invoice type definitions
+│
+├── utils/
+│   ├── invoicePDF.ts                  # PDF generation
+│   └── confirmationEmail.ts           # Email service
+│
+└── types/
+    ├── payment.ts                     # Shared payment types
+    └── booking.ts                     # Booking types
 ```
+
+## Component Responsibilities
+
+### Payment Coordinator
+- `PaymentSelection.tsx`
+  - Handles payment method selection
+  - Coordinates between payment methods
+  - Manages overall payment flow
+  - Provides unified interface
+
+### Swish Flow
+1. `SwishPaymentSection.tsx`
+   - Coordinates Swish payment flow
+   - Manages payment status
+   - Handles callbacks and redirects
+
+2. `SwishPaymentForm.tsx`
+   - Phone number input and validation
+   - Swish-specific form logic
+
+3. `SwishPaymentDialog.tsx`
+   - Shows payment status
+   - Provides user instructions
+   - Handles success/error states
+
+### Invoice Flow
+1. `InvoicePaymentSection.tsx`
+   - Coordinates invoice payment flow
+   - Manages invoice generation
+   - Handles PDF creation
+
+2. `InvoicePaymentForm.tsx` (To be created)
+   - Address input and validation
+   - Invoice-specific form logic
+
+3. `InvoicePaymentDialog.tsx`
+   - Shows invoice status
+   - Provides download options
+   - Handles success/error states
+
+### Services
+1. Swish Services
+   - API integration
+   - Payment creation
+   - Status monitoring
+
+2. Invoice Services
+   - Invoice generation
+   - PDF creation
+   - Email sending
+
+## Data Flow
+
+### Swish Payment Flow
+1. User selects Swish
+2. Enters phone number (SwishPaymentForm)
+3. Section creates payment (SwishPaymentService)
+4. Dialog shows status
+5. Redirects on completion
+
+### Invoice Payment Flow
+1. User selects Invoice
+2. Enters address (InvoicePaymentForm)
+3. Section generates invoice (InvoicePaymentService)
+4. Creates PDF and sends email
+5. Dialog shows confirmation
 
 ## Key Components
 
@@ -159,7 +250,8 @@ SWISH_TEST_CA_PATH=certs/swish/test/Swish_TLS_RootCA.pem
 # Invoice Configuration
 NEXT_PUBLIC_INVOICE_PDF_STORAGE_PATH=invoices
 NEXT_PUBLIC_INVOICE_NUMBER_PREFIX=SC
-```
+
+
 
 ## Database Schema
 ```sql
@@ -264,3 +356,4 @@ CREATE TABLE bookings (
    - Create component documentation
    - Update API documentation
    - Add invoice flow diagrams
+```

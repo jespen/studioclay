@@ -2,72 +2,19 @@
  * PaymentSelection Component
  * 
  * This component handles the payment selection and processing flow in the booking process.
- * It's one of the most complex parts of the application, coordinating between different
- * payment methods (Swish and Invoice) and their respective components.
- * 
- * Key Responsibilities:
- * 1. Display payment method selection (Swish/Invoice)
- * 2. Coordinate between payment components
- * 3. Handle form validation
- * 4. Manage payment state and errors
- * 5. Handle navigation after successful payment
+ * It coordinates between different payment methods (Swish and Invoice) and their respective components.
  * 
  * Component Structure:
  * - PaymentSelection (this file)
- *   ├── SwishPaymentSection (handles Swish-specific logic)
- *   └── InvoicePaymentSection (handles Invoice-specific logic)
- * 
- * Recent Changes and Architecture Decisions:
- * 1. Separation of Concerns:
- *    - Moved Swish-specific logic to SwishPaymentSection
- *    - Moved Invoice-specific logic to InvoicePaymentSection
- *    - PaymentSelection now acts as a coordinator
- * 
- * 2. Payment Flow:
- *    Swish:
- *    - User selects Swish payment
- *    - Enters phone number
- *    - Clicks "Slutför bokning"
- *    - SwishPaymentSection creates payment and shows dialog
- *    - User approves in Swish app
- *    - Status updates via polling
- *    - Redirect to confirmation on success
- * 
- *    Invoice:
- *    - User selects Invoice payment
- *    - Fills in invoice details
- *    - Clicks "Slutför bokning"
- *    - InvoicePaymentSection validates and creates invoice
- *    - On success, redirects to confirmation
- * 
- * 3. State Management:
- *    - Payment method selection
- *    - Form validation state
- *    - Submission state
- *    - Error handling
- * 
- * 4. Validation:
- *    - Basic form validation (payment method selected)
- *    - Swish validation handled by SwishPaymentSection
- *    - Invoice validation handled by InvoicePaymentSection
- * 
- * 5. Error Handling:
- *    - Form validation errors
- *    - Payment processing errors
- *    - API errors
- * 
- * Important Notes:
- * - Each payment method has its own component for better maintainability
- * - PaymentSelection uses refs to communicate with child components
- * - Navigation after successful payment is handled differently for each method
- * - Swish requires user interaction (approval in app)
- * - Invoice is processed immediately
- * 
- * Dependencies:
- * - SwishPaymentSection: Handles Swish payment flow
- * - InvoicePaymentSection: Handles Invoice payment flow
- * - useSwishPaymentStatus: Manages Swish payment status
- * - Various MUI components for UI
+ *   ├── Swish Flow/
+ *   │   ├── SwishPaymentSection.tsx # Swish coordinator
+ *   │   ├── SwishPaymentForm.tsx    # Phone number input
+ *   │   └── SwishPaymentDialog.tsx  # Payment status
+ *   │
+ *   └── Invoice Flow/
+ *       ├── InvoicePaymentSection.tsx # Invoice coordinator
+ *       ├── InvoicePaymentForm.tsx    # Address input
+ *       └── InvoicePaymentDialog.tsx  # Payment status
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -153,13 +100,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails>({
-    method: 'swish',
-    invoiceDetails: {
-      address: '',
-      postalCode: '',
-      city: '',
-      reference: '',
-    }
+    method: 'swish'
   });
   
   const [formErrors, setFormErrors] = useState<BaseFormErrors>({});
@@ -182,7 +123,19 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
 
   const handleRadioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setPaymentDetails(prev => ({ ...prev, [name]: value }));
+    setPaymentDetails(prev => ({ 
+      ...prev, 
+      [name]: value,
+      // Initialize invoiceDetails when switching to invoice
+      ...(value === 'invoice' && !prev.invoiceDetails ? {
+        invoiceDetails: {
+          address: '',
+          postalCode: '',
+          city: '',
+          reference: ''
+        }
+      } : {})
+    }));
     // Clear error when user selects
     if (formErrors[name as keyof BaseFormErrors]) {
       setFormErrors(prev => ({ ...prev, [name]: undefined }));
@@ -408,11 +361,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
                             }}
                             onValidationError={(error) => setFormErrors(prev => ({ ...prev, invoice: error }))}
                             disabled={isSubmitting}
-                            errors={{
-                              address: formErrors['invoiceDetails.address'],
-                              postalCode: formErrors['invoiceDetails.postalCode'],
-                              city: formErrors['invoiceDetails.city']
-                            }}
                           />
                         )}
                       </CardContent>
