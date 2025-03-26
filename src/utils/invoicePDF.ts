@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf';
 import { UserInfo } from '@/types/booking';
 
 // Company details
@@ -81,6 +80,9 @@ export async function generateInvoicePDF(
     dueDate: string;
   }
 ): Promise<Blob> {
+  // Dynamically import jsPDF (to avoid SSR issues)
+  const { default: jsPDF } = await import('jspdf');
+  
   // Create a new PDF document
   const doc = new jsPDF({
     orientation: 'portrait',

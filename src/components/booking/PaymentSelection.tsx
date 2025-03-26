@@ -179,78 +179,63 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
 
   // Create an invoice payment request
   const createInvoicePayment = async (): Promise<{success: boolean, reference: string | null}> => {
+    console.log('=== Starting invoice payment creation ===');
+    console.log('User info:', userInfo);
+    console.log('Course ID:', courseId);
+    console.log('Payment details:', paymentDetails);
+    
     try {
       // Generera en unik idempotency key
       const idempotencyKey = uuidv4();
+      console.log('Generated idempotency key:', idempotencyKey);
       
-      const response = await fetch('/api/payments/create', {
+      console.log('Creating invoice...');
+      const response = await fetch('/api/invoice/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Idempotency-Key': idempotencyKey
         },
         body: JSON.stringify({
-          user_info: {
-            firstName: userInfo?.firstName,
-            lastName: userInfo?.lastName,
-            email: userInfo?.email,
-            phone: userInfo?.phone
-          },
-          product_type: 'course',
-          product_id: courseId,
-          amount: calculatePrice(),
-          quantity: parseInt(userInfo?.numberOfParticipants || '1'),
-          payment_method: 'invoice'
-        }),
-      });
-
-      const result = await response.json();
-      console.log('Payment API response:', result);
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create payment');
-      }
-
-      // Store payment reference and idempotency key
-      localStorage.setItem('currentPaymentReference', result.reference);
-      localStorage.setItem('currentPaymentIdempotencyKey', idempotencyKey);
-
-      // Create invoice
-      const invoiceResponse = await fetch('/api/invoice/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': `${idempotencyKey}-invoice`
-        },
-        body: JSON.stringify({
           courseId,
           userInfo,
           paymentDetails: {
             ...paymentDetails,
-            reference: result.reference
+            amount: calculatePrice()
           }
         }),
       });
 
-      const invoiceResult = await invoiceResponse.json();
-      if (!invoiceResult.success) {
-        throw new Error(invoiceResult.error || 'Failed to create invoice');
+      const result = await response.json();
+      console.log('Invoice API response:', result);
+
+      if (!result.success) {
+        console.error('Invoice creation failed:', result.error);
+        throw new Error(result.error || 'Failed to create invoice');
       }
 
-      return { success: true, reference: result.reference };
+      // Store booking reference
+      if (result.data?.bookingReference) {
+        console.log('Storing booking reference:', result.data.bookingReference);
+        localStorage.setItem('bookingReference', result.data.bookingReference);
+      }
+
+      console.log('=== Invoice creation completed successfully ===');
+      return { success: true, reference: result.data?.bookingReference || null };
     } catch (error) {
-      console.error('Error in invoice creation:', error);
+      console.error('=== Error in invoice creation ===');
+      console.error('Error details:', error);
       return { success: false, reference: null };
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Submit button clicked');
-    console.log('handleSubmit called, payment method:', paymentDetails.method);
+    console.log('=== Payment submission started ===');
+    console.log('Payment method:', paymentDetails.method);
     
     if (!validateForm()) {
-      console.log('Form validation failed, stopping submission');
+      console.log('Form validation failed');
       console.log('Form errors:', formErrors);
       return;
     }
@@ -275,16 +260,18 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
         const paymentResult = await createInvoicePayment();
         
         if (!paymentResult.success) {
+          console.error('Invoice payment failed');
           throw new Error('Invoice creation failed');
         }
         
+        console.log('Invoice payment successful, redirecting to confirmation');
         router.push(`/book-course/${courseId}/confirmation`);
       }
     } catch (error) {
       console.error('Error in handleSubmit:', error);
       setSubmitError('Det gick inte att skapa betalningen. Försök igen senare.');
     } finally {
-      console.log('handleSubmit completed, setting isSubmitting to false');
+      console.log('Payment submission completed');
       setIsSubmitting(false);
     }
   };
