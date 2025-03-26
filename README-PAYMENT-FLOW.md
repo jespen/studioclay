@@ -522,74 +522,9 @@ interface SwishCallbackData {
     /components
       /booking
         PaymentSelection.tsx ✅ Working
-    /services
-      /swish
-        swishService.ts      ✅ New: Handles all Swish-specific logic
-        types.ts            ✅ New: Contains Swish-related types
-    /utils
-      /admin/              ✅ Working
-      apiUtils.ts          ✅ Working
-      booking.ts           ✅ Working
-      confirmationEmail.ts ✅ Working
-      invoiceEmail.ts      ✅ Working
-      invoicePDF.ts        ✅ Working
-      security.ts          ✅ Working
-      serverEmail.ts       ✅ Working
-      supabase.ts          ✅ Working
-  /certs
-    /swish
-      /test               ✅ Required for test environment
-        Swish_Merchant_TestCertificate_1234679304.pem
-        Swish_Merchant_TestCertificate_1234679304.key
-        Swish_TLS_RootCA.pem
-      /prod              🔄 Required for production
-        [CERT].pem
-        [KEY].key
-        [CA].pem
-```
-
-### 🔄 Recent Changes
-1. **New Service Layer**:
-   - Added `SwishService` class for centralized Swish handling
-   - Moved phone number formatting and API communication to service
-   - Implemented singleton pattern for consistent configuration
-
-2. **Type System Improvements**:
-   - Moved `PaymentStatus` from component to `types.ts`
-   - Replaced enum with type union and constant object
-   - Improved type safety across the payment system
-   - Centralized all Swish-related types in `services/swish/types.ts`
-
-3. **Code Organization**:
-   - Better separation of concerns
-   - Improved type safety with dedicated types file
-   - More maintainable and testable code structure
-   - All Swish-related code now centralized in `services/swish`
-
-4. **Removed Files**:
-   - Removed `src/utils/payments.ts` (functionality moved to `SwishService`)
-   - Removed `src/lib/swish.ts` (functionality moved to `SwishService`)
-   - Removed empty `src/lib/swish` directory
-   - Removed unused Swish configuration files
-
-### 📁 Required File Structure
-```
-/studioclay
-  /src
-    /app
-      /api
-        /payments
-          /swish
-            /create
-              route.ts       ✅ Working
-            /callback
-              route.ts       ✅ Working
-          /status
-            /[reference]
-              route.ts       ✅ Working
-    /components
-      /booking
-        PaymentSelection.tsx ✅ Working
+        SwishPaymentDialog.tsx ✅ New: Extracted dialog component
+    /hooks
+      useSwishPaymentStatus.ts ✅ New: Custom hook for payment status
     /services
       /swish
         swishService.ts      ✅ New: Handles all Swish-specific logic
@@ -702,3 +637,27 @@ CREATE TABLE payments (
 3. ❌ Refund handling (not implemented)
 4. ❌ Multiple payment attempts tracking (not implemented)
 5. ❌ Payment status history (table exists but not used)
+
+### 🔄 Recent Changes
+1. **New Service Layer**:
+   - Added `SwishService` class for centralized Swish handling
+   - Moved phone number formatting and API communication to service
+   - Implemented singleton pattern for consistent configuration
+
+2. **Type System Improvements**:
+   - Moved `PaymentStatus` from component to `types.ts`
+   - Replaced enum with type union and constant object
+   - Improved type safety across the payment system
+   - Centralized all Swish-related types in `services/swish/types.ts`
+
+3. **Code Organization**:
+   - Better separation of concerns
+   - Improved type safety with dedicated types file
+   - More maintainable and testable code structure
+   - All Swish-related code now centralized in `services/swish`
+
+4. **Removed Files**:
+   - Removed `src/utils/payments.ts` (functionality moved to `SwishService`)
+   - Removed `src/lib/swish.ts` (functionality moved to `SwishService`)
+   - Removed empty `src/lib/swish` directory
+   - Removed unused Swish configuration files
