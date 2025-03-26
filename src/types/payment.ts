@@ -73,4 +73,34 @@ export interface Booking {
 // Booking status values
 export type BookingStatus = 
   | 'CONFIRMED'
-  | 'CANCELLED'; 
+  | 'CANCELLED';
+
+export type PaymentMethod = 'swish' | 'invoice';
+
+export interface PaymentDetails {
+  method: PaymentMethod;
+  invoiceDetails?: InvoiceDetails;
+}
+
+export interface InvoiceDetails {
+  address: string;
+  postalCode: string;
+  city: string;
+  reference: string;
+}
+
+export interface BaseFormErrors {
+  paymentMethod?: string;
+  'invoiceDetails.address'?: string;
+  'invoiceDetails.postalCode'?: string;
+  'invoiceDetails.city'?: string;
+  invoice?: string;
+}
+
+export interface SwishFormErrors extends BaseFormErrors {
+  swishPhone?: string;
+}
+
+export interface InvoiceFormErrors extends BaseFormErrors {
+  'invoiceDetails.reference'?: string;
+} 

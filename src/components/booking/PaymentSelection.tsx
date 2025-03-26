@@ -119,6 +119,7 @@ import { sendBookingConfirmationEmail } from '@/utils/confirmationEmail';
 import { v4 as uuidv4 } from 'uuid';
 import SwishPaymentSection, { SwishPaymentSectionRef } from './SwishPaymentSection';
 import InvoicePaymentSection, { InvoicePaymentSectionRef } from './InvoicePaymentSection';
+import { PaymentMethod, PaymentDetails, BaseFormErrors } from '@/types/payment';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -138,20 +139,6 @@ interface InvoiceDetails {
   postalCode: string;
   city: string;
   reference: string;
-}
-
-interface PaymentDetails {
-  method: string;
-  invoiceDetails?: InvoiceDetails;
-}
-
-interface FormErrors {
-  paymentMethod?: string;
-  swishPhone?: string;
-  'invoiceDetails.address'?: string;
-  'invoiceDetails.postalCode'?: string;
-  'invoiceDetails.city'?: string;
-  invoice?: string;
 }
 
 const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
@@ -175,7 +162,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     }
   });
   
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [formErrors, setFormErrors] = useState<BaseFormErrors>({});
   const swishPaymentRef = useRef<SwishPaymentSectionRef>(null);
   const invoicePaymentRef = useRef<InvoicePaymentSectionRef>(null);
 
@@ -197,7 +184,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     const { name, value } = e.target;
     setPaymentDetails(prev => ({ ...prev, [name]: value }));
     // Clear error when user selects
-    if (formErrors[name as keyof FormErrors]) {
+    if (formErrors[name as keyof BaseFormErrors]) {
       setFormErrors(prev => ({ ...prev, [name]: undefined }));
     }
   };
@@ -215,28 +202,20 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({ courseId }) => {
     }));
     
     // Clear error when user types
-    const errorKey = `invoiceDetails.${name}` as keyof FormErrors;
+    const errorKey = `invoiceDetails.${name}` as keyof BaseFormErrors;
     if (formErrors[errorKey]) {
       setFormErrors(prev => ({ ...prev, [errorKey]: undefined }));
     }
   };
 
   const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
+    const newErrors: BaseFormErrors = {};
     
     if (!paymentDetails.method) {
       newErrors.paymentMethod = 'Välj betalningsmetod';
     }
 
-    if (paymentDetails.method === 'swish') {
-      // Swish validation is handled in SwishPaymentSection
-      return true;
-    } else if (paymentDetails.method === 'invoice') {
-      // Invoice validation is handled in InvoicePaymentSection
-      return true;
-    }
-
-    setFormErrors(newErrors);
+    // Each payment section handles its own validation
     return Object.keys(newErrors).length === 0;
   };
 
