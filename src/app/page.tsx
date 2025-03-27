@@ -8,6 +8,7 @@ import Courses from '@/components/Courses';
 import NewsletterBanner from '@/components/NewsletterBanner';
 import FAQ from '@/components/FAQ';
 import Footer from '@/components/Footer';
+import Shop from '@/components/shop/Shop';
 
 export default function Home() {
   return (
@@ -26,6 +27,9 @@ export default function Home() {
         </section>
         <section id="presentkort">
           <GiftCardBanner />
+        </section>
+        <section id="shop">
+          <Shop />
         </section>
         <section id="works">
           <Portfolio />

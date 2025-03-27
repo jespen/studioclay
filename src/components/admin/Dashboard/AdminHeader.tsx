@@ -19,31 +19,33 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
-
-      // Sign out from Supabase first
-      await (supabase as SupabaseClient).auth.signOut();
-
-      // Call our logout API
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Cache-Control': 'no-cache'
-        }
-      });
-
-      // Clear all cookies
-      document.cookie.split(';').forEach(cookie => {
-        const [name] = cookie.split('=');
-        document.cookie = `${name.trim()}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
-      });
-
-      // Force a complete page reload to clear all state
-      window.location.href = '/admin?ts=' + Date.now();
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Error signing out:', error);
+        // Still redirect even if there was an error, as a fallback
+      }
+      
+      // Try to clear any auth cookies through the API
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+      } catch (err) {
+        console.error('Error clearing auth cookies:', err);
+      }
+      
+      // Redirect to login page after logout
+      router.push('/admin');
     } catch (error) {
-      console.error('Logout error:', error);
-      // Even if there's an error, try to redirect
-      window.location.href = '/admin?ts=' + Date.now();
+      console.error('Unexpected error during logout:', error);
+      // Redirect anyway as a fallback
+      router.push('/admin');
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -68,12 +70,19 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
             <Link href="/admin/dashboard/gift-cards" className={styles.navButton}>
               Presentkort
             </Link>
+            
+            <Link href="/admin/dashboard/shop" className={styles.navButton}>
+              Webshop
+            </Link>
+            
             <Link href="/admin/templates" className={styles.navButton}>
               Kursmallar
             </Link>
+            
             <Link href="/admin/dashboard/developer" className={styles.navButton}>
               Developer
             </Link>
+            
             <button 
               onClick={handleLogout} 
               className={`${styles.navButton} ${styles.logoutButton}`}

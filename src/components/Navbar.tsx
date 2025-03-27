@@ -33,7 +33,7 @@ const Navbar = () => {
 
   useEffect(() => {
     const handleScroll = () => {
-      const sections = ['home', 'services', 'presentkort', 'works', 'courses', 'kontakt'];
+      const sections = ['home', 'services', 'presentkort', 'shop', 'works', 'courses', 'kontakt'];
       const scrollPosition = window.scrollY + 100;
 
       for (const section of sections) {
@@ -62,6 +62,7 @@ const Navbar = () => {
     { id: 'courses', label: 'Kurser', isAnchor: true },
     { id: 'services', label: 'Övriga kurser', isAnchor: true },
     { id: 'presentkort', label: 'Presentkort', isAnchor: true },
+    { id: 'shop', label: 'Shop', isAnchor: true },
     { id: 'works', label: 'Portfolio', isAnchor: true },
     { id: 'kontakt', label: 'Kontakt', href: '/contact', isAnchor: false },
   ];
