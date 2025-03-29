@@ -4,110 +4,42 @@ import React, { useState, useEffect } from 'react';
 import ProductCard from './ProductCard';
 import { Product } from './types';
 
-const initialProducts: Product[] = [
-  {
-    id: '1',
-    title: 'KORG MED HANDTAG',
-    price: 160,
-    image: '/pictures/gronvas.jpg',
-    isNew: true,
-    description: 'En stilfull korg med handtag, perfekt för förvaring eller som en dekorativ inredningsdetalj.',
-    discount: null,
-  },
-  {
-    id: '2',
-    title: 'BLOMVAS',
-    price: 170,
-    originalPrice: 210,
-    image: '/pictures/vasmedblomma.jpg',
-    isNew: true,
-    description: 'Elegant blomvas med detaljer, perfekt för färska eller torkade blommor.',
-    discount: 19,
-  },
-  {
-    id: '3',
-    title: 'DEKORATION',
-    price: 35,
-    image: '/pictures/ljuslykta.jpg',
-    isNew: false,
-    description: 'Dekorativ inredningsdetalj som tillför textur och charm till alla utrymmen.',
-    discount: null,
-  },
-  {
-    id: '4',
-    title: 'VÄGGPRYDNAD',
-    price: 110,
-    image: '/pictures/skålmedprickar.jpg',
-    isNew: true,
-    description: 'Minimalistisk väggdekoration med rena linjer för en modern estetik.',
-    discount: null,
-  },
-  {
-    id: '5',
-    title: 'FÖRVARINGSDETALJ',
-    price: 90,
-    image: '/pictures/finavaser.jpg',
-    isNew: false,
-    description: 'Väggmonterad förvaringslösning med stilren design och praktisk funktion.',
-    discount: null,
-  },
-  {
-    id: '6',
-    title: 'KERAMIKVAS',
-    price: 60,
-    image: '/pictures/ljuslyktorblåa.jpg',
-    isNew: false,
-    description: 'Handgjord keramikvas i neutrala toner, var och en med unika texturer och finish.',
-    discount: null,
-  },
-  {
-    id: '7',
-    title: 'DEKORATIONSDETALJ',
-    price: 24,
-    originalPrice: 30,
-    image: '/pictures/skålmedprickar2.jpg',
-    isNew: false,
-    description: 'Elegant dekorationsdetalj, perfekt som accent för vilket rum som helst.',
-    discount: 20,
-  },
-  {
-    id: '8',
-    title: 'KAFFEKOPP SET',
-    price: 240,
-    image: '/pictures/kaffemuggar.jpg',
-    isNew: true,
-    description: 'Modernt kaffekopp-set med vacker design och praktisk funktion.',
-    discount: null,
-  },
-];
-
+// Produkterna hämtas nu från API:et istället för att vara hårdkodade här
 const Shop = () => {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // In the future, we'll fetch products from Supabase here
-  // useEffect(() => {
-  //   async function fetchProducts() {
-  //     setLoading(true);
-  //     try {
-  //       // const { data, error } = await supabase
-  //       //   .from('products')
-  //       //   .select('*')
-  //       //   .order('created_at', { ascending: false });
-  //       
-  //       // if (error) throw error;
-  //       // setProducts(data);
-  //       setLoading(false);
-  //     } catch (err) {
-  //       console.error('Error fetching products:', err);
-  //       setError('Failed to load products');
-  //       setLoading(false);
-  //     }
-  //   }
-  //   
-  //   fetchProducts();
-  // }, []);
+  // Fetch products from API
+  useEffect(() => {
+    async function fetchProducts() {
+      setLoading(true);
+      try {
+        const response = await fetch('/api/products?inStock=true');
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch products: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data && Array.isArray(data.products)) {
+          setProducts(data.products);
+        } else {
+          console.error('Invalid product data format:', data);
+          setError('Kunde inte ladda produkter från servern');
+        }
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching products:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load products');
+        setLoading(false);
+      }
+    }
+    
+    fetchProducts();
+  }, []);
 
   if (loading) {
     return (
