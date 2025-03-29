@@ -1,6 +1,6 @@
 # Checkout Flow Refactoring
 
-This document describes the refactoring changes made to simplify and improve the checkout flow, focusing on steps 1, 2, and 4. The payment component (step 3) is intentionally left unchanged as requested.
+This document describes the refactoring changes made to simplify and improve the checkout flow, focusing on all four steps (1, 2, 3, and 4). The refactoring creates a more consistent, maintainable, and robust checkout experience.
 
 ## Overview of Changes
 
@@ -42,6 +42,16 @@ We created a centralized data fetching and management utility that all component
 - Improved loading and error states
 - Ensures data is saved consistently to both flowStorage and legacy localStorage
 
+### Step 3: Payment Selection Component
+
+- Integrated with the centralized data fetcher utility
+- Parallel data loading with Promise.all for improved performance
+- Clear loading and error states with appropriate UI feedback
+- Maintains compatibility with both Swish and invoice payment methods
+- Corrected the flow for Swish payments to properly track payment status
+- Better separation of concerns between payment methods
+- Preserved the complex payment logic while improving data handling
+
 ### Step 4: Confirmation Component
 
 - Standardized data retrieval from both flowStorage and fallback sources
@@ -69,4 +79,10 @@ This ensures a smooth transition and maintains compatibility with both old and n
 
 ## Next Steps
 
-The payment section (step 3) has been left unchanged for now, but in the future, it could be refactored using the same patterns to complete the modernization of the checkout flow. 
+All steps in the checkout flow have now been refactored using the same patterns, creating a consistent and maintainable system. Future enhancements could include:
+
+1. **Server-side state persistence**: Moving from client-side storage to server-side state management
+2. **Authentication integration**: Adding user accounts for returning customers
+3. **Enhanced analytics**: Better tracking of checkout flow progression and abandonment
+4. **A/B testing framework**: Infrastructure for testing different checkout variations
+5. **Localization**: Internationalization support for multiple languages 

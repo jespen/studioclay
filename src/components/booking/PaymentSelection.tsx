@@ -41,11 +41,6 @@ import {
   TextField,
   useTheme,
   useMediaQuery,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
 } from '@mui/material';
 
 import PersonIcon from '@mui/icons-material/Person';
@@ -53,22 +48,22 @@ import EmailIcon from '@mui/icons-material/Email';
 import PhoneIcon from '@mui/icons-material/Phone';
 import PeopleIcon from '@mui/icons-material/People';
 import ReceiptIcon from '@mui/icons-material/Receipt';
-import CreditCardIcon from '@mui/icons-material/CreditCard';
-import HomeIcon from '@mui/icons-material/Home';
-import LocationCityIcon from '@mui/icons-material/LocationCity';
-import MarkunreadMailboxIcon from '@mui/icons-material/MarkunreadMailbox';
 
 import { GenericStep, FlowType } from '../common/BookingStepper';
 import GenericFlowContainer from '../common/GenericFlowContainer';
 import StyledButton from '../common/StyledButton';
-import { FormCheckboxField, FormTextField } from '../common/FormField';
-import { sendBookingConfirmationEmail } from '@/utils/confirmationEmail';
 import { v4 as uuidv4 } from 'uuid';
 import SwishPaymentSection, { SwishPaymentSectionRef } from './SwishPaymentSection';
 import InvoicePaymentSection, { InvoicePaymentSectionRef } from './InvoicePaymentSection';
 import { PaymentMethod, PaymentDetails, BaseFormErrors, InvoiceDetails } from '@/types/payment';
 import { setPaymentInfo } from '@/utils/flowStorage';
 import { FlowStateData } from '../common/FlowStepWrapper';
+import { 
+  CourseDetail, 
+  UserInfo, 
+  fetchCourseDetail, 
+  getUserInfo 
+} from '@/utils/dataFetcher';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -77,15 +72,6 @@ interface PaymentSelectionProps {
   onNext?: (data?: any) => void;
   onBack?: () => void;
   flowData?: FlowStateData;
-}
-
-interface UserInfo {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  numberOfParticipants: string;
-  specialRequirements?: string;
 }
 
 const PaymentSelection: React.FC<PaymentSelectionProps> = ({ 
@@ -102,8 +88,9 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
   
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [courseDetail, setCourseDetail] = useState<any | null>(null);
+  const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [submitError, setSubmitError] = useState<string | null>(null);
   
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails>({
@@ -115,25 +102,33 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const invoicePaymentRef = useRef<InvoicePaymentSectionRef>(null);
 
   useEffect(() => {
-    // Use flowData if available, fall back to localStorage for backwards compatibility
-    if (flowData) {
-      setUserInfo(flowData.userInfo as UserInfo);
-      setCourseDetail(flowData.itemDetails);
-      return;
-    }
-    
-    // Fallback to localStorage
-    const storedUserInfo = localStorage.getItem('userInfo');
-    const storedCourseDetail = localStorage.getItem('courseDetail');
-    
-    if (storedUserInfo) {
-      setUserInfo(JSON.parse(storedUserInfo));
-    }
-    
-    if (storedCourseDetail) {
-      setCourseDetail(JSON.parse(storedCourseDetail));
-    }
-  }, [flowData]);
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        // Prioritize data from flowData props
+        if (flowData?.itemDetails && flowData?.userInfo) {
+          setCourseDetail(flowData.itemDetails as CourseDetail);
+          setUserInfo(flowData.userInfo as UserInfo);
+        } else {
+          // Fall back to our utilities that check both flowStorage and localStorage
+          const [courseData, userData] = await Promise.all([
+            fetchCourseDetail(courseId),
+            getUserInfo()
+          ]);
+          
+          setCourseDetail(courseData);
+          setUserInfo(userData);
+        }
+      } catch (error) {
+        console.error('Error loading data for payment:', error);
+        setSubmitError('Det gick inte att ladda nödvändig information. Försök igen senare.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [courseId, flowData]);
 
   const handleRadioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -183,6 +178,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     }
 
     // Each payment section handles its own validation
+    setFormErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
@@ -194,6 +190,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     }
 
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
       let success = false;
@@ -283,6 +280,31 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       }
     }
   };
+
+  // If data is loading, show loading state
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', my: 5 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // If data failed to load, show error
+  if (!userInfo || !courseDetail) {
+    return (
+      <Box sx={{ my: 3 }}>
+        <Alert severity="error">
+          Det gick inte att ladda nödvändig information. Gå tillbaka och försök igen.
+        </Alert>
+        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+          <StyledButton secondary onClick={handleBack}>
+            Tillbaka
+          </StyledButton>
+        </Box>
+      </Box>
+    );
+  }
 
   // Extract the payment form content to be reused
   const renderPaymentContent = () => (
