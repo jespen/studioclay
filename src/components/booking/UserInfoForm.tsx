@@ -19,9 +19,12 @@ import { GenericStep, FlowType } from '../common/BookingStepper';
 import GenericFlowContainer from '../common/GenericFlowContainer';
 import StyledButton from '../common/StyledButton';
 import { FormTextField } from '../common/FormField';
+import { setUserInfo } from '@/utils/flowStorage';
 
 interface UserInfoFormProps {
   courseId: string;
+  onNext?: () => void;
+  onBack?: () => void;
 }
 
 interface FormData {
@@ -50,13 +53,15 @@ interface CourseDetail {
   price?: number;
 }
 
-const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId }) => {
+const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack }) => {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [maxParticipants, setMaxParticipants] = useState(1);
+  // Ref to track if we're already fetching data
+  const isFetchingRef = React.useRef(false);
   
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -71,13 +76,44 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId }) => {
 
   // Fetch course details to get available spots
   useEffect(() => {
+    // Skip if already fetching
+    if (isFetchingRef.current) return;
+    
     const fetchCourseDetails = async () => {
       try {
+        // Set fetching flag
+        isFetchingRef.current = true;
         setLoading(true);
+        
+        // First check if we already have course details in localStorage or flowData
+        const storedCourseDetail = localStorage.getItem('courseDetail');
+        if (storedCourseDetail) {
+          try {
+            const parsedDetail = JSON.parse(storedCourseDetail);
+            if (parsedDetail && parsedDetail.id === courseId) {
+              setCourseDetail(parsedDetail);
+              
+              // Calculate available spots
+              const availableSpots = parsedDetail.availableSpots !== undefined 
+                ? parsedDetail.availableSpots 
+                : (parsedDetail.max_participants ? parsedDetail.max_participants - (parsedDetail.current_participants || 0) : 10);
+              
+              setMaxParticipants(Math.max(1, availableSpots));
+              setLoading(false);
+              isFetchingRef.current = false;
+              return;
+            }
+          } catch (err) {
+            console.error('Error parsing stored course detail:', err);
+            // Continue to fetch from API if parsing fails
+          }
+        }
+        
+        // If not found in localStorage, fetch from API
         const response = await fetch(`/api/courses/${courseId}`);
         
         if (!response.ok) {
-          throw new Error('Failed to fetch course details');
+          throw new Error(`Failed to fetch course details: ${response.status}`);
         }
         
         const data = await response.json();
@@ -90,19 +126,44 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId }) => {
             ? data.course.availableSpots 
             : (data.course.max_participants ? data.course.max_participants - (data.course.current_participants || 0) : 10);
           
-          setMaxParticipants(availableSpots);
+          setMaxParticipants(Math.max(1, availableSpots));
+        } else {
+          throw new Error('Invalid course data format');
         }
       } catch (error) {
-        setSubmitError('Failed to fetch course details. Please try again later.');
+        console.error('Error fetching course details:', error);
+        setSubmitError(error instanceof Error ? error.message : 'Failed to fetch course details. Please try again later.');
       } finally {
         setLoading(false);
+        isFetchingRef.current = false;
       }
     };
 
     if (courseId) {
       fetchCourseDetails();
     }
+    
+    // Clean up fetching flag
+    return () => {
+      isFetchingRef.current = false;
+    };
   }, [courseId]);
+
+  // Load existing user data if available
+  useEffect(() => {
+    const storedUserInfo = localStorage.getItem('userInfo');
+    if (storedUserInfo) {
+      try {
+        const parsedUserInfo = JSON.parse(storedUserInfo);
+        setFormData(prevData => ({
+          ...prevData,
+          ...parsedUserInfo
+        }));
+      } catch (error) {
+        console.error('Error parsing stored user info:', error);
+      }
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -177,16 +238,18 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId }) => {
     setSubmitError(null);
 
     try {
-      // In a real implementation, this would be an API call
-      // Mock API call with a timeout
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Store user info using flowStorage API
+      setUserInfo(formData);
       
-      // Store form data in localStorage or context for the next step
+      // Also store in localStorage for backward compatibility
       localStorage.setItem('userInfo', JSON.stringify(formData));
-      localStorage.setItem('courseDetail', JSON.stringify(courseDetail));
       
       // Navigate to next step
-      router.push(`/book-course/${courseId}/payment`);
+      if (onNext) {
+        onNext();
+      } else {
+        router.push(`/book-course/${courseId}/payment`);
+      }
     } catch (error) {
       setSubmitError('Det gick inte att skicka formuläret. Försök igen senare.');
     } finally {
@@ -195,175 +258,164 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId }) => {
   };
 
   const handleBack = () => {
-    router.push(`/book-course/${courseId}`);
-  };
-
-  // Generate participant options based on available spots
-  const participantOptions = () => {
-    const options = [];
-    for (let i = 1; i <= maxParticipants; i++) {
-      options.push(
-        <MenuItem key={i} value={i.toString()}>
-          {i} {i === 1 ? 'person' : 'personer'}
-        </MenuItem>
-      );
+    if (onBack) {
+      onBack();
+    } else {
+      router.push(`/book-course/${courseId}`);
     }
-    return options;
   };
 
+  // Extract form rendering logic to a separate function for reuse
+  const renderFormContent = () => (
+    <Grid container spacing={3}>
+      <Grid item xs={12} sm={6}>
+        <FormTextField
+          required
+          id="firstName"
+          name="firstName"
+          label="Förnamn"
+          value={formData.firstName}
+          onChange={handleChange}
+          error={formErrors.firstName}
+          disabled={isSubmitting}
+        />
+      </Grid>
+      <Grid item xs={12} sm={6}>
+        <FormTextField
+          required
+          id="lastName"
+          name="lastName"
+          label="Efternamn"
+          value={formData.lastName}
+          onChange={handleChange}
+          error={formErrors.lastName}
+          disabled={isSubmitting}
+        />
+      </Grid>
+      <Grid item xs={12}>
+        <FormTextField
+          required
+          id="email"
+          name="email"
+          label="E-post"
+          value={formData.email}
+          onChange={handleChange}
+          error={formErrors.email}
+          disabled={isSubmitting}
+        />
+      </Grid>
+      <Grid item xs={12}>
+        <FormTextField
+          required
+          id="phone"
+          name="phone"
+          label="Telefon"
+          value={formData.phone}
+          onChange={handleChange}
+          error={formErrors.phone}
+          disabled={isSubmitting}
+        />
+      </Grid>
+      <Grid item xs={12}>
+        <FormControl fullWidth error={Boolean(formErrors.numberOfParticipants)}>
+          <InputLabel id="numberOfParticipants-label">Antal personer</InputLabel>
+          <Select
+            labelId="numberOfParticipants-label"
+            id="numberOfParticipants"
+            name="numberOfParticipants"
+            value={formData.numberOfParticipants}
+            onChange={handleSelectChange}
+            disabled={isSubmitting}
+          >
+            {Array.from({ length: maxParticipants }, (_, i) => i + 1).map((num) => (
+              <MenuItem key={num} value={num.toString()}>
+                {num} {num === 1 ? 'person' : 'personer'}
+              </MenuItem>
+            ))}
+          </Select>
+          {formErrors.numberOfParticipants && (
+            <FormHelperText>{formErrors.numberOfParticipants}</FormHelperText>
+          )}
+        </FormControl>
+      </Grid>
+      <Grid item xs={12}>
+        <FormTextField
+          id="specialRequirements"
+          name="specialRequirements"
+          label="Särskilda önskemål (valfritt)"
+          multiline
+          rows={4}
+          value={formData.specialRequirements}
+          onChange={handleChange}
+          disabled={isSubmitting}
+        />
+      </Grid>
+    </Grid>
+  );
+
+  // Extract buttons rendering
+  const renderButtons = () => (
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
+      <StyledButton
+        type="button"
+        onClick={handleBack}
+        disabled={isSubmitting}
+        secondary
+      >
+        Tillbaka
+      </StyledButton>
+      <StyledButton
+        type="submit"
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? <CircularProgress size={24} /> : 'Fortsätt till betalning'}
+      </StyledButton>
+    </Box>
+  );
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // Skip GenericFlowContainer if we're inside FlowStepWrapper (indicated by onNext)
   return (
-    <GenericFlowContainer 
-      activeStep={1} 
-      flowType={FlowType.COURSE_BOOKING}
-      title="Dina uppgifter"
-      subtitle="Fyll i dina personuppgifter nedan för att fortsätta med bokningen."
-      alertMessage={submitError || undefined}
-      alertSeverity="error"
-    >
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress />
+    <>
+      {onNext ? (
+        // When inside FlowStepWrapper (has onNext), only render the form without container
+        <Box component="form" onSubmit={handleSubmit} noValidate>
+          {submitError && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              {submitError}
+            </Alert>
+          )}
+          <Paper elevation={3} sx={{ p: { xs: 2, md: 4 }, mb: 4, borderRadius: 2 }}>
+            {renderFormContent()}
+            {renderButtons()}
+          </Paper>
         </Box>
       ) : (
-        <Paper 
-          elevation={3} 
-          sx={{ 
-            borderRadius: 2, 
-            p: { xs: 2, sm: 4 }, 
-            mt: 4 
-          }}
+        // Standalone rendering with GenericFlowContainer
+        <GenericFlowContainer
+          activeStep={GenericStep.USER_INFO}
+          flowType={FlowType.COURSE_BOOKING}
+          title="Dina uppgifter"
+          subtitle="Fyll i dina kontaktuppgifter för att fortsätta med bokningen."
+          alertMessage={submitError || undefined}
+          alertSeverity="error"
         >
-          {courseDetail && (
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                {courseDetail.title}
-              </Typography>
-              <Typography variant="body2">
-                Tillgängliga platser: {maxParticipants}
-              </Typography>
-            </Box>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            <Grid container spacing={3}>
-              <Grid item xs={12} sm={6}>
-                <FormTextField
-                  label="Förnamn *"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  error={formErrors.firstName}
-                  required
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <FormTextField
-                  label="Efternamn *"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  error={formErrors.lastName}
-                  required
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <FormTextField
-                  label="E-post *"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  error={formErrors.email}
-                  required
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <FormTextField
-                  label="Telefon *"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  error={formErrors.phone}
-                  required
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <FormControl 
-                  fullWidth 
-                  error={!!formErrors.numberOfParticipants}
-                  required
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      '&.Mui-focused fieldset': {
-                        borderColor: 'var(--primary)',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: 'var(--primary-light)',
-                      }
-                    },
-                    '& .MuiInputLabel-root': {
-                      '&.Mui-focused': {
-                        color: 'var(--primary)',
-                      },
-                    },
-                  }}
-                >
-                  <InputLabel id="number-of-participants-label">Antal deltagare</InputLabel>
-                  <Select
-                    labelId="number-of-participants-label"
-                    id="numberOfParticipants"
-                    name="numberOfParticipants"
-                    value={formData.numberOfParticipants}
-                    onChange={handleSelectChange}
-                    label="Antal deltagare *"
-                  >
-                    {participantOptions()}
-                  </Select>
-                  {formErrors.numberOfParticipants && (
-                    <FormHelperText>{formErrors.numberOfParticipants}</FormHelperText>
-                  )}
-                </FormControl>
-              </Grid>
-              
-              <Grid item xs={12}>
-                <FormTextField
-                  label="Särskilda önskemål eller behov"
-                  name="specialRequirements"
-                  value={formData.specialRequirements}
-                  onChange={handleChange}
-                  multiline
-                  rows={3}
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-                  <StyledButton
-                    secondary
-                    onClick={handleBack}
-                    disabled={isSubmitting}
-                  >
-                    Tillbaka
-                  </StyledButton>
-                  
-                  <StyledButton
-                    type="submit"
-                    disabled={isSubmitting || maxParticipants <= 0}
-                    startIcon={isSubmitting ? <CircularProgress size={20} sx={{ color: 'white' }} /> : undefined}
-                  >
-                    {isSubmitting ? 'Skickar...' : 'Fortsätt till betalning'}
-                  </StyledButton>
-                </Box>
-              </Grid>
-            </Grid>
-          </form>
-        </Paper>
+          <Box component="form" onSubmit={handleSubmit} noValidate>
+            <Paper elevation={3} sx={{ p: { xs: 2, md: 4 }, mb: 4, borderRadius: 2 }}>
+              {renderFormContent()}
+              {renderButtons()}
+            </Paper>
+          </Box>
+        </GenericFlowContainer>
       )}
-    </GenericFlowContainer>
+    </>
   );
 };
 

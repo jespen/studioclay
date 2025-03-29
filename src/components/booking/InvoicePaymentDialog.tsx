@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -26,6 +26,14 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
   invoiceNumber,
   bookingReference,
 }) => {
+  // Automatiskt stäng dialogrutan och fortsätt till bekräftelsesidan vid 'success'
+  useEffect(() => {
+    if (status === 'success' && open) {
+      // Stäng direkt utan att visa success-meddelandet
+      onClose();
+    }
+  }, [status, open, onClose]);
+
   return (
     <Dialog 
       open={open} 
@@ -80,7 +88,7 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
       </DialogContent>
 
       <DialogActions>
-        {status === 'success' && (
+        {status === 'error' && (
           <Button onClick={onClose} variant="contained" color="primary">
             Stäng
           </Button>

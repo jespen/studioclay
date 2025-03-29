@@ -112,6 +112,7 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
       setInvoiceNumber(data.invoiceNumber);
       setBookingReference(data.bookingReference);
       setStatus('success');
+      setShowDialog(false);
       onPaymentComplete(true);
       return true;
     } catch (error) {
@@ -128,6 +129,9 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
 
   const handleCloseDialog = () => {
     if (status === 'success') {
+      setShowDialog(false);
+      onPaymentComplete(true);
+    } else if (status === 'error') {
       setShowDialog(false);
     }
   };

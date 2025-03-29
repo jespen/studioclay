@@ -1,231 +1,285 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Typography, Paper, Box, TextField, InputAdornment, Divider } from '@mui/material';
-import GenericFlowContainer from '../common/GenericFlowContainer';
+import { 
+  Paper, 
+  Typography, 
+  Box, 
+  Grid, 
+  TextField, 
+  Radio, 
+  RadioGroup, 
+  FormControlLabel, 
+  FormControl, 
+  FormLabel,
+  Button,
+  Card,
+  CardContent,
+  Alert,
+  useMediaQuery,
+  useTheme
+} from '@mui/material';
+import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
+import PersonIcon from '@mui/icons-material/Person';
+import FlowStepWrapper from '../common/FlowStepWrapper';
 import { FlowType, GenericStep } from '../common/BookingStepper';
 import StyledButton from '../common/StyledButton';
-import styles from '@/styles/GiftCardSelection.module.css';
-import { setFlowType, setItemDetails, setItemId } from '@/utils/flowStorage';
-import { getNextStepUrl } from '@/utils/flowNavigation';
+import { setFlowType, setItemDetails } from '@/utils/flowStorage';
 
-const GiftCardSelection = () => {
+interface GiftCardSelectionProps {
+  onNext?: (data: any) => void;
+}
+
+interface RecipientInfo {
+  name: string;
+  email: string;
+  message?: string;
+}
+
+interface FormErrors {
+  amount?: string;
+  recipientName?: string;
+  recipientEmail?: string;
+}
+
+// Define gift card amounts
+const GIFT_CARD_AMOUNTS = [
+  { value: '500', label: '500 kr' },
+  { value: '1000', label: '1 000 kr' },
+  { value: '1500', label: '1 500 kr' },
+  { value: '2000', label: '2 000 kr' },
+  { value: 'custom', label: 'Eget belopp' }
+];
+
+const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
   const router = useRouter();
-  const [amount, setAmount] = useState<string>('500');
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
+  const [amount, setAmount] = useState<string>('1000');
   const [customAmount, setCustomAmount] = useState<string>('');
+  const [recipient, setRecipient] = useState<RecipientInfo>({
+    name: '',
+    email: '',
+    message: ''
+  });
+  const [errors, setErrors] = useState<FormErrors>({});
 
-  const predefinedAmounts = ['500', '1000', '2000'];
+  useEffect(() => {
+    // Initialize flow type
+    setFlowType(FlowType.GIFT_CARD);
+  }, []);
 
-  const handleAmountSelect = (value: string) => {
-    setAmount(value);
-    setCustomAmount('');
+  const handleAmountChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setAmount(event.target.value);
+    setErrors(prev => ({ ...prev, amount: undefined }));
   };
 
-  const handleCustomAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (/^\d*$/.test(value)) {
-      setCustomAmount(value);
-      setAmount('custom');
+  const handleCustomAmountChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomAmount(event.target.value);
+    if (amount === 'custom') {
+      setErrors(prev => ({ ...prev, amount: undefined }));
     }
   };
 
-  const handleContinue = () => {
-    const finalAmount = amount === 'custom' ? customAmount : amount;
+  const handleRecipientChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    setRecipient(prev => ({ ...prev, [name]: value }));
+    setErrors(prev => ({ ...prev, [name]: undefined }));
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: FormErrors = {};
     
     // Validate amount
-    if (!finalAmount || parseFloat(finalAmount) <= 0) {
-      alert('Vänligen ange ett giltigt belopp');
+    if (amount === 'custom') {
+      if (!customAmount) {
+        newErrors.amount = 'Vänligen ange ett belopp';
+      } else if (isNaN(Number(customAmount)) || Number(customAmount) < 100) {
+        newErrors.amount = 'Beloppet måste vara minst 100 kr';
+      }
+    }
+    
+    // Validate recipient info
+    if (!recipient.name) {
+      newErrors.recipientName = 'Vänligen ange mottagarens namn';
+    }
+    
+    if (!recipient.email) {
+      newErrors.recipientEmail = 'Vänligen ange mottagarens e-postadress';
+    } else if (!/\S+@\S+\.\S+/.test(recipient.email)) {
+      newErrors.recipientEmail = 'Vänligen ange en giltig e-postadress';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleNext = () => {
+    if (!validateForm()) {
       return;
     }
     
-    // Store selected gift card data in localStorage
+    // Calculate final amount
+    const finalAmount = amount === 'custom' ? customAmount : amount;
+    
+    // Store gift card details
     const giftCardDetails = {
       amount: finalAmount,
-      type: 'digital',
-      created_at: new Date().toISOString()
+      type: 'gift-card',
+      recipientName: recipient.name,
+      recipientEmail: recipient.email,
+      message: recipient.message
     };
     
-    // Set flow data using our new utilities
-    setFlowType(FlowType.GIFT_CARD);
-    setItemId(finalAmount); // Use amount as the ID for gift cards
+    // Save details to flow storage
     setItemDetails(giftCardDetails);
+
+    // For backwards compatibility with PaymentSelection, also save as a "course"
+    const fakeGiftCardCourse = {
+      id: "gift-card",
+      title: "Presentkort",
+      description: `Presentkort på ${finalAmount} kr`,
+      price: parseInt(finalAmount),
+      currency: "SEK",
+      max_participants: 1,
+      current_participants: 0
+    };
     
-    // Keep old sessionStorage for backward compatibility
-    sessionStorage.setItem('giftCardAmount', finalAmount);
-    sessionStorage.setItem('giftCardType', 'digital');
+    // Store in localStorage for components that expect it
+    localStorage.setItem('courseDetail', JSON.stringify(fakeGiftCardCourse));
     
-    // Navigate to next step using our navigation helper
-    const nextUrl = getNextStepUrl(GenericStep.ITEM_SELECTION, FlowType.GIFT_CARD);
-    if (nextUrl) {
-      router.push(nextUrl);
+    // Navigate to next step
+    if (onNext) {
+      onNext(giftCardDetails);
     } else {
-      // Fallback to the hardcoded URL
-      router.push('/gift-card-flow/recipient');
+      router.push('/gift-card-flow/personal-info');
     }
   };
 
   return (
-    <GenericFlowContainer
-      activeStep={GenericStep.ITEM_SELECTION}
-      flowType={FlowType.GIFT_CARD}
-      title="Välj presentkort"
-      subtitle="Anpassa presentkortet med önskat belopp"
-    >
-      <Paper 
-        elevation={3} 
-        sx={{ 
-          borderRadius: 2, 
-          p: { xs: 2, sm: 4 }, 
-          mt: 4 
-        }}
-      >
-        {/* Gift Card header */}
-        <Typography variant="h4" component="h2" gutterBottom sx={{ color: 'var(--primary)' }}>
-          Digitalt Presentkort
-        </Typography>
-
-        <Typography variant="body1" paragraph>
-          Ge bort en kreativ upplevelse från Studio Clay. Presentkortet är giltigt i 12 månader och kan användas till kurser, workshops, studiotid eller produkter.
-        </Typography>
-
-        {/* Gift Card Preview */}
-        <Box className={styles.giftCardImageContainer} sx={{ my: 4, borderRadius: 2, overflow: 'hidden' }}>
-          <img 
-            src="/pictures/finavaser.jpg"
-            alt="Studio Clay presentkort"
-            className={styles.giftCardImage}
-          />
-          <div className={styles.giftCardImageOverlay}>
-            <div className={styles.giftCardLabel}>Presentkort</div>
-            <div className={styles.giftCardAmount}>
-              {amount === 'custom' ? `${customAmount} kr` : `${amount} kr`}
-            </div>
-          </div>
-        </Box>
-        
-        <Divider sx={{ my: 3 }} />
-
-        {/* Amount Selection */}
-        <Typography variant="h6" gutterBottom>
-          Välj belopp
-        </Typography>
-        
-        <Box className={styles.amountSection}>
-          <Box className={styles.amountButtons}>
-            {predefinedAmounts.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={`${styles.amountButton} ${amount === value ? styles.amountSelected : ''}`}
-                onClick={() => handleAmountSelect(value)}
-              >
-                {value} kr
-              </button>
-            ))}
-          </Box>
-          
-          <Box mt={2}>
-            <TextField
-              fullWidth
-              placeholder="Ange valfritt belopp"
-              variant="outlined"
-              value={customAmount}
-              onChange={handleCustomAmountChange}
-              InputProps={{
-                endAdornment: <InputAdornment position="end">kr</InputAdornment>,
-              }}
-            />
-          </Box>
-        </Box>
-        
-        <Divider sx={{ my: 3 }} />
-
-        {/* Features */}
-        <Typography variant="h6" gutterBottom>
-          Varför våra presentkort?
-        </Typography>
-        
-        <Box className={styles.featureList}>
-          <Box className={styles.featureItem}>
-            <Box className={styles.featureIcon}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+    <Box>
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={6}>
+          <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              mb: 3,
+              borderBottom: '1px solid #e0e0e0',
+              pb: 2 
+            }}>
+              <CardGiftcardIcon sx={{ mr: 1, color: 'var(--primary)' }} />
+              <Typography variant="h6">Välj belopp för presentkortet</Typography>
             </Box>
-            <Box className={styles.featureText}>
-              <Typography variant="subtitle1">Giltigt i 12 månader</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Mottagaren har ett helt år på sig att använda presentkortet.
-              </Typography>
-            </Box>
-          </Box>
-          
-          <Box className={styles.featureItem}>
-            <Box className={styles.featureIcon}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            </Box>
-            <Box className={styles.featureText}>
-              <Typography variant="subtitle1">Full flexibilitet</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Kan användas till kurser, workshops, studiotid eller produkter i butiken.
-              </Typography>
-            </Box>
-          </Box>
-          
-          <Box className={styles.featureItem}>
-            <Box className={styles.featureIcon}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
-              </svg>
-            </Box>
-            <Box className={styles.featureText}>
-              <Typography variant="subtitle1">Personlig upplevelse</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Lägg till ett personligt meddelande till mottagaren i nästa steg.
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
+            
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <FormLabel>Belopp</FormLabel>
+              <RadioGroup value={amount} onChange={handleAmountChange}>
+                {GIFT_CARD_AMOUNTS.map((item) => (
+                  <FormControlLabel 
+                    key={item.value} 
+                    value={item.value} 
+                    control={<Radio />} 
+                    label={item.label} 
+                  />
+                ))}
+              </RadioGroup>
+              
+              {amount === 'custom' && (
+                <TextField
+                  label="Eget belopp (kr)"
+                  variant="outlined"
+                  fullWidth
+                  value={customAmount}
+                  onChange={handleCustomAmountChange}
+                  type="number"
+                  inputProps={{ min: 100 }}
+                  sx={{ mt: 1 }}
+                  error={!!errors.amount}
+                  helperText={errors.amount}
+                />
+              )}
+            </FormControl>
+          </Paper>
+        </Grid>
         
-        {/* Price display */}
-        <Divider sx={{ my: 3 }} />
-        
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            Presentkortspris
-          </Typography>
-          
-          <Box sx={{ display: 'flex', alignItems: 'baseline', mb: 1 }}>
-            <Typography variant="h4" sx={{ color: 'var(--primary)', mr: 1 }}>
-              {amount === 'custom' ? customAmount || '0' : amount} kr
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Inklusive moms
-            </Typography>
-          </Box>
-        </Box>
-
-        {/* Buttons */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-          <StyledButton 
-            secondary
-            onClick={() => router.push('/')}
-          >
-            Tillbaka
-          </StyledButton>
-          
-          <StyledButton 
-            onClick={handleContinue}
-          >
-            Fortsätt till dina uppgifter
-          </StyledButton>
-        </Box>
-      </Paper>
-    </GenericFlowContainer>
+        <Grid item xs={12} md={6}>
+          <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              mb: 3,
+              borderBottom: '1px solid #e0e0e0',
+              pb: 2 
+            }}>
+              <PersonIcon sx={{ mr: 1, color: 'var(--primary)' }} />
+              <Typography variant="h6">Mottagarens uppgifter</Typography>
+            </Box>
+            
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <TextField
+                label="Mottagarens namn"
+                variant="outlined"
+                fullWidth
+                name="name"
+                value={recipient.name}
+                onChange={handleRecipientChange}
+                margin="normal"
+                error={!!errors.recipientName}
+                helperText={errors.recipientName}
+              />
+              
+              <TextField
+                label="Mottagarens e-postadress"
+                variant="outlined"
+                fullWidth
+                name="email"
+                value={recipient.email}
+                onChange={handleRecipientChange}
+                margin="normal"
+                error={!!errors.recipientEmail}
+                helperText={errors.recipientEmail}
+              />
+              
+              <TextField
+                label="Personligt meddelande (valfritt)"
+                variant="outlined"
+                fullWidth
+                name="message"
+                value={recipient.message}
+                onChange={handleRecipientChange}
+                margin="normal"
+                multiline
+                rows={4}
+              />
+            </FormControl>
+          </Paper>
+        </Grid>
+      </Grid>
+      
+      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+        <StyledButton onClick={handleNext}>
+          Fortsätt
+        </StyledButton>
+      </Box>
+    </Box>
   );
 };
 
-export default GiftCardSelection; 
+const GiftCardSelectionWrapper = () => {
+  return (
+    <FlowStepWrapper
+      flowType={FlowType.GIFT_CARD}
+      activeStep={GenericStep.ITEM_SELECTION}
+      title="Presentkort"
+      subtitle="Välj belopp och ange mottagarens uppgifter"
+      validateData={() => true}
+    >
+      {(props) => <GiftCardSelection onNext={props.onNext} />}
+    </FlowStepWrapper>
+  );
+};
+
+export default GiftCardSelectionWrapper; 

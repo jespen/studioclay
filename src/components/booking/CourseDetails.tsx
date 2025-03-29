@@ -14,7 +14,8 @@ import {
   ListItemText,
   Container,
   Alert,
-  Paper
+  Paper,
+  CircularProgress
 } from '@mui/material';
 import EventIcon from '@mui/icons-material/Event';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -25,13 +26,14 @@ import PersonIcon from '@mui/icons-material/Person';
 import CategoryIcon from '@mui/icons-material/Category';
 
 import { GenericStep, FlowType } from '../common/BookingStepper';
-import GenericFlowContainer from '../common/GenericFlowContainer';
 import BackToCourses from '../common/BackToCourses';
 import StyledButton from '../common/StyledButton';
+import { setItemDetails } from '@/utils/flowStorage';
 import '@/styles/richText.css';
 
 interface CourseDetailsProps {
   courseId: string;
+  onNext?: () => void;
 }
 
 interface Instructor {
@@ -98,17 +100,61 @@ const RichTextContent = ({ content }: { content: string }) => {
   );
 };
 
-const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId }) => {
+const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext }) => {
   const router = useRouter();
   const [courseDetail, setCourseDetail] = React.useState<CourseDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [hasLimitedData, setHasLimitedData] = React.useState(false);
+  
+  // Ref to track if we are already fetching
+  const isFetchingRef = React.useRef(false);
+  // Ref to track if we have updated flow storage
+  const hasUpdatedStorageRef = React.useRef(false);
 
   React.useEffect(() => {
+    // Skip if already fetching
+    if (isFetchingRef.current) return;
+    
     const fetchCourseDetail = async () => {
       try {
+        // Set fetching flag
+        isFetchingRef.current = true;
         setLoading(true);
+        
+        // Try to get from localStorage first for better performance
+        const storedCourseDetail = localStorage.getItem('courseDetail');
+        if (storedCourseDetail) {
+          try {
+            const parsedDetail = JSON.parse(storedCourseDetail);
+            if (parsedDetail && parsedDetail.id === courseId) {
+              // Course already exists in localStorage
+              setCourseDetail(parsedDetail);
+              
+              // Check if we have limited data
+              const hasMinimalData = 
+                !parsedDetail.description && 
+                !parsedDetail.price && 
+                !parsedDetail.start_date;
+                
+              setHasLimitedData(hasMinimalData);
+              
+              // Update flow storage, but only once
+              if (!hasUpdatedStorageRef.current) {
+                setItemDetails(parsedDetail);
+                hasUpdatedStorageRef.current = true;
+              }
+              
+              setLoading(false);
+              isFetchingRef.current = false;
+              return;
+            }
+          } catch (err) {
+            console.error('Error parsing stored course detail:', err);
+            // Continue to fetch from API if parsing fails
+          }
+        }
+        
         const response = await fetch(`/api/courses/${courseId}`);
         
         if (!response.ok) {
@@ -129,6 +175,15 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId }) => {
             
           setHasLimitedData(hasMinimalData);
           setCourseDetail(course);
+          
+          // Store course details in flowStorage, but only once
+          if (!hasUpdatedStorageRef.current) {
+            setItemDetails(course);
+            hasUpdatedStorageRef.current = true;
+            
+            // Also store in localStorage for backward compatibility
+            localStorage.setItem('courseDetail', JSON.stringify(course));
+          }
         } else {
           setError('No course data found');
         }
@@ -137,23 +192,34 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId }) => {
         setError('Failed to load course details');
       } finally {
         setLoading(false);
+        isFetchingRef.current = false;
       }
     };
 
     if (courseId) {
       fetchCourseDetail();
     }
+    
+    // Clean up function
+    return () => {
+      isFetchingRef.current = false;
+      hasUpdatedStorageRef.current = false;
+    };
   }, [courseId]);
 
   const handleContinue = () => {
-    router.push(`/book-course/${courseId}/personal-info`);
+    if (onNext) {
+      onNext();
+    } else {
+      router.push(`/book-course/${courseId}/personal-info`);
+    }
   };
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ pt: 4, pb: 6 }}>
-        <Typography>Laddar kursinformation...</Typography>
-      </Container>
+      <Box sx={{ display: 'flex', justifyContent: 'center', my: 5 }}>
+        <CircularProgress />
+      </Box>
     );
   }
 
@@ -209,11 +275,7 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId }) => {
   };
 
   return (
-    <GenericFlowContainer 
-      activeStep={GenericStep.ITEM_SELECTION} 
-      flowType={FlowType.COURSE_BOOKING}
-      alertMessage={hasLimitedData ? 'Vi håller på att ladda all kursinformation. Vissa detaljer kan saknas.' : undefined}
-    >
+    <>
       <Typography variant="h4" component="h1" align="center" gutterBottom>
         {courseDetail?.title || 'Laddar kurs...'}
       </Typography>
@@ -243,11 +305,13 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId }) => {
           mt: 4 
         }}
       >
-        {/* Course header and description */}
-        <Typography variant="h4" component="h2" gutterBottom sx={{ color: '#547264' }}>
-          {courseDetail.title || 'Kurs'}
-        </Typography>
-          
+        {hasLimitedData && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            Vi håller på att ladda all kursinformation. Vissa detaljer kan saknas.
+          </Alert>
+        )}
+        
+        {/* Course description */}
         {courseDetail.rich_description ? (
           <Box sx={{ mb: 4 }}>
             <RichTextContent content={courseDetail.rich_description} />
@@ -399,7 +463,7 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId }) => {
           </Box>
         )}
       </Paper>
-    </GenericFlowContainer>
+    </>
   );
 };
 

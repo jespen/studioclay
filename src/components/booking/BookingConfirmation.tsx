@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
 import { 
   Box, 
@@ -24,13 +26,14 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import HomeIcon from '@mui/icons-material/Home';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 
-import { GenericStep, FlowType } from '../common/BookingStepper';
-import GenericFlowContainer from '../common/GenericFlowContainer';
 import StyledButton from '../common/StyledButton';
 import Link from 'next/link';
+import { FlowStateData } from '../common/FlowStepWrapper';
+import { clearFlowData } from '@/utils/flowStorage';
 
 interface BookingConfirmationProps {
   courseId: string;
+  flowData?: FlowStateData;
 }
 
 interface UserInfo {
@@ -42,33 +45,44 @@ interface UserInfo {
   specialRequirements?: string;
 }
 
-interface PaymentDetails {
-  method: string;
-  paymentReference?: string;
-  paymentStatus?: string;
-  swishPhone?: string;
-  invoiceNumber?: string;
-  invoiceDetails?: {
-    address: string;
-    postalCode: string;
-    city: string;
-    reference?: string;
-  };
-  bookingId?: string;
-  emailSent?: boolean;
+interface PaymentInfo {
+  status: string;
+  amount: number | string;
+  payment_method: string;
+  payment_date: string;
+  reference: string;
 }
 
-const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId }) => {
+const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flowData }) => {
   const [courseDetail, setCourseDetail] = useState<any | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const [bookingReference, setBookingReference] = useState<string>('');
 
   useEffect(() => {
-    // Get data from localStorage
+    // Use flowData if available
+    if (flowData) {
+      setCourseDetail(flowData.itemDetails);
+      setUserInfo(flowData.userInfo as UserInfo);
+      setPaymentInfo(flowData.paymentInfo as PaymentInfo);
+      
+      // Generate a booking reference if not already in payment info
+      if (flowData.paymentInfo && flowData.paymentInfo.reference) {
+        setBookingReference(flowData.paymentInfo.reference);
+      } else {
+        // Generate a booking reference
+        const timestamp = new Date().getTime().toString().slice(-6);
+        const randomChars = Math.random().toString(36).substring(2, 5).toUpperCase();
+        setBookingReference(`SC-${randomChars}-${timestamp}`);
+      }
+      
+      return;
+    }
+    
+    // Fallback to localStorage if flowData is not available
     const storedUserInfo = localStorage.getItem('userInfo');
     const storedCourseDetail = localStorage.getItem('courseDetail');
-    const storedPaymentDetails = localStorage.getItem('paymentDetails');
+    const storedPaymentInfo = localStorage.getItem('paymentInfo');
     
     if (storedUserInfo) {
       setUserInfo(JSON.parse(storedUserInfo));
@@ -78,20 +92,45 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId }) =
       setCourseDetail(JSON.parse(storedCourseDetail));
     }
     
-    if (storedPaymentDetails) {
-      setPaymentDetails(JSON.parse(storedPaymentDetails));
+    if (storedPaymentInfo) {
+      setPaymentInfo(JSON.parse(storedPaymentInfo));
+    } else {
+      // Fallback to old format
+      const storedPaymentDetails = localStorage.getItem('paymentDetails');
+      if (storedPaymentDetails) {
+        const details = JSON.parse(storedPaymentDetails);
+        setPaymentInfo({
+          status: details.paymentStatus || 'completed',
+          amount: calculatePrice(),
+          payment_method: details.method || 'unknown',
+          payment_date: new Date().toISOString(),
+          reference: details.paymentReference || bookingReference
+        });
+      }
     }
     
     // Generate a booking reference
     const timestamp = new Date().getTime().toString().slice(-6);
     const randomChars = Math.random().toString(36).substring(2, 5).toUpperCase();
     setBookingReference(`SC-${randomChars}-${timestamp}`);
+  }, [flowData, courseId]);
+
+  // Handle going back to home page and clearing data
+  const handleBackToHome = () => {
+    // Clear flow data before navigating
+    clearFlowData();
     
-    // In a real application, you would make an API call to store the booking in the database
-  }, []);
+    // For backward compatibility
+    localStorage.removeItem('userInfo');
+    localStorage.removeItem('courseDetail');
+    localStorage.removeItem('paymentDetails');
+    localStorage.removeItem('paymentInfo');
+  };
 
   const getMethodDisplayName = (method: string) => {
     switch (method) {
+      case 'swish':
+        return 'Swish';
       case 'credit_card':
         return 'Kreditkort';
       case 'invoice':
@@ -108,16 +147,24 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId }) =
     return courseDetail.price * numParticipants;
   };
 
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('sv-SE', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
   return (
-    <GenericFlowContainer 
-      activeStep={3} 
-      flowType={FlowType.COURSE_BOOKING}
-      title="Bokningsbekräftelse"
-      subtitle="Tack för din bokning! Nedan hittar du information om din bokning."
-      showBackButton={false}
-      backButtonLabel="Tillbaka till startsidan"
-      backUrl="/"
-    >
+    <>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <CheckCircleIcon color="success" sx={{ fontSize: 40, mr: 2 }} />
         <Typography variant="h6">
@@ -142,7 +189,7 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId }) =
         </Typography>
         
         <Typography variant="body2" color="text.secondary" paragraph>
-          Bokningsnummer: <strong>{bookingReference}</strong>
+          Bokningsnummer: <strong>{paymentInfo?.reference || bookingReference}</strong>
         </Typography>
         
         <Grid container spacing={4}>
@@ -160,21 +207,21 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId }) =
                   />
                 </ListItem>
                 
-                {courseDetail.date && (
+                {courseDetail.start_date && (
                   <ListItem disableGutters>
                     <ListItemIcon sx={{ minWidth: 36 }}>
                       <EventIcon fontSize="small" />
                     </ListItemIcon>
-                    <ListItemText primary={`Datum: ${courseDetail.date}`} />
+                    <ListItemText primary={`Datum: ${formatDate(courseDetail.start_date)}`} />
                   </ListItem>
                 )}
                 
-                {courseDetail.time && (
+                {courseDetail.duration_minutes && (
                   <ListItem disableGutters>
                     <ListItemIcon sx={{ minWidth: 36 }}>
                       <AccessTimeIcon fontSize="small" />
                     </ListItemIcon>
-                    <ListItemText primary={`Tid: ${courseDetail.time}`} />
+                    <ListItemText primary={`Längd: ${courseDetail.duration_minutes} minuter`} />
                   </ListItem>
                 )}
                 
@@ -226,10 +273,10 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId }) =
                 </ListItem>
                 
                 {userInfo.specialRequirements && (
-                  <ListItem disableGutters sx={{ mt: 1 }}>
+                  <ListItem disableGutters>
                     <ListItemText 
                       primary="Särskilda önskemål:" 
-                      secondary={userInfo.specialRequirements}
+                      secondary={userInfo.specialRequirements} 
                     />
                   </ListItem>
                 )}
@@ -244,92 +291,62 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId }) =
           Betalningsinformation
         </Typography>
         
-        {paymentDetails && (
-          <List dense>
-            <ListItem disableGutters>
-              <ListItemIcon sx={{ minWidth: 36 }}>
-                {paymentDetails.method === 'credit_card' ? (
-                  <PaymentIcon fontSize="small" />
-                ) : (
-                  <ReceiptIcon fontSize="small" />
-                )}
-              </ListItemIcon>
-              <ListItemText primary={`Betalningsmetod: ${getMethodDisplayName(paymentDetails.method)}`} />
-            </ListItem>
-            
-            <ListItem disableGutters>
-              <ListItemIcon sx={{ minWidth: 36 }}>
-                <ReceiptIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText 
-                primary={`Totalt belopp: ${calculatePrice()} kr`}
-                secondary="Inklusive moms"
-              />
-            </ListItem>
-          </List>
-        )}
-        
-        {paymentDetails && paymentDetails.method === 'invoice' && (
-          <>
-            <Alert severity="info" sx={{ mt: 2 }}>
-              En faktura har skickats till din e-postadress: <strong>{userInfo?.email}</strong>. Vänligen betala inom 10 dagar från fakturadatum.
-            </Alert>
-            
-            <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Fakturainformation
-              </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6}>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <PaymentIcon sx={{ mr: 1, color: 'var(--primary)' }} />
+                <Typography variant="subtitle2">
+                  Betalningsöversikt
+                </Typography>
+              </Box>
+              
               <List dense>
-                {paymentDetails.invoiceNumber && (
-                  <ListItem disableGutters>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <ReceiptIcon fontSize="small" sx={{ color: 'var(--primary)' }} />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={`Fakturanummer: ${paymentDetails.invoiceNumber}`} 
-                    />
-                  </ListItem>
-                )}
-                
-                {paymentDetails.invoiceDetails && (
-                  <ListItem disableGutters>
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      <HomeIcon fontSize="small" sx={{ color: 'var(--primary)' }} />
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={`Fakturerad till: ${paymentDetails.invoiceDetails.address}, ${paymentDetails.invoiceDetails.postalCode} ${paymentDetails.invoiceDetails.city}`} 
-                    />
-                  </ListItem>
-                )}
+                <ListItem disableGutters>
+                  <ListItemText 
+                    primary="Betalningsmetod:" 
+                    secondary={getMethodDisplayName(paymentInfo?.payment_method || 'unknown')} 
+                  />
+                </ListItem>
                 
                 <ListItem disableGutters>
-                  <ListItemIcon sx={{ minWidth: 36 }}>
-                    <CreditCardIcon fontSize="small" sx={{ color: 'var(--primary)' }} />
-                  </ListItemIcon>
                   <ListItemText 
-                    primary={`Betalningsvillkor: 10 dagar`} 
+                    primary="Status:" 
+                    secondary={paymentInfo?.status === 'completed' ? 'Genomförd' : 'Väntar på verifiering'} 
+                  />
+                </ListItem>
+                
+                <ListItem disableGutters>
+                  <ListItemText 
+                    primary="Betaldatum:" 
+                    secondary={paymentInfo?.payment_date ? formatDate(paymentInfo.payment_date) : new Date().toLocaleDateString()} 
+                  />
+                </ListItem>
+                
+                <ListItem disableGutters>
+                  <ListItemText 
+                    primary="Summa:" 
+                    secondary={`${paymentInfo?.amount || calculatePrice()} kr`} 
                   />
                 </ListItem>
               </List>
-            </Box>
-          </>
-        )}
-      </Paper>
-      
-      <Box sx={{ mt: 3, textAlign: 'center' }}>
-        <Typography variant="body2" paragraph>
-          Om du har några frågor, vänligen kontakta oss på <strong>eva@studioclay.se</strong> eller ring <strong>079-312 06 05</strong>.
-        </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
         
-        <StyledButton 
-          component={Link} 
-          href="/"
-          size="large"
-        >
-          Tillbaka till startsidan
-        </StyledButton>
-      </Box>
-    </GenericFlowContainer>
+        <Box sx={{ mt: 4, textAlign: 'center' }}>
+          <Typography variant="body2" paragraph>
+            Vi har skickat en bekräftelse via e-post med alla detaljer om din bokning.
+          </Typography>
+          
+          <Link href="/" passHref>
+            <StyledButton onClick={handleBackToHome}>
+              Tillbaka till startsidan
+            </StyledButton>
+          </Link>
+        </Box>
+      </Paper>
+    </>
   );
 };
 

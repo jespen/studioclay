@@ -37,6 +37,12 @@ const GenericFlowContainer: React.FC<GenericFlowContainerProps> = ({
   backUrl,
   className,
 }) => {
+  // Log the activeStep when component renders
+  console.log(`GenericFlowContainer rendering with activeStep: ${activeStep}, flowType: ${flowType}`);
+  
+  // Ensure activeStep is a number
+  const numericActiveStep = typeof activeStep === 'number' ? activeStep : GenericStep.ITEM_SELECTION;
+
   // Determine the appropriate back button component based on flow type
   const getBackButton = () => {
     if (!showBackButton) return null;
@@ -78,9 +84,16 @@ const GenericFlowContainer: React.FC<GenericFlowContainerProps> = ({
 
   return (
     <Container maxWidth="lg" sx={{ pt: 4, pb: 6 }} className={`hide-navigation ${className || ''}`}>
+      {/* Debug information */}
+      {process.env.NODE_ENV === 'development' && (
+        <div style={{ display: 'none' }}>
+          Debug: numericActiveStep={numericActiveStep}, flowType={flowType}
+        </div>
+      )}
+      
       {getBackButton()}
       
-      <GenericStepper activeStep={activeStep} flowType={flowType} />
+      <GenericStepper activeStep={numericActiveStep} flowType={flowType} />
       
       {alertMessage && (
         <Alert severity={alertSeverity} sx={{ mb: 3 }}>

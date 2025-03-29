@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import React, { Suspense } from 'react';
 import BookingConfirmationWrapper from '@/components/booking/wrappers/BookingConfirmationWrapper';
 
 interface ConfirmationPageProps {
@@ -7,15 +7,15 @@ interface ConfirmationPageProps {
   };
 }
 
-// Server component that safely handles params
-export default async function ConfirmationPage({ params }: ConfirmationPageProps) {
-  // In Next.js 15.2+, we need to await the params
-  const awaitedParams = await params;
-  const id = awaitedParams.id;
-  
+// Define the page component
+const ConfirmationPage = ({ params }: ConfirmationPageProps) => {
+  const courseId = params.id;
+
   return (
-    <Suspense fallback={<div>Loading confirmation...</div>}>
-      <BookingConfirmationWrapper id={id} />
+    <Suspense fallback={<div>Laddar bekräftelse...</div>}>
+      <BookingConfirmationWrapper id={courseId} />
     </Suspense>
   );
-} 
+};
+
+export default ConfirmationPage; 

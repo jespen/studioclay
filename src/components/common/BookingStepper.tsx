@@ -74,11 +74,11 @@ const flowConfigs: Record<FlowType, StepConfig[]> = {
   ],
   [FlowType.GIFT_CARD]: [
     {
-      label: 'Välj kort',
+      label: 'Presentkort',
       icon: <CardGiftcardIcon fontSize="small" />,
     },
     {
-      label: 'Mottagare',
+      label: 'Dina uppgifter',
       icon: <PersonIcon fontSize="small" />,
     },
     {
@@ -130,16 +130,54 @@ const GenericStepper: React.FC<StepperProps> = ({
   customSteps,
   className
 }) => {
+  // Add debugging for the active step
+  console.log(`GenericStepper rendering with activeStep: ${activeStep}, flowType: ${flowType}`);
+  
+  // Parse the active step to ensure it's a number and within valid range
+  const numericActiveStep = typeof activeStep === 'number' ? activeStep : 0;
+  
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Use custom steps if provided, otherwise use default steps for the flow type
   const steps = customSteps || flowConfigs[flowType];
+  
+  // Map GenericStep enum values to actual position in the stepper
+  // This handles the mismatch between GenericStep enum and flowConfigs array indices
+  let adjustedActiveStep = numericActiveStep;
+  
+  // Special mapping for COURSE_BOOKING flow because of DETAILS step
+  if (flowType === FlowType.COURSE_BOOKING && !customSteps) {
+    if (numericActiveStep === GenericStep.USER_INFO) {
+      // USER_INFO (2) should map to index 1 in flowConfigs
+      adjustedActiveStep = 1;
+    } else if (numericActiveStep === GenericStep.PAYMENT) {
+      // PAYMENT (3) should map to index 2 in flowConfigs
+      adjustedActiveStep = 2;
+    } else if (numericActiveStep === GenericStep.CONFIRMATION) {
+      // CONFIRMATION (4) should map to index 3 in flowConfigs
+      adjustedActiveStep = 3;
+    }
+  }
+  
+  // Make sure active step is within valid bounds
+  const validActiveStep = Math.max(0, Math.min(adjustedActiveStep, steps.length - 1));
+  
+  if (validActiveStep !== numericActiveStep) {
+    console.log(`Mapped activeStep ${numericActiveStep} to ${validActiveStep} for flow ${flowType}`);
+  }
 
   return (
     <Box sx={{ width: '100%', mb: 4, mt: 2 }} className={className}>
+      {/* Add debug info */}
+      {process.env.NODE_ENV === 'development' && (
+        <div style={{ fontSize: '10px', color: '#666', textAlign: 'right', marginBottom: '4px' }}>
+          Debug stepper: enum={numericActiveStep}, rendered={validActiveStep}, flow={flowType}
+        </div>
+      )}
+      
       <Stepper 
-        activeStep={activeStep} 
+        activeStep={validActiveStep} 
         alternativeLabel={!isMobile}
         orientation={isMobile ? 'vertical' : 'horizontal'}
         sx={{ 
@@ -149,12 +187,12 @@ const GenericStepper: React.FC<StepperProps> = ({
         }}
       >
         {steps.map((step, index) => (
-          <Step key={step.label} completed={activeStep > index}>
+          <Step key={step.label} completed={validActiveStep > index}>
             <StepLabel 
               StepIconComponent={() => {
                 // Determine if this step is active, completed, or neither
-                const isActive = activeStep === index;
-                const isCompleted = activeStep > index;
+                const isActive = validActiveStep === index;
+                const isCompleted = validActiveStep > index;
                 const isInactive = !isActive && !isCompleted;
                 
                 return (
@@ -180,9 +218,9 @@ const GenericStepper: React.FC<StepperProps> = ({
             >
               <Typography 
                 variant="body2" 
-                fontWeight={activeStep === index ? 'bold' : 'normal'}
+                fontWeight={validActiveStep === index ? 'bold' : 'normal'}
                 sx={{
-                  color: activeStep === index ? 'var(--primary-dark)' : 'inherit',
+                  color: validActiveStep === index ? 'var(--primary-dark)' : 'inherit',
                 }}
               >
                 {step.label}
