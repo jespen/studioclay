@@ -120,12 +120,31 @@ const flowConfigs: Record<FlowType, StepConfig[]> = {
 }
 
 // Mappa GenericStep-enum till rätt index i flowConfigs för att hantera olika antal steg
+// Special mapping för COURSE_BOOKING flow
 if (flowType === FlowType.COURSE_BOOKING && !customSteps) {
   if (numericActiveStep === GenericStep.USER_INFO) {
     // USER_INFO (2) should map to index 1 in flowConfigs
     adjustedActiveStep = 1;
+  } else if (numericActiveStep === GenericStep.PAYMENT) {
+    // PAYMENT (3) should map to index 2 in flowConfigs
+    adjustedActiveStep = 2;
+  } else if (numericActiveStep === GenericStep.CONFIRMATION) {
+    // CONFIRMATION (4) should map to index 3 in flowConfigs
+    adjustedActiveStep = 3;
   }
-  // ... och så vidare för andra stegmappningar
+}
+// Special mapping för GIFT_CARD flow
+else if (flowType === FlowType.GIFT_CARD && !customSteps) {
+  if (numericActiveStep === GenericStep.USER_INFO) {
+    // USER_INFO (2) should map to index 1 in flowConfigs
+    adjustedActiveStep = 1;
+  } else if (numericActiveStep === GenericStep.PAYMENT) {
+    // PAYMENT (3) should map to index 2 in flowConfigs
+    adjustedActiveStep = 2;
+  } else if (numericActiveStep === GenericStep.CONFIRMATION) {
+    // CONFIRMATION (4) should map to index 3 in flowConfigs
+    adjustedActiveStep = 3;
+  }
 }
 ```
 
@@ -355,6 +374,34 @@ if (flowType === FlowType.COURSE_BOOKING) {
     adjustedActiveStep = 1; // Index i flowConfigs-arrayen
   }
   // ... liknande för andra steg
+}
+```
+
+### 3. Presentkort (Gift Card) hantering
+För att hantera presentkortköp i Swish- och faktureringsflöden:
+```typescript
+// I Swish-betalningsflödet
+if (product_type === 'gift_card') {
+  // Lagra presentkortsinformation i metadata
+  metadata.item_details = {
+    type: storedDetails.type || 'digital',
+    recipientName: storedDetails.recipientName || '',
+    recipientEmail: storedDetails.recipientEmail || '',
+    message: storedDetails.message || ''
+  };
+  
+  // Använd genererat UUID istället för product_id
+  const { data: paymentData } = await supabase
+    .from('payments')
+    .insert({
+      // ... övriga fält
+      product_type: 'gift_card',
+      // Generera korrekt UUID
+      product_id: crypto.randomUUID(),
+      // ... övriga fält
+    })
+    .select()
+    .single();
 }
 ```
 
