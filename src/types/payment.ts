@@ -16,7 +16,7 @@ export interface UserInfo {
 }
 
 // Basic product type definition
-export type ProductType = 'course';  // Simplified as we only handle courses currently
+export type ProductType = 'course' | 'gift_card';  // Now supports both courses and gift cards
 
 // Payment request structure from frontend
 export interface PaymentRequest {

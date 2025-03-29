@@ -88,8 +88,7 @@ export async function POST(request: Request) {
         is_paid: true, // Marked as paid since we're creating an invoice
         expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(), // 1 year from now
         payment_method: 'invoice',
-        invoice_number: invoiceNumber,
-        booking_reference: bookingReference
+        invoice_number: invoiceNumber
       };
       
       console.log('Creating gift card with data:', giftCardData);

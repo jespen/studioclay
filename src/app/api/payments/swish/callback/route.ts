@@ -106,8 +106,7 @@ async function createGiftCard(paymentId: string, amount: number, userInfo: any, 
     is_printed: false,
     is_paid: true, // Mark as paid since Swish payment was successful
     expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(), // 1 year from now
-    payment_method: 'swish',
-    payment_id: paymentId
+    payment_method: 'swish'
   };
   
   // Insert gift card into database
