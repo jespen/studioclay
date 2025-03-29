@@ -265,4 +265,18 @@ export function cleanupCheckoutFlow(): void {
   localStorage.removeItem('paymentDetails');
   localStorage.removeItem('paymentInfo');
   localStorage.removeItem('currentPaymentReference');
+}
+
+/**
+ * Save item details to both flowStorage and localStorage
+ * @param itemDetails The item details to save
+ */
+export function saveItemDetails<T>(itemDetails: T): void {
+  // Save to flow storage
+  setItemDetails(itemDetails);
+  
+  // For backwards compatibility (if it's a course)
+  if (itemDetails && typeof itemDetails === 'object' && 'id' in itemDetails) {
+    localStorage.setItem('courseDetail', JSON.stringify(itemDetails));
+  }
 } 

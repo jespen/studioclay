@@ -25,7 +25,9 @@ import PersonIcon from '@mui/icons-material/Person';
 import FlowStepWrapper from '../common/FlowStepWrapper';
 import { FlowType, GenericStep } from '../common/BookingStepper';
 import StyledButton from '../common/StyledButton';
-import { setFlowType, setItemDetails } from '@/utils/flowStorage';
+import { setFlowType } from '@/utils/flowStorage';
+import { saveItemDetails } from '@/utils/dataFetcher';
+import styles from '@/styles/GiftCard.module.css';
 
 interface GiftCardSelectionProps {
   onNext?: (data: any) => void;
@@ -57,6 +59,9 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
+  // Initialize flow type immediately
+  setFlowType(FlowType.GIFT_CARD);
+  
   const [amount, setAmount] = useState<string>('1000');
   const [customAmount, setCustomAmount] = useState<string>('');
   const [recipient, setRecipient] = useState<RecipientInfo>({
@@ -67,7 +72,7 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
   const [errors, setErrors] = useState<FormErrors>({});
 
   useEffect(() => {
-    // Initialize flow type
+    // Initialize flow type again to ensure it persists
     setFlowType(FlowType.GIFT_CARD);
   }, []);
 
@@ -134,7 +139,7 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
     };
     
     // Save details to flow storage
-    setItemDetails(giftCardDetails);
+    saveItemDetails(giftCardDetails);
 
     // For backwards compatibility with PaymentSelection, also save as a "course"
     const fakeGiftCardCourse = {
@@ -147,9 +152,6 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
       current_participants: 0
     };
     
-    // Store in localStorage for components that expect it
-    localStorage.setItem('courseDetail', JSON.stringify(fakeGiftCardCourse));
-    
     // Navigate to next step
     if (onNext) {
       onNext(giftCardDetails);
@@ -160,52 +162,60 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
 
   return (
     <Box>
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              mb: 3,
-              borderBottom: '1px solid #e0e0e0',
-              pb: 2 
-            }}>
-              <CardGiftcardIcon sx={{ mr: 1, color: 'var(--primary)' }} />
-              <Typography variant="h6">Välj belopp för presentkortet</Typography>
-            </Box>
+      <div className={styles.mainContent}>
+        <div className={styles.giftCardContainer}>
+          <div className={styles.giftCardPreview}>
+            <div className={styles.giftCardImageContainer}>
+              <img 
+                src="/pictures/finavaser.jpg"
+                alt="Studio Clay presentkort"
+                className={styles.giftCardImage}
+              />
+              <div className={styles.giftCardImageOverlay}>
+                <div className={styles.giftCardLabel}>Presentkort</div>
+                <div className={styles.giftCardAmount}>
+                  {amount === 'custom' ? `${customAmount || '0'} kr` : `${amount} kr`}
+                </div>
+              </div>
+            </div>
             
-            <FormControl fullWidth sx={{ mb: 3 }}>
-              <FormLabel>Belopp</FormLabel>
-              <RadioGroup value={amount} onChange={handleAmountChange}>
-                {GIFT_CARD_AMOUNTS.map((item) => (
-                  <FormControlLabel 
-                    key={item.value} 
-                    value={item.value} 
-                    control={<Radio />} 
-                    label={item.label} 
+            <div className={styles.giftCardInfo}>
+              <div className={styles.amountSection}>
+                <h3 className={styles.sectionTitle}>Välj belopp för presentkortet</h3>
+                <div className={styles.amounts}>
+                  {GIFT_CARD_AMOUNTS.filter(item => item.value !== 'custom').map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      className={`${styles.amountButton} ${amount === item.value ? styles.amountSelected : ''}`}
+                      onClick={() => setAmount(item.value)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                <div className={styles.customAmount}>
+                  <input
+                    type="text"
+                    className={styles.customAmountInput}
+                    placeholder="Ange valfritt belopp"
+                    value={customAmount}
+                    onChange={(e) => {
+                      if (/^\d*$/.test(e.target.value)) {
+                        setCustomAmount(e.target.value);
+                        setAmount('custom');
+                      }
+                    }}
                   />
-                ))}
-              </RadioGroup>
-              
-              {amount === 'custom' && (
-                <TextField
-                  label="Eget belopp (kr)"
-                  variant="outlined"
-                  fullWidth
-                  value={customAmount}
-                  onChange={handleCustomAmountChange}
-                  type="number"
-                  inputProps={{ min: 100 }}
-                  sx={{ mt: 1 }}
-                  error={!!errors.amount}
-                  helperText={errors.amount}
-                />
-              )}
-            </FormControl>
-          </Paper>
-        </Grid>
-        
-        <Grid item xs={12} md={6}>
+                  <span className={styles.currencySymbol}>kr</span>
+                </div>
+                {errors.amount && (
+                  <Typography color="error" variant="caption">{errors.amount}</Typography>
+                )}
+              </div>
+            </div>
+          </div>
+
           <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
             <Box sx={{ 
               display: 'flex', 
@@ -256,8 +266,8 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
               />
             </FormControl>
           </Paper>
-        </Grid>
-      </Grid>
+        </div>
+      </div>
       
       <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
         <StyledButton onClick={handleNext}>

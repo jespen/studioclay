@@ -1,12 +1,16 @@
-import { Suspense } from 'react';
-import GiftCardSelectionWrapper from '@/components/gift-card-flow/GiftCardSelection';
+'use client';
 
-export const metadata = {
-  title: 'Välj Presentkort | Studio Clay',
-  description: 'Välj belopp och anpassa ditt presentkort från Studio Clay.',
-};
+import { Suspense, useEffect } from 'react';
+import GiftCardSelectionWrapper from '@/components/gift-card-flow/GiftCardSelection';
+import { FlowType } from '@/components/common/BookingStepper';
+import { setFlowType } from '@/utils/flowStorage';
 
 export default function SelectionPage() {
+  // Set flow type as soon as this page loads
+  useEffect(() => {
+    setFlowType(FlowType.GIFT_CARD);
+  }, []);
+
   return (
     <Suspense fallback={<div>Laddar presentkort...</div>}>
       <GiftCardSelectionWrapper />

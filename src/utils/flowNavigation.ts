@@ -10,7 +10,7 @@ const STEP_URL_SEGMENTS: Record<FlowType, Record<GenericStep, string>> = {
     [GenericStep.DETAILS]: 'details',        // Not used in this flow
   },
   [FlowType.GIFT_CARD]: {
-    [GenericStep.ITEM_SELECTION]: '',        // /gift-card-flow
+    [GenericStep.ITEM_SELECTION]: 'selection',  // /gift-card-flow/selection
     [GenericStep.USER_INFO]: 'personal-info',    // /gift-card-flow/personal-info 
     [GenericStep.PAYMENT]: 'payment',        // /gift-card-flow/payment
     [GenericStep.CONFIRMATION]: 'confirmation', // /gift-card-flow/confirmation

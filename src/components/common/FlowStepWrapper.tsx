@@ -10,7 +10,8 @@ import {
   getAllFlowData,
   getItemDetails, 
   getUserInfo, 
-  getPaymentInfo 
+  getPaymentInfo,
+  setFlowType
 } from '@/utils/flowStorage';
 import { 
   getNextStepUrl, 
@@ -127,7 +128,11 @@ const FlowStepWrapper: React.FC<FlowStepWrapperProps> = ({
         const currentFlowType = getFlowType();
         if (currentFlowType !== flowType) {
           console.warn(`Wrong flow type. Expected ${flowType}, got: ${currentFlowType}`);
-          if (redirectOnInvalid && !isRedirectingRef.current) {
+          
+          // If no flow type is set, set it now instead of redirecting
+          if (!currentFlowType) {
+            setFlowType(flowType);
+          } else if (redirectOnInvalid && !isRedirectingRef.current) {
             isRedirectingRef.current = true;
             router.push(getStepUrl(flowType, GenericStep.ITEM_SELECTION, itemId));
             return;

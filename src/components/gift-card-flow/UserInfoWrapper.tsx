@@ -17,7 +17,7 @@ import {
 import FlowStepWrapper from '../common/FlowStepWrapper';
 import { FlowType, GenericStep } from '../common/BookingStepper';
 import StyledButton from '../common/StyledButton';
-import { setUserInfo } from '@/utils/flowStorage';
+import { saveUserInfo } from '@/utils/dataFetcher';
 
 interface FormData {
   firstName: string;
@@ -143,10 +143,7 @@ const UserInfoWrapper: React.FC<UserInfoWrapperProps> = ({ onNext, onBack }) => 
 
     try {
       // Store user info in flow storage
-      setUserInfo(formData);
-      
-      // Also store in localStorage for compatibility
-      localStorage.setItem('userInfo', JSON.stringify(formData));
+      saveUserInfo(formData);
       
       // Navigate to next step
       if (onNext) {
@@ -298,7 +295,7 @@ const UserInfoFlowWrapper = () => {
       expectedPreviousSteps={[GenericStep.ITEM_SELECTION]}
       title="Dina uppgifter"
       subtitle="Fyll i dina kontaktuppgifter för att fortsätta"
-      validateData={({ itemDetails }) => {
+      validateData={({ itemDetails }: { itemDetails: any }) => {
         // Validate that we have gift card details
         return !!itemDetails && !!itemDetails.amount;
       }}

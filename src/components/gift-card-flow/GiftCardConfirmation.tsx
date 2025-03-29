@@ -18,7 +18,7 @@ import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 
 import { FlowStateData } from '../common/FlowStepWrapper';
 import StyledButton from '../common/StyledButton';
-import { clearFlowData } from '@/utils/flowStorage';
+import { cleanupCheckoutFlow } from '@/utils/dataFetcher';
 
 // Define types
 interface GiftCardDetails {
@@ -112,7 +112,7 @@ const GiftCardConfirmation: React.FC<GiftCardConfirmationProps> = ({ flowData })
 
   const handleHome = () => {
     // Clear flow data before going home
-    clearFlowData();
+    cleanupCheckoutFlow();
     sessionStorage.removeItem('giftCardAmount');
     sessionStorage.removeItem('giftCardType');
     
