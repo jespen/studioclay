@@ -31,7 +31,15 @@ export const SwishRequestSchema = z.object({
  * Type definition for Swish payment request data.
  * Derived from the SwishRequestSchema.
  */
-export type SwishRequestData = z.infer<typeof SwishRequestSchema>;
+export interface SwishRequestData {
+  payeePaymentReference: string;
+  callbackUrl: string;
+  payeeAlias: string;
+  amount: string;
+  currency: string;
+  message: string;
+  payerAlias: string;
+}
 
 /**
  * Response type for Swish API calls.

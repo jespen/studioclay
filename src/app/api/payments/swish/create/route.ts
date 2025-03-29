@@ -17,6 +17,18 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Define metadata interface
+interface PaymentMetadata {
+  idempotency_key: string | null;
+  item_details?: {
+    type: string;
+    recipientName: string;
+    recipientEmail: string;
+    message: string;
+  };
+  [key: string]: any;
+}
+
 // Schema för validering av Swish-betalningsdata
 const SwishPaymentSchema = z.object({
   phone_number: z.string().min(1),
@@ -30,8 +42,14 @@ const SwishPaymentSchema = z.object({
     lastName: z.string().min(1),
     email: z.string().email(),
     phone: z.string().min(1),
-    numberOfParticipants: z.string()
-  })
+    numberOfParticipants: z.string().transform(val => Number(val) || 1)
+  }),
+  itemDetails: z.object({
+    type: z.string().optional(),
+    recipientName: z.string().optional(),
+    recipientEmail: z.string().email().optional(),
+    message: z.string().optional()
+  }).nullable().optional()
 });
 
 // Hjälpfunktion för att kontrollera idempotency
@@ -173,6 +191,23 @@ export async function POST(request: Request) {
     const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
     const paymentReference = `SC-${timestamp}-${randomNum}`;
 
+    // Prepare metadata including idempotency key
+    const metadata: PaymentMetadata = {
+      idempotency_key: request.headers.get('Idempotency-Key')
+    };
+    
+    // If this is a gift card payment, store item details in metadata
+    if (product_type === 'gift_card') {
+      // Retrieve gift card details from localStorage or request
+      const storedDetails = body.itemDetails || {};
+      metadata.item_details = {
+        type: storedDetails.type || 'digital',
+        recipientName: storedDetails.recipientName || '',
+        recipientEmail: storedDetails.recipientEmail || '',
+        message: storedDetails.message || ''
+      };
+    }
+
     // Create payment record in database first
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
@@ -186,9 +221,7 @@ export async function POST(request: Request) {
         status: 'CREATED',
         user_info: user_info,
         phone_number: phone_number,
-        metadata: {
-          idempotency_key: request.headers.get('Idempotency-Key')
-        }
+        metadata: metadata
       })
       .select()
       .single();
@@ -207,7 +240,7 @@ export async function POST(request: Request) {
       payeePaymentReference: paymentReference,
       callbackUrl: callbackUrl,
       payeeAlias: swishService.getPayeeAlias(),
-      amount: amount.toFixed(2),
+      amount: amount.toString(),
       currency: "SEK",
       message: `Betalning för ${product_id}`.substring(0, 50), // Max 50 chars
       payerAlias: swishService.formatPhoneNumber(phone_number)
