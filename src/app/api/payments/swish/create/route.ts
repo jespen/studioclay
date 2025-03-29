@@ -182,98 +182,132 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    // Validate the request body
-    const validatedData = SwishPaymentSchema.parse(body);
-    const { phone_number, product_id, product_type, user_info, amount } = validatedData;
-
-    // Generate payment reference (max 35 chars, alphanumeric)
-    const timestamp = new Date().getTime().toString().slice(-6);
-    const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    const paymentReference = `SC-${timestamp}-${randomNum}`;
-
-    // Prepare metadata including idempotency key
-    const metadata: PaymentMetadata = {
-      idempotency_key: request.headers.get('Idempotency-Key')
-    };
+    // Log the received request body for debugging
+    logDebug('Received Swish payment request body:', body);
     
-    // If this is a gift card payment, store item details in metadata
-    if (product_type === 'gift_card') {
-      // Retrieve gift card details from localStorage or request
-      const storedDetails = body.itemDetails || {};
-      metadata.item_details = {
-        type: storedDetails.type || 'digital',
-        recipientName: storedDetails.recipientName || '',
-        recipientEmail: storedDetails.recipientEmail || '',
-        message: storedDetails.message || ''
+    try {
+      // Validate the request body
+      logDebug('Attempting to validate request body');
+      const validatedData = SwishPaymentSchema.parse(body);
+      logDebug('Request body validation successful', validatedData);
+      
+      const { phone_number, product_id, product_type, user_info, amount } = validatedData;
+
+      // Generate payment reference (max 35 chars, alphanumeric)
+      const timestamp = new Date().getTime().toString().slice(-6);
+      const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      const paymentReference = `SC-${timestamp}-${randomNum}`;
+
+      // Prepare metadata including idempotency key
+      const metadata: PaymentMetadata = {
+        idempotency_key: request.headers.get('Idempotency-Key')
       };
-    }
+      
+      // If this is a gift card payment, store item details in metadata
+      if (product_type === 'gift_card') {
+        logDebug('Processing gift card payment, extracting item details');
+        // Retrieve gift card details from localStorage or request
+        const storedDetails = body.itemDetails || {};
+        logDebug('Gift card details from request:', storedDetails);
+        
+        metadata.item_details = {
+          type: storedDetails.type || 'digital',
+          recipientName: storedDetails.recipientName || '',
+          recipientEmail: storedDetails.recipientEmail || '',
+          message: storedDetails.message || ''
+        };
+        
+        logDebug('Prepared metadata for gift card payment:', metadata);
+      }
 
-    // Create payment record in database first
-    const { data: payment, error: paymentError } = await supabase
-      .from('payments')
-      .insert({
-        payment_method: 'swish',
-        amount: amount,
-        currency: 'SEK',
-        payment_reference: paymentReference,
-        product_type: product_type,
-        product_id: product_id,
-        status: 'CREATED',
-        user_info: user_info,
-        phone_number: phone_number,
-        metadata: metadata
-      })
-      .select()
-      .single();
-
-    if (paymentError) {
-      throw new Error(`Failed to create payment record: ${paymentError.message}`);
-    }
-
-    // Ensure callback URL uses HTTPS
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const callbackUrl = baseUrl.replace('http://', 'https://') + '/api/payments/swish/callback';
-
-    // Use SwishService to create payment
-    const swishService = SwishService.getInstance();
-    const result = await swishService.createPayment({
-      payeePaymentReference: paymentReference,
-      callbackUrl: callbackUrl,
-      payeeAlias: swishService.getPayeeAlias(),
-      amount: amount.toString(),
-      currency: "SEK",
-      message: `Betalning för ${product_id}`.substring(0, 50), // Max 50 chars
-      payerAlias: swishService.formatPhoneNumber(phone_number)
-    });
-
-    if (!result.success) {
-      // If Swish request fails, update payment status to ERROR
-      await supabase
+      // Create payment record in database first
+      logDebug('Creating payment record in database');
+      const { data: payment, error: paymentError } = await supabase
         .from('payments')
-        .update({ 
-          status: 'ERROR',
-          metadata: {
-            ...payment.metadata,
-            swish_error: result.error
-          }
+        .insert({
+          payment_method: 'swish',
+          amount: amount,
+          currency: 'SEK',
+          payment_reference: paymentReference,
+          product_type: product_type,
+          product_id: product_id,
+          status: 'CREATED',
+          user_info: user_info,
+          phone_number: phone_number,
+          metadata: metadata
         })
-        .eq('payment_reference', paymentReference);
+        .select()
+        .single();
 
+      if (paymentError) {
+        logError('Failed to create payment record in database', paymentError);
+        throw new Error(`Failed to create payment record: ${paymentError.message}`);
+      }
+      
+      logDebug('Payment record created successfully', payment);
+
+      // Ensure callback URL uses HTTPS
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+      const callbackUrl = baseUrl.replace('http://', 'https://') + '/api/payments/swish/callback';
+
+      // Prepare Swish payment request data
+      const swishPaymentData = {
+        payeePaymentReference: paymentReference,
+        callbackUrl: callbackUrl,
+        payeeAlias: SwishService.getInstance().getPayeeAlias(),
+        amount: amount.toString(),
+        currency: "SEK",
+        message: `Betalning för ${product_id}`.substring(0, 50), // Max 50 chars
+        payerAlias: SwishService.getInstance().formatPhoneNumber(phone_number)
+      };
+      
+      logDebug('Prepared Swish payment request data:', swishPaymentData);
+
+      // Use SwishService to create payment
+      logDebug('Calling SwishService to create payment');
+      const swishService = SwishService.getInstance();
+      const result = await swishService.createPayment(swishPaymentData);
+      
+      logDebug('SwishService createPayment result:', result);
+
+      if (!result.success) {
+        logError('Swish payment request failed', result);
+        // If Swish request fails, update payment status to ERROR
+        await supabase
+          .from('payments')
+          .update({ 
+            status: 'ERROR',
+            metadata: {
+              ...payment.metadata,
+              swish_error: result.error
+            }
+          })
+          .eq('payment_reference', paymentReference);
+
+        return NextResponse.json({
+          success: false,
+          error: result.error,
+          details: result.data
+        }, { status: 400 });
+      }
+
+      logDebug('Swish payment request successful');
+      return NextResponse.json({
+        success: true,
+        data: {
+          reference: paymentReference
+        }
+      });
+    } catch (validationError) {
+      logError('Validation error in request body', validationError);
       return NextResponse.json({
         success: false,
-        error: result.error,
-        details: result.data
+        error: validationError instanceof Error ? validationError.message : 'Validation error',
+        validationError: true
       }, { status: 400 });
     }
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        reference: paymentReference
-      }
-    });
   } catch (error) {
-    logDebug('Error in POST handler:', error);
+    logError('Unhandled error in POST handler', error);
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
