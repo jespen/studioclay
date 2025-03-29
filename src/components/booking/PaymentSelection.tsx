@@ -281,6 +281,24 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     }
   };
 
+  // Helper function to get gift card amount from localStorage
+  const getGiftCardAmount = (): number => {
+    try {
+      const giftCardDetails = localStorage.getItem('giftCardDetails');
+      if (giftCardDetails) {
+        const parsed = JSON.parse(giftCardDetails);
+        if (parsed && parsed.amount) {
+          return parsed.amount;
+        }
+      }
+      // Fallback to courseDetail if it exists (it might be stored as a fake course)
+      return courseDetail?.price || 0;
+    } catch (e) {
+      console.error('Error parsing gift card amount from localStorage:', e);
+      return courseDetail?.price || 0;
+    }
+  };
+
   // If data is loading, show loading state
   if (isLoading) {
     return (
@@ -366,7 +384,9 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                       ref={swishPaymentRef}
                       userInfo={userInfo}
                       courseId={courseId}
-                      amount={calculatePrice()}
+                      amount={flowType === FlowType.GIFT_CARD 
+                        ? (flowData?.itemDetails?.amount || getGiftCardAmount())
+                        : calculatePrice()}
                       onPaymentComplete={handlePaymentComplete}
                       disabled={isSubmitting}
                     />
