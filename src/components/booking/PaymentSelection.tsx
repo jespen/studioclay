@@ -544,7 +544,9 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
           </Typography>
           
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            {calculatePrice()} kr
+            {flowType === FlowType.GIFT_CARD 
+              ? `${flowData?.itemDetails?.amount || getGiftCardAmount()} kr`
+              : `${calculatePrice()} kr`}
           </Typography>
           
           <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
