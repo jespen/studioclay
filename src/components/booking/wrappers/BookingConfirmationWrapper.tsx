@@ -5,21 +5,27 @@ import BookingConfirmation from '@/components/booking/BookingConfirmation';
 import FlowStepWrapper from '@/components/common/FlowStepWrapper';
 import { FlowType, GenericStep } from '@/components/common/BookingStepper';
 
-// Skapa en serialiserbar validateData-funktion
+/**
+ * Creates a serializable validation function
+ * @returns A validation function that ensures we have all required data for the confirmation page
+ */
 function createValidateFunction() {
-  // Validera att vi har all nödvändig information
+  // Validate we have all necessary information
   return function validateData({ itemDetails, userInfo, paymentInfo }: any) {
     return Boolean(itemDetails) && Boolean(userInfo) && Boolean(paymentInfo);
   };
 }
 
+/**
+ * Wrapper component for the booking confirmation page
+ */
 export default function BookingConfirmationWrapper({ id }: { id: string }) {
-  // Skapa validationsfunktionen inuti komponenten
+  // Create validation function inside the component
   const validateBookingData = createValidateFunction();
   
-  // Funktion för att rendera children
+  // Function to render children with safe flow data
   const renderChildren = ({ flowData }: any) => {
-    // Säkra bara de data vi behöver för att undvika serialiseringsproblem
+    // Only pass the data we need to avoid serialization issues
     const safeFlowData = {
       itemDetails: flowData?.itemDetails || null,
       userInfo: flowData?.userInfo || null,
@@ -38,7 +44,7 @@ export default function BookingConfirmationWrapper({ id }: { id: string }) {
       title="Bokningsbekräftelse"
       subtitle="Tack för din bokning!"
       itemId={id}
-      // Skicka funktionen direkt - vi har abstraherat bort det komplexa
+      // Pass the function directly - we've abstracted away the complexity
       validateData={validateBookingData}
     >
       {renderChildren}

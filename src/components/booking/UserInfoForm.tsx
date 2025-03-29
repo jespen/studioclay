@@ -19,7 +19,7 @@ import { GenericStep, FlowType } from '../common/BookingStepper';
 import GenericFlowContainer from '../common/GenericFlowContainer';
 import StyledButton from '../common/StyledButton';
 import { FormTextField } from '../common/FormField';
-import { setUserInfo } from '@/utils/flowStorage';
+import { fetchCourseDetail, CourseDetail, saveUserInfo, getUserInfo } from '@/utils/dataFetcher';
 
 interface UserInfoFormProps {
   courseId: string;
@@ -44,15 +44,6 @@ interface FormErrors {
   numberOfParticipants?: string;
 }
 
-interface CourseDetail {
-  id: string;
-  title: string;
-  max_participants?: number;
-  current_participants?: number;
-  availableSpots?: number;
-  price?: number;
-}
-
 const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack }) => {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -60,8 +51,6 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [maxParticipants, setMaxParticipants] = useState(1);
-  // Ref to track if we're already fetching data
-  const isFetchingRef = React.useRef(false);
   
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -74,94 +63,50 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
 
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  // Fetch course details to get available spots
+  // Fetch course details using our centralized utility
   useEffect(() => {
-    // Skip if already fetching
-    if (isFetchingRef.current) return;
+    let isMounted = true;
     
-    const fetchCourseDetails = async () => {
+    const loadCourseDetails = async () => {
       try {
-        // Set fetching flag
-        isFetchingRef.current = true;
         setLoading(true);
+        const course = await fetchCourseDetail(courseId);
         
-        // First check if we already have course details in localStorage or flowData
-        const storedCourseDetail = localStorage.getItem('courseDetail');
-        if (storedCourseDetail) {
-          try {
-            const parsedDetail = JSON.parse(storedCourseDetail);
-            if (parsedDetail && parsedDetail.id === courseId) {
-              setCourseDetail(parsedDetail);
-              
-              // Calculate available spots
-              const availableSpots = parsedDetail.availableSpots !== undefined 
-                ? parsedDetail.availableSpots 
-                : (parsedDetail.max_participants ? parsedDetail.max_participants - (parsedDetail.current_participants || 0) : 10);
-              
-              setMaxParticipants(Math.max(1, availableSpots));
-              setLoading(false);
-              isFetchingRef.current = false;
-              return;
-            }
-          } catch (err) {
-            console.error('Error parsing stored course detail:', err);
-            // Continue to fetch from API if parsing fails
-          }
-        }
-        
-        // If not found in localStorage, fetch from API
-        const response = await fetch(`/api/courses/${courseId}`);
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch course details: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data && data.course) {
-          setCourseDetail(data.course);
+        if (isMounted) {
+          setCourseDetail(course);
           
           // Calculate available spots
-          const availableSpots = data.course.availableSpots !== undefined 
-            ? data.course.availableSpots 
-            : (data.course.max_participants ? data.course.max_participants - (data.course.current_participants || 0) : 10);
+          const availableSpots = course.availableSpots !== undefined 
+            ? course.availableSpots 
+            : (course.max_participants ? course.max_participants - (course.current_participants || 0) : 10);
           
           setMaxParticipants(Math.max(1, availableSpots));
-        } else {
-          throw new Error('Invalid course data format');
+          setLoading(false);
         }
       } catch (error) {
-        console.error('Error fetching course details:', error);
-        setSubmitError(error instanceof Error ? error.message : 'Failed to fetch course details. Please try again later.');
-      } finally {
-        setLoading(false);
-        isFetchingRef.current = false;
+        console.error('Error loading course details:', error);
+        if (isMounted) {
+          setSubmitError(error instanceof Error ? error.message : 'Failed to fetch course details. Please try again later.');
+          setLoading(false);
+        }
       }
     };
 
-    if (courseId) {
-      fetchCourseDetails();
-    }
+    loadCourseDetails();
     
-    // Clean up fetching flag
     return () => {
-      isFetchingRef.current = false;
+      isMounted = false;
     };
   }, [courseId]);
 
   // Load existing user data if available
   useEffect(() => {
-    const storedUserInfo = localStorage.getItem('userInfo');
-    if (storedUserInfo) {
-      try {
-        const parsedUserInfo = JSON.parse(storedUserInfo);
-        setFormData(prevData => ({
-          ...prevData,
-          ...parsedUserInfo
-        }));
-      } catch (error) {
-        console.error('Error parsing stored user info:', error);
-      }
+    const existingUserInfo = getUserInfo();
+    if (existingUserInfo) {
+      setFormData(prevData => ({
+        ...prevData,
+        ...existingUserInfo
+      }));
     }
   }, []);
 
@@ -238,11 +183,8 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
     setSubmitError(null);
 
     try {
-      // Store user info using flowStorage API
-      setUserInfo(formData);
-      
-      // Also store in localStorage for backward compatibility
-      localStorage.setItem('userInfo', JSON.stringify(formData));
+      // Store user info using our utility function
+      saveUserInfo(formData);
       
       // Navigate to next step
       if (onNext) {

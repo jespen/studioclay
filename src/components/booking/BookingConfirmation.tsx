@@ -30,37 +30,29 @@ import StyledButton from '../common/StyledButton';
 import Link from 'next/link';
 import { FlowStateData } from '../common/FlowStepWrapper';
 import { clearFlowData } from '@/utils/flowStorage';
+import { 
+  CourseDetail, 
+  UserInfo, 
+  PaymentInfo, 
+  generateBookingReference, 
+  getUserInfo, 
+  getPaymentInfo,
+  cleanupCheckoutFlow
+} from '@/utils/dataFetcher';
 
 interface BookingConfirmationProps {
   courseId: string;
   flowData?: FlowStateData;
 }
 
-interface UserInfo {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  numberOfParticipants: string;
-  specialRequirements?: string;
-}
-
-interface PaymentInfo {
-  status: string;
-  amount: number | string;
-  payment_method: string;
-  payment_date: string;
-  reference: string;
-}
-
 const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flowData }) => {
-  const [courseDetail, setCourseDetail] = useState<any | null>(null);
+  const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const [bookingReference, setBookingReference] = useState<string>('');
 
   useEffect(() => {
-    // Use flowData if available
+    // Use flowData if available (preferred and more efficient)
     if (flowData) {
       setCourseDetail(flowData.itemDetails);
       setUserInfo(flowData.userInfo as UserInfo);
@@ -70,61 +62,27 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flo
       if (flowData.paymentInfo && flowData.paymentInfo.reference) {
         setBookingReference(flowData.paymentInfo.reference);
       } else {
-        // Generate a booking reference
-        const timestamp = new Date().getTime().toString().slice(-6);
-        const randomChars = Math.random().toString(36).substring(2, 5).toUpperCase();
-        setBookingReference(`SC-${randomChars}-${timestamp}`);
+        setBookingReference(generateBookingReference());
       }
       
       return;
     }
     
-    // Fallback to localStorage if flowData is not available
-    const storedUserInfo = localStorage.getItem('userInfo');
-    const storedCourseDetail = localStorage.getItem('courseDetail');
-    const storedPaymentInfo = localStorage.getItem('paymentInfo');
+    // Fallback to utility functions if flowData is not available
+    const courseFromFlow = flowData ? flowData.itemDetails as CourseDetail : null;
+    setCourseDetail(courseFromFlow);
+    setUserInfo(getUserInfo());
+    setPaymentInfo(getPaymentInfo());
     
-    if (storedUserInfo) {
-      setUserInfo(JSON.parse(storedUserInfo));
-    }
-    
-    if (storedCourseDetail) {
-      setCourseDetail(JSON.parse(storedCourseDetail));
-    }
-    
-    if (storedPaymentInfo) {
-      setPaymentInfo(JSON.parse(storedPaymentInfo));
-    } else {
-      // Fallback to old format
-      const storedPaymentDetails = localStorage.getItem('paymentDetails');
-      if (storedPaymentDetails) {
-        const details = JSON.parse(storedPaymentDetails);
-        setPaymentInfo({
-          status: details.paymentStatus || 'completed',
-          amount: calculatePrice(),
-          payment_method: details.method || 'unknown',
-          payment_date: new Date().toISOString(),
-          reference: details.paymentReference || bookingReference
-        });
-      }
-    }
-    
-    // Generate a booking reference
-    const timestamp = new Date().getTime().toString().slice(-6);
-    const randomChars = Math.random().toString(36).substring(2, 5).toUpperCase();
-    setBookingReference(`SC-${randomChars}-${timestamp}`);
-  }, [flowData, courseId]);
+    // Generate a booking reference if needed
+    const reference = getPaymentInfo()?.reference || generateBookingReference();
+    setBookingReference(reference);
+  }, [flowData]);
 
   // Handle going back to home page and clearing data
   const handleBackToHome = () => {
-    // Clear flow data before navigating
-    clearFlowData();
-    
-    // For backward compatibility
-    localStorage.removeItem('userInfo');
-    localStorage.removeItem('courseDetail');
-    localStorage.removeItem('paymentDetails');
-    localStorage.removeItem('paymentInfo');
+    // Clear all flow and localStorage data
+    cleanupCheckoutFlow();
   };
 
   const getMethodDisplayName = (method: string) => {

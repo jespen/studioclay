@@ -28,7 +28,7 @@ import CategoryIcon from '@mui/icons-material/Category';
 import { GenericStep, FlowType } from '../common/BookingStepper';
 import BackToCourses from '../common/BackToCourses';
 import StyledButton from '../common/StyledButton';
-import { setItemDetails } from '@/utils/flowStorage';
+import { fetchCourseDetail, CourseDetail, hasMinimalCourseData } from '@/utils/dataFetcher';
 import '@/styles/richText.css';
 
 interface CourseDetailsProps {
@@ -52,26 +52,6 @@ interface Category {
   description?: string;
   created_at?: string;
   updated_at?: string;
-}
-
-interface CourseDetail {
-  id: string;
-  title: string;
-  description?: string;
-  rich_description?: string;
-  start_date?: string;
-  end_date?: string;
-  duration_minutes?: number;
-  location?: string;
-  price?: number;
-  max_participants?: number;
-  current_participants?: number;
-  features?: string[];
-  image_url?: string;
-  category?: string | Category;
-  instructor?: string | Instructor;
-  availableSpots?: number;
-  template_id?: string;
 }
 
 // const DEFAULT_FEATURES = [
@@ -106,104 +86,35 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext }) => {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [hasLimitedData, setHasLimitedData] = React.useState(false);
-  
-  // Ref to track if we are already fetching
-  const isFetchingRef = React.useRef(false);
-  // Ref to track if we have updated flow storage
-  const hasUpdatedStorageRef = React.useRef(false);
 
   React.useEffect(() => {
-    // Skip if already fetching
-    if (isFetchingRef.current) return;
+    let isMounted = true;
     
-    const fetchCourseDetail = async () => {
+    const loadCourseDetails = async () => {
       try {
-        // Set fetching flag
-        isFetchingRef.current = true;
         setLoading(true);
+        const course = await fetchCourseDetail(courseId);
         
-        // Try to get from localStorage first for better performance
-        const storedCourseDetail = localStorage.getItem('courseDetail');
-        if (storedCourseDetail) {
-          try {
-            const parsedDetail = JSON.parse(storedCourseDetail);
-            if (parsedDetail && parsedDetail.id === courseId) {
-              // Course already exists in localStorage
-              setCourseDetail(parsedDetail);
-              
-              // Check if we have limited data
-              const hasMinimalData = 
-                !parsedDetail.description && 
-                !parsedDetail.price && 
-                !parsedDetail.start_date;
-                
-              setHasLimitedData(hasMinimalData);
-              
-              // Update flow storage, but only once
-              if (!hasUpdatedStorageRef.current) {
-                setItemDetails(parsedDetail);
-                hasUpdatedStorageRef.current = true;
-              }
-              
-              setLoading(false);
-              isFetchingRef.current = false;
-              return;
-            }
-          } catch (err) {
-            console.error('Error parsing stored course detail:', err);
-            // Continue to fetch from API if parsing fails
-          }
-        }
-        
-        const response = await fetch(`/api/courses/${courseId}`);
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch course details');
-        }
-        
-        const data = await response.json();
-        console.log('Fetched course details:', data);
-        
-        if (data && data.course) {
-          const course = data.course;
-          
-          // Check if we have limited data
-          const hasMinimalData = 
-            !course.description && 
-            !course.price && 
-            !course.start_date;
-            
-          setHasLimitedData(hasMinimalData);
+        // Only update state if component is still mounted
+        if (isMounted) {
           setCourseDetail(course);
-          
-          // Store course details in flowStorage, but only once
-          if (!hasUpdatedStorageRef.current) {
-            setItemDetails(course);
-            hasUpdatedStorageRef.current = true;
-            
-            // Also store in localStorage for backward compatibility
-            localStorage.setItem('courseDetail', JSON.stringify(course));
-          }
-        } else {
-          setError('No course data found');
+          setHasLimitedData(hasMinimalCourseData(course));
+          setLoading(false);
         }
       } catch (err) {
-        console.error('Error fetching course details:', err);
-        setError('Failed to load course details');
-      } finally {
-        setLoading(false);
-        isFetchingRef.current = false;
+        console.error('Error loading course details:', err);
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load course details');
+          setLoading(false);
+        }
       }
     };
 
-    if (courseId) {
-      fetchCourseDetail();
-    }
+    loadCourseDetails();
     
     // Clean up function
     return () => {
-      isFetchingRef.current = false;
-      hasUpdatedStorageRef.current = false;
+      isMounted = false;
     };
   }, [courseId]);
 
