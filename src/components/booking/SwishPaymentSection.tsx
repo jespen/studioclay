@@ -84,6 +84,19 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       // Check if this is a gift card payment
       const isGiftCard = courseId === 'gift-card';
       
+      // For gift cards, get the item details from localStorage
+      let itemDetails = null;
+      if (isGiftCard) {
+        try {
+          const storedDetails = localStorage.getItem('giftCardDetails');
+          if (storedDetails) {
+            itemDetails = JSON.parse(storedDetails);
+          }
+        } catch (e) {
+          console.error('Error parsing gift card details from localStorage:', e);
+        }
+      }
+      
       const response = await fetch('/api/payments/swish/create', {
         method: 'POST',
         headers: {
@@ -97,7 +110,8 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           product_id: courseId,
           amount: amount,
           quantity: parseInt(userInfo.numberOfParticipants || '1'),
-          user_info: userInfo
+          user_info: userInfo,
+          itemDetails: itemDetails
         })
       });
 

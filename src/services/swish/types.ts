@@ -117,7 +117,7 @@ export class SwishError extends Error {
 export interface SwishPaymentData {
   phone_number: string;
   payment_method: "swish";
-  product_type: "course";
+  product_type: "course" | "gift_card";
   product_id: string;
   amount: number;
   quantity: number;
