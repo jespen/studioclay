@@ -7,6 +7,8 @@ import GenericFlowContainer from '../common/GenericFlowContainer';
 import { FlowType, GenericStep } from '../common/BookingStepper';
 import StyledButton from '../common/StyledButton';
 import styles from '@/styles/GiftCardSelection.module.css';
+import { setFlowType, setItemDetails, setItemId } from '@/utils/flowStorage';
+import { getNextStepUrl } from '@/utils/flowNavigation';
 
 const GiftCardSelection = () => {
   const router = useRouter();
@@ -37,12 +39,30 @@ const GiftCardSelection = () => {
       return;
     }
     
-    // Store selected amount in sessionStorage for later steps
+    // Store selected gift card data in localStorage
+    const giftCardDetails = {
+      amount: finalAmount,
+      type: 'digital',
+      created_at: new Date().toISOString()
+    };
+    
+    // Set flow data using our new utilities
+    setFlowType(FlowType.GIFT_CARD);
+    setItemId(finalAmount); // Use amount as the ID for gift cards
+    setItemDetails(giftCardDetails);
+    
+    // Keep old sessionStorage for backward compatibility
     sessionStorage.setItem('giftCardAmount', finalAmount);
     sessionStorage.setItem('giftCardType', 'digital');
     
-    // Navigate to next step
-    router.push('/gift-card-flow/recipient');
+    // Navigate to next step using our navigation helper
+    const nextUrl = getNextStepUrl(GenericStep.ITEM_SELECTION, FlowType.GIFT_CARD);
+    if (nextUrl) {
+      router.push(nextUrl);
+    } else {
+      // Fallback to the hardcoded URL
+      router.push('/gift-card-flow/recipient');
+    }
   };
 
   return (
