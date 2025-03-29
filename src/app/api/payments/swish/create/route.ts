@@ -230,7 +230,7 @@ export async function POST(request: Request) {
           currency: 'SEK',
           payment_reference: paymentReference,
           product_type: product_type,
-          product_id: product_id,
+          product_id: product_type === 'gift_card' ? 'gift-card-product' : product_id,
           status: 'CREATED',
           user_info: user_info,
           phone_number: phone_number,

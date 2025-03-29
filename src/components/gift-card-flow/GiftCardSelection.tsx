@@ -101,7 +101,13 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
     }
     
     // Calculate final amount
-    const finalAmount = amount === 'custom' ? customAmount : amount;
+    const finalAmount = amount === 'custom' ? parseInt(customAmount) : parseInt(amount);
+    
+    // Ensure we have a valid amount (default to 500 if somehow invalid)
+    if (!finalAmount || finalAmount <= 0) {
+      setErrors({ amount: 'Vänligen ange ett giltigt belopp' });
+      return;
+    }
     
     // Store gift card details
     const giftCardDetails = {
@@ -112,15 +118,16 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
       message: recipient.message
     };
     
-    // Save details to flow storage
+    // Save details to flow storage and localStorage for API access
     saveItemDetails(giftCardDetails);
+    localStorage.setItem('giftCardDetails', JSON.stringify(giftCardDetails));
 
     // For backwards compatibility with PaymentSelection, also save as a "course"
     const fakeGiftCardCourse = {
       id: "gift-card",
       title: "Presentkort",
       description: `Presentkort på ${finalAmount} kr`,
-      price: parseInt(finalAmount),
+      price: finalAmount,
       currency: "SEK",
       max_participants: 1,
       current_participants: 0
