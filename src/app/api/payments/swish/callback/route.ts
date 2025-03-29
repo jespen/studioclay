@@ -82,6 +82,48 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any)
   return booking;
 }
 
+// Hjälpfunktion för att skapa presentkort
+async function createGiftCard(paymentId: string, amount: number, userInfo: any, itemDetails: any = {}) {
+  // Generate a unique code for the gift card
+  const generateUniqueCode = () => {
+    const random = Math.random().toString(36).substring(2, 10).toUpperCase();
+    return `GC-${random}`;
+  };
+  
+  // Create gift card data
+  const giftCardData = {
+    code: generateUniqueCode(),
+    amount: amount,
+    type: itemDetails.type || 'digital',
+    sender_name: `${userInfo.firstName} ${userInfo.lastName}`,
+    sender_email: userInfo.email,
+    recipient_name: itemDetails.recipientName || userInfo.recipientName || 'Mottagare',
+    recipient_email: itemDetails.recipientEmail || userInfo.recipientEmail || null,
+    message: itemDetails.message || userInfo.message || null,
+    status: 'active',
+    remaining_balance: amount,
+    is_emailed: false,
+    is_printed: false,
+    is_paid: true, // Mark as paid since Swish payment was successful
+    expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(), // 1 year from now
+    payment_method: 'swish',
+    payment_id: paymentId
+  };
+  
+  // Insert gift card into database
+  const { data: giftCard, error } = await supabase
+    .from('gift_cards')
+    .insert([giftCardData])
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create gift card: ${error.message}`);
+  }
+
+  return giftCard;
+}
+
 export async function POST(request: Request) {
   try {
     // Klona request för signaturverifiering (eftersom body endast kan läsas en gång)
@@ -157,18 +199,31 @@ export async function POST(request: Request) {
       throw new Error(`Failed to update payment status: ${updateError.message}`);
     }
 
-    // Om betalningen lyckades, skapa bokning
-    let booking = null;
+    // Om betalningen lyckades, skapa bokning eller presentkort
+    let result = null;
     if (newStatus === 'PAID') {
       try {
-        booking = await createBooking(
-          payment.id,
-          payment.product_id,
-          payment.user_info
-        );
+        if (payment.product_type === 'gift_card') {
+          console.log('Creating gift card from successful Swish payment');
+          result = await createGiftCard(
+            payment.id,
+            payment.amount,
+            payment.user_info,
+            payment.metadata?.item_details
+          );
+          console.log('Gift card created successfully:', result);
+        } else {
+          console.log('Creating booking from successful Swish payment');
+          result = await createBooking(
+            payment.id,
+            payment.product_id,
+            payment.user_info
+          );
+          console.log('Booking created successfully:', result);
+        }
       } catch (error) {
-        console.error('Error creating booking:', error);
-        // Vi fortsätter även om bokningen misslyckas - detta hanteras manuellt
+        console.error('Error creating record after payment:', error);
+        // Vi fortsätter även om det misslyckas - detta hanteras manuellt
       }
     }
 
@@ -179,7 +234,7 @@ export async function POST(request: Request) {
           reference: payment.payment_reference,
           status: newStatus
         },
-        booking: booking
+        result: result
       }
     });
   } catch (error) {

@@ -21,7 +21,7 @@ const supabase = createClient(
 const SwishPaymentSchema = z.object({
   phone_number: z.string().min(1),
   payment_method: z.literal('swish'),
-  product_type: z.literal('course'),
+  product_type: z.enum(['course', 'gift_card']),
   product_id: z.string(),
   amount: z.number(),
   quantity: z.number(),
@@ -166,7 +166,7 @@ export async function POST(request: Request) {
     
     // Validate the request body
     const validatedData = SwishPaymentSchema.parse(body);
-    const { phone_number, product_id, user_info, amount } = validatedData;
+    const { phone_number, product_id, product_type, user_info, amount } = validatedData;
 
     // Generate payment reference (max 35 chars, alphanumeric)
     const timestamp = new Date().getTime().toString().slice(-6);
@@ -181,7 +181,7 @@ export async function POST(request: Request) {
         amount: amount,
         currency: 'SEK',
         payment_reference: paymentReference,
-        product_type: 'course',
+        product_type: product_type,
         product_id: product_id,
         status: 'CREATED',
         user_info: user_info,

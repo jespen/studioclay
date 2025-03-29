@@ -81,6 +81,22 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
       setShowDialog(true);
       setStatus('loading');
 
+      // Check if this is a gift card payment
+      const isGiftCard = courseId === 'gift-card';
+      
+      // If this is a gift card, get the item details from localStorage
+      let itemDetails = null;
+      if (isGiftCard) {
+        try {
+          const storedItemDetails = localStorage.getItem('itemDetails');
+          if (storedItemDetails) {
+            itemDetails = JSON.parse(storedItemDetails);
+          }
+        } catch (e) {
+          console.error('Error parsing itemDetails from localStorage:', e);
+        }
+      }
+
       const response = await fetch('/api/invoice/create', {
         method: 'POST',
         headers: {
@@ -100,6 +116,7 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
           },
           amount,
           numberOfParticipants: parseInt(userInfo.numberOfParticipants) || 1,
+          itemDetails, // Include item details for gift cards
         }),
       });
 

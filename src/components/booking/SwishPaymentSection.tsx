@@ -81,6 +81,9 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     }
 
     try {
+      // Check if this is a gift card payment
+      const isGiftCard = courseId === 'gift-card';
+      
       const response = await fetch('/api/payments/swish/create', {
         method: 'POST',
         headers: {
@@ -90,7 +93,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         body: JSON.stringify({
           phone_number: phoneNumber,
           payment_method: 'swish',
-          product_type: 'course',
+          product_type: isGiftCard ? 'gift_card' : 'course',
           product_id: courseId,
           amount: amount,
           quantity: parseInt(userInfo.numberOfParticipants || '1'),
