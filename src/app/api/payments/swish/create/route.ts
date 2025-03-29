@@ -228,7 +228,7 @@ export async function POST(request: Request) {
 
       // For gift cards, we need to handle the product_id differently since it's not a UUID
       if (product_type === 'gift_card') {
-        // Create a payment record without specifying product_id (will use default UUID)
+        // Create a payment record with a proper UUID as product_id
         const { data: paymentData, error: paymentError } = await supabase
           .from('payments')
           .insert({
@@ -237,8 +237,8 @@ export async function POST(request: Request) {
             currency: 'SEK',
             payment_reference: paymentReference,
             product_type: product_type,
-            // For gift cards, use a special format - gift-card with a random UUID part
-            product_id: `gift-card-${crypto.randomUUID().slice(0, 8)}`,
+            // Generate a proper UUID
+            product_id: crypto.randomUUID(),
             status: 'CREATED',
             user_info: user_info,
             phone_number: phone_number,
