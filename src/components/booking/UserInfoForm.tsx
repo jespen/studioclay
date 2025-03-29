@@ -20,6 +20,7 @@ import GenericFlowContainer from '../common/GenericFlowContainer';
 import StyledButton from '../common/StyledButton';
 import { FormTextField } from '../common/FormField';
 import { fetchCourseDetail, CourseDetail, saveUserInfo, getUserInfo } from '@/utils/dataFetcher';
+import { getFlowType } from '@/utils/flowStorage';
 
 interface UserInfoFormProps {
   courseId: string;
@@ -51,6 +52,8 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [maxParticipants, setMaxParticipants] = useState(1);
+  const flowType = getFlowType();
+  const isShopFlow = flowType === FlowType.ART_PURCHASE;
   
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -70,19 +73,22 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
     const loadCourseDetails = async () => {
       try {
         setLoading(true);
-        const course = await fetchCourseDetail(courseId);
-        
-        if (isMounted) {
-          setCourseDetail(course);
+        // Only fetch course details if not in shop flow
+        if (!isShopFlow) {
+          const course = await fetchCourseDetail(courseId);
           
-          // Calculate available spots
-          const availableSpots = course.availableSpots !== undefined 
-            ? course.availableSpots 
-            : (course.max_participants ? course.max_participants - (course.current_participants || 0) : 10);
-          
-          setMaxParticipants(Math.max(1, availableSpots));
-          setLoading(false);
+          if (isMounted) {
+            setCourseDetail(course);
+            
+            // Calculate available spots
+            const availableSpots = course.availableSpots !== undefined 
+              ? course.availableSpots 
+              : (course.max_participants ? course.max_participants - (course.current_participants || 0) : 10);
+            
+            setMaxParticipants(Math.max(1, availableSpots));
+          }
         }
+        setLoading(false);
       } catch (error) {
         console.error('Error loading course details:', error);
         if (isMounted) {
@@ -97,7 +103,7 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
     return () => {
       isMounted = false;
     };
-  }, [courseId]);
+  }, [courseId, isShopFlow]);
 
   // Load existing user data if available
   useEffect(() => {
@@ -156,15 +162,17 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
       isValid = false;
     }
     
-    // Validate number of participants
-    if (!formData.numberOfParticipants) {
-      errors.numberOfParticipants = 'Antal deltagare är obligatoriskt';
-      isValid = false;
-    } else {
-      const numParticipants = parseInt(formData.numberOfParticipants);
-      if (isNaN(numParticipants) || numParticipants < 1 || numParticipants > maxParticipants) {
-        errors.numberOfParticipants = `Antal deltagare måste vara mellan 1 och ${maxParticipants}`;
+    // Only validate number of participants if not in shop flow
+    if (!isShopFlow) {
+      if (!formData.numberOfParticipants) {
+        errors.numberOfParticipants = 'Antal deltagare är obligatoriskt';
         isValid = false;
+      } else {
+        const numParticipants = parseInt(formData.numberOfParticipants);
+        if (isNaN(numParticipants) || numParticipants < 1 || numParticipants > maxParticipants) {
+          errors.numberOfParticipants = `Antal deltagare måste vara mellan 1 och ${maxParticipants}`;
+          isValid = false;
+        }
       }
     }
 
@@ -208,7 +216,7 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
   };
 
   // Extract form rendering logic to a separate function for reuse
-  const renderFormContent = () => (
+  const renderFormContent = () =>
     <Grid container spacing={3}>
       <Grid item xs={12} sm={6}>
         <FormTextField
@@ -258,28 +266,30 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
           disabled={isSubmitting}
         />
       </Grid>
-      <Grid item xs={12}>
-        <FormControl fullWidth error={Boolean(formErrors.numberOfParticipants)}>
-          <InputLabel id="numberOfParticipants-label">Antal personer</InputLabel>
-          <Select
-            labelId="numberOfParticipants-label"
-            id="numberOfParticipants"
-            name="numberOfParticipants"
-            value={formData.numberOfParticipants}
-            onChange={handleSelectChange}
-            disabled={isSubmitting}
-          >
-            {Array.from({ length: maxParticipants }, (_, i) => i + 1).map((num) => (
-              <MenuItem key={num} value={num.toString()}>
-                {num} {num === 1 ? 'person' : 'personer'}
-              </MenuItem>
-            ))}
-          </Select>
-          {formErrors.numberOfParticipants && (
-            <FormHelperText>{formErrors.numberOfParticipants}</FormHelperText>
-          )}
-        </FormControl>
-      </Grid>
+      {!isShopFlow && (
+        <Grid item xs={12}>
+          <FormControl fullWidth error={Boolean(formErrors.numberOfParticipants)}>
+            <InputLabel id="numberOfParticipants-label">Antal personer</InputLabel>
+            <Select
+              labelId="numberOfParticipants-label"
+              id="numberOfParticipants"
+              name="numberOfParticipants"
+              value={formData.numberOfParticipants}
+              onChange={handleSelectChange}
+              disabled={isSubmitting}
+            >
+              {Array.from({ length: maxParticipants }, (_, i) => i + 1).map((num) => (
+                <MenuItem key={num} value={num.toString()}>
+                  {num} {num === 1 ? 'person' : 'personer'}
+                </MenuItem>
+              ))}
+            </Select>
+            {formErrors.numberOfParticipants && (
+              <FormHelperText>{formErrors.numberOfParticipants}</FormHelperText>
+            )}
+          </FormControl>
+        </Grid>
+      )}
       <Grid item xs={12}>
         <FormTextField
           id="specialRequirements"
@@ -293,7 +303,7 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
         />
       </Grid>
     </Grid>
-  );
+  ;
 
   // Extract buttons rendering
   const renderButtons = () => (
@@ -315,7 +325,7 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
     </Box>
   );
 
-  if (loading) {
+  if (loading && !isShopFlow) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
         <CircularProgress />

@@ -248,7 +248,13 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
 
   // Calculate price based on number of participants
   const calculatePrice = () => {
-    if (!userInfo || !courseDetail || !courseDetail.price) return 0;
+    if (!userInfo || !courseDetail || !courseDetail.price) {
+      // For shop items, use the product price directly from flowData
+      if (flowType === FlowType.ART_PURCHASE && flowData?.itemDetails?.price) {
+        return flowData.itemDetails.price;
+      }
+      return 0;
+    }
     const numParticipants = parseInt(userInfo.numberOfParticipants) || 1;
     return courseDetail.price * numParticipants;
   };
@@ -524,12 +530,14 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                   <ListItemText primary={userInfo.phone} />
                 </ListItem>
                 
-                <ListItem disableGutters>
-                  <ListItemIcon sx={{ minWidth: 36 }}>
-                    <PeopleIcon fontSize="small" sx={{ color: 'var(--primary)' }} />
-                  </ListItemIcon>
-                  <ListItemText primary={`Antal deltagare: ${userInfo.numberOfParticipants}`} />
-                </ListItem>
+                {flowType !== FlowType.ART_PURCHASE && (
+                  <ListItem disableGutters>
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      <PeopleIcon fontSize="small" sx={{ color: 'var(--primary)' }} />
+                    </ListItemIcon>
+                    <ListItemText primary={`Antal deltagare: ${userInfo.numberOfParticipants}`} />
+                  </ListItem>
+                )}
               </List>
             </CardContent>
           </Card>
