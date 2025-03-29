@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Product } from './types';
 import ProductDialog from './ProductDialog';
+import { useRouter } from 'next/navigation';
 
 type ProductCardProps = {
   product: Product;
@@ -10,6 +11,7 @@ type ProductCardProps = {
 
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const router = useRouter();
 
   const handleOpenDialog = () => {
     setIsDialogOpen(true);
@@ -17,6 +19,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
+  };
+
+  const handleBuyClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent dialog from opening
+    router.push(`/shop/${product.id}`);
   };
 
   return (
@@ -64,6 +71,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         </div>
         <button 
           className="mt-3 w-full py-2 btn-primary text-white hover:bg-primary-dark transition-colors"
+          onClick={handleBuyClick}
         >
           KÖP
         </button>
@@ -74,7 +82,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <ProductDialog 
           product={product} 
           isOpen={isDialogOpen} 
-          onClose={handleCloseDialog} 
+          onClose={handleCloseDialog}
+          onBuy={handleBuyClick}
         />
       )}
     </div>

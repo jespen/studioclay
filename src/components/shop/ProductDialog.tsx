@@ -7,9 +7,10 @@ type ProductDialogProps = {
   product: Product;
   isOpen: boolean;
   onClose: () => void;
+  onBuy?: (e: React.MouseEvent) => void;
 };
 
-const ProductDialog: React.FC<ProductDialogProps> = ({ product, isOpen, onClose }) => {
+const ProductDialog: React.FC<ProductDialogProps> = ({ product, isOpen, onClose, onBuy }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,6 +40,13 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ product, isOpen, onClose 
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  const handleBuyClick = (e: React.MouseEvent) => {
+    onClose();
+    if (onBuy) {
+      onBuy(e);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -86,7 +94,10 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ product, isOpen, onClose 
           </div>
           
           <div className="mt-auto pt-8">
-            <button className="w-full py-3 btn-primary text-white hover:bg-primary-dark transition-colors">
+            <button 
+              className="w-full py-3 btn-primary text-white hover:bg-primary-dark transition-colors"
+              onClick={handleBuyClick}
+            >
               KÖP
             </button>
           </div>

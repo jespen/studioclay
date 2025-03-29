@@ -1,59 +1,44 @@
+import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 // Get products from Supabase
 export async function GET(request: NextRequest) {
   try {
-    // Check if we want published/unpublished products
-    const { searchParams } = new URL(request.url);
-    const inStock = searchParams.get('inStock');
+    // Get query parameters
+    const url = new URL(request.url);
+    const inStock = url.searchParams.get('inStock');
     
-    // Build query
-    let query = supabaseAdmin.from('products').select('*');
+    // Build the query
+    let query = supabase.from('products').select('*');
     
-    // Filter by in_stock if specified
+    // Filter by in_stock if provided
     if (inStock === 'true') {
       query = query.eq('in_stock', true);
     } else if (inStock === 'false') {
       query = query.eq('in_stock', false);
     }
     
-    // Order by created_at descending (newest first)
+    // Order by created_at (newest first)
     query = query.order('created_at', { ascending: false });
     
-    // Execute query
-    const { data, error } = await query;
+    // Execute the query
+    const { data: products, error } = await query;
     
     if (error) {
       console.error('Error fetching products:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch products' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 });
     }
-    
-    // Transform data to match the frontend Product interface
-    const products = data.map(item => ({
-      id: item.id,
-      title: item.title,
-      price: Number(item.price),
-      originalPrice: item.original_price ? Number(item.original_price) : undefined,
-      image: item.image,
-      isNew: item.is_new,
-      description: item.description || '',
-      discount: item.discount,
-      inStock: item.in_stock
-    }));
-    
-    console.log(`API Route: Fetched ${products.length} products`);
     
     return NextResponse.json({ products });
   } catch (error) {
-    console.error('Unexpected error fetching products:', error);
-    return NextResponse.json(
-      { error: 'An unexpected error occurred' },
-      { status: 500 }
-    );
+    console.error('Unhandled error in GET products:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -85,7 +70,7 @@ export async function POST(request: NextRequest) {
     
     // If id is provided, update existing product
     if (productData.id) {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('products')
         .update(dbProduct)
         .eq('id', productData.id)
@@ -116,7 +101,7 @@ export async function POST(request: NextRequest) {
     } 
     
     // Otherwise, insert new product
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from('products')
       .insert(dbProduct)
       .select()
