@@ -22,8 +22,15 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
   
   const [amount, setAmount] = useState<string>('500');
   const [customAmount, setCustomAmount] = useState<string>('');
+  const [recipient, setRecipient] = useState({
+    name: '',
+    email: '',
+    message: '',
+  });
   const [errors, setErrors] = useState<{
     amount?: string;
+    recipientName?: string;
+    recipientEmail?: string;
   }>({});
 
   const predefinedAmounts = ['500', '1000', '2000'];
@@ -48,13 +55,40 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
     }
   };
 
+  const handleRecipientChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setRecipient(prev => ({ ...prev, [name]: value }));
+    
+    // Clear error for the field being changed
+    if (name === 'name') {
+      setErrors(prev => ({ ...prev, recipientName: undefined }));
+    } else if (name === 'email') {
+      setErrors(prev => ({ ...prev, recipientEmail: undefined }));
+    }
+  };
+
   const validateForm = (): boolean => {
-    const newErrors: { amount?: string } = {};
+    const newErrors: { 
+      amount?: string; 
+      recipientName?: string;
+      recipientEmail?: string;
+    } = {};
     
     // Validate amount
     const finalAmount = amount === 'custom' ? customAmount : amount;
     if (!finalAmount || parseInt(finalAmount) <= 0) {
       newErrors.amount = 'Vänligen ange ett giltigt belopp';
+    }
+    
+    // Validate recipient info
+    if (!recipient.name) {
+      newErrors.recipientName = 'Vänligen ange mottagarens namn';
+    }
+    
+    if (!recipient.email) {
+      newErrors.recipientEmail = 'Vänligen ange mottagarens e-postadress';
+    } else if (!/\S+@\S+\.\S+/.test(recipient.email)) {
+      newErrors.recipientEmail = 'Vänligen ange en giltig e-postadress';
     }
     
     setErrors(newErrors);
@@ -73,6 +107,9 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
     const giftCardDetails = {
       amount: finalAmount,
       type: 'digital',
+      recipientName: recipient.name,
+      recipientEmail: recipient.email,
+      message: recipient.message
     };
     
     // Save details to flow storage
@@ -169,6 +206,54 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
       
       <Divider sx={{ my: 3 }} />
 
+      {/* Recipient Information */}
+      <Typography variant="h6" gutterBottom>
+        Mottagarinformation
+      </Typography>
+      
+      <Box sx={{ mb: 3 }}>
+        <TextField
+          fullWidth
+          label="Mottagarens namn"
+          variant="outlined"
+          name="name"
+          value={recipient.name}
+          onChange={handleRecipientChange}
+          margin="normal"
+          error={!!errors.recipientName}
+          helperText={errors.recipientName}
+          required
+        />
+        
+        <TextField
+          fullWidth
+          label="Mottagarens e-postadress"
+          variant="outlined"
+          name="email"
+          value={recipient.email}
+          onChange={handleRecipientChange}
+          margin="normal"
+          error={!!errors.recipientEmail}
+          helperText={errors.recipientEmail}
+          required
+        />
+        
+        <TextField
+          fullWidth
+          label="Personligt meddelande (valfritt)"
+          variant="outlined"
+          name="message"
+          value={recipient.message}
+          onChange={handleRecipientChange}
+          margin="normal"
+          multiline
+          rows={4}
+          placeholder="Lägg till en personlig hälsning till mottagaren..."
+        />
+      </Box>
+      
+      <Divider sx={{ my: 3 }} />
+
       {/* Features */}
       <Typography variant="h6" gutterBottom>
         Varför våra presentkort?
@@ -212,7 +297,7 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
           <Box className={styles.featureText}>
             <Typography variant="subtitle1">Personlig upplevelse</Typography>
             <Typography variant="body2" color="text.secondary">
-              Lägg till ett personligt meddelande till mottagaren i nästa steg.
+              Lägg till ett personligt meddelande till mottagaren.
             </Typography>
           </Box>
         </Box>
