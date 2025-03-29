@@ -328,6 +328,41 @@ export async function POST(request: Request) {
       }
 
       logDebug('Swish payment request successful');
+
+      if (product_type === 'art_product') {
+        try {
+          // Create art order record
+          const { data: orderData, error: orderError } = await supabase
+            .from('art_orders')
+            .insert({
+              product_id: product_id,
+              customer_name: user_info.firstName + ' ' + user_info.lastName,
+              customer_email: user_info.email,
+              customer_phone: phone_number,
+              payment_method: 'swish',
+              order_reference: paymentReference,
+              unit_price: amount,
+              total_price: amount,
+              metadata: {
+                payment_id: payment.id,
+                user_info: user_info
+              }
+            })
+            .select()
+            .single();
+
+            if (orderError) {
+              console.error('Error creating art order:', orderError);
+              throw new Error('Failed to create art order');
+            }
+
+            console.log('Created art order:', orderData);
+          } catch (error) {
+            console.error('Error in art order creation:', error);
+            throw error;
+          }
+      }
+
       return NextResponse.json({
         success: true,
         data: {

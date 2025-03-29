@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   
   try {
     const data = await request.json();
-    const { courseId, userInfo, paymentDetails, amount } = data;
+    const { courseId, userInfo, paymentDetails, amount, product_type } = data;
     
     console.log('Creating invoice for product:', courseId);
     console.log('User info:', userInfo);
@@ -55,11 +55,119 @@ export async function POST(request: Request) {
     dueDate.setDate(dueDate.getDate() + 10);
     const formattedDueDate = dueDate.toLocaleDateString('sv-SE');
     
-    // Check if this is a gift card or a course
-    const isGiftCard = courseId === 'gift-card';
-    
-    // Different handling based on product type
-    if (isGiftCard) {
+    // Check product type first
+    if (product_type === 'art_product') {
+      // Get product details from products table
+      console.log('Fetching art product details from Supabase');
+      const { data: productData, error: productError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', courseId)
+        .single();
+      
+      if (productError || !productData) {
+        console.error('Error fetching product:', productError);
+        return NextResponse.json(
+          { success: false, error: 'Product not found' },
+          { status: 404 }
+        );
+      }
+
+      // Generate invoice PDF for art product
+      console.log('Generating invoice PDF for art product');
+      const invoiceData = {
+        customerInfo: userInfo,
+        courseDetails: {
+          title: productData.title,
+          description: productData.description,
+          start_date: new Date().toISOString(),
+          location: "Studio Clay",
+          price: productData.price
+        },
+        invoiceDetails: paymentDetails.invoiceDetails || {
+          address: '',
+          postalCode: '',
+          city: ''
+        },
+        invoiceNumber,
+        dueDate: formattedDueDate
+      };
+
+      const pdfBlob = await generateInvoicePDF(invoiceData);
+      const pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
+
+      // Save PDF to Supabase storage
+      console.log('Saving art product invoice PDF to Supabase storage');
+      const { error: storageError } = await supabase
+        .storage
+        .from('invoices')
+        .upload(`${invoiceNumber}.pdf`, pdfBuffer, {
+          contentType: 'application/pdf',
+          upsert: true
+        });
+
+      if (storageError) {
+        console.error('Error saving PDF to storage:', storageError);
+        return NextResponse.json(
+          { success: false, error: 'Failed to save invoice PDF' },
+          { status: 500 }
+        );
+      }
+
+      // Send invoice email
+      console.log('Sending art product invoice email');
+      const emailResult = await sendServerInvoiceEmail({
+        userInfo: userInfo as UserInfo,
+        paymentDetails: paymentDetails as PaymentDetails,
+        courseDetails: {
+          id: productData.id,
+          title: productData.title,
+          description: productData.description,
+          start_date: new Date().toISOString(),
+          location: "Studio Clay",
+          price: productData.price
+        },
+        invoiceNumber,
+        pdfBuffer
+      });
+
+      console.log('Art product invoice email sending result:', emailResult);
+
+      // Create art order record
+      const { data: orderData, error: orderError } = await supabase
+        .from('art_orders')
+        .insert({
+          product_id: productData.id,
+          customer_name: userInfo.firstName + ' ' + userInfo.lastName,
+          customer_email: userInfo.email,
+          customer_phone: userInfo.phone,
+          payment_method: 'invoice',
+          order_reference: bookingReference,
+          invoice_number: invoiceNumber,
+          unit_price: amount,
+          total_price: amount,
+          metadata: {
+            user_info: userInfo
+          }
+        })
+        .select()
+        .single();
+
+      if (orderError) {
+        console.error('Error creating art order:', orderError);
+        throw new Error('Failed to create art order');
+      }
+
+      console.log('Created art order:', orderData);
+
+      return NextResponse.json({
+        success: true,
+        invoiceNumber,
+        bookingReference,
+        emailSent: emailResult.success,
+        emailMessage: emailResult.message
+      });
+    } else if (courseId === 'gift-card') {
       console.log('Processing gift card invoice');
       
       // Extract gift card details from localStorage or session data

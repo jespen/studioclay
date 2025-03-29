@@ -442,6 +442,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                       userInfo={userInfo}
                       courseId={courseId}
                       amount={calculatePrice()}
+                      product_type={flowType === FlowType.GIFT_CARD ? 'gift_card' : flowType === FlowType.ART_PURCHASE ? 'art_product' : 'course'}
                       onPaymentComplete={handlePaymentComplete}
                       onValidationError={(error) => setFormErrors(prev => ({ ...prev, invoice: error }))}
                       disabled={isSubmitting}

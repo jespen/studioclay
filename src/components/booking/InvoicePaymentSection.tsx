@@ -17,6 +17,7 @@ interface InvoicePaymentSectionProps {
   };
   courseId: string;
   amount: number;
+  product_type: string;
   onPaymentComplete: (success: boolean) => void;
   onValidationError?: (error: string) => void;
   disabled?: boolean;
@@ -26,6 +27,7 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
   userInfo,
   courseId,
   amount,
+  product_type,
   onPaymentComplete,
   onValidationError,
   disabled = false,
@@ -115,6 +117,7 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
             }
           },
           amount,
+          product_type,
           numberOfParticipants: parseInt(userInfo.numberOfParticipants) || 1,
           itemDetails, // Include item details for gift cards
         }),
