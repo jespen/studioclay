@@ -199,28 +199,24 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       let success = false;
       
       if (paymentDetails.method === 'swish') {
-        // For Swish, we just need to trigger the payment creation
+        // For Swish, we trigger the payment creation
         // The dialog and status handling is managed by SwishPaymentSection
         success = await swishPaymentRef.current?.handleCreatePayment() || false;
         
-        if (success) {
-          // Store payment info
-          const paymentInfo = {
-            status: 'completed',
-            amount: calculatePrice(),
-            payment_method: 'swish',
-            payment_date: new Date().toISOString(),
-            reference: uuidv4()
-          };
-          handlePaymentComplete(paymentInfo);
+        // Important: We don't immediately redirect for Swish
+        // The SwishPaymentSection will handle the payment status and redirect
+        // through its onPaymentComplete callback when payment is confirmed
+        if (!success) {
+          setSubmitError('Det gick inte att skapa Swish-betalningen. Försök igen senare.');
         }
+        // Don't call handlePaymentComplete here - it will be called from SwishPaymentSection
       } else if (paymentDetails.method === 'invoice') {
         // For Invoice, we trigger the payment creation and wait for success
         // The InvoicePaymentSection handles the validation and creation
         success = await invoicePaymentRef.current?.handleCreatePayment() || false;
         
         if (success) {
-          // Store payment info
+          // Store payment info and redirect for invoice payments
           const paymentInfo = {
             status: 'pending',
             amount: calculatePrice(),
@@ -229,12 +225,9 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             reference: uuidv4()
           };
           handlePaymentComplete(paymentInfo);
+        } else {
+          setSubmitError('Det gick inte att skapa fakturan. Försök igen senare.');
         }
-      }
-
-      // Only show error if both payment methods failed
-      if (!success) {
-        setSubmitError('Det gick inte att skapa betalningen. Försök igen senare.');
       }
     } catch (error) {
       console.error('Payment error:', error);

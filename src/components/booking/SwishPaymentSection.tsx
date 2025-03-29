@@ -107,7 +107,12 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         return false;
       }
 
-      setPaymentReference(result.data.reference);
+      const paymentRef = result.data.reference;
+      setPaymentReference(paymentRef);
+      // Store payment reference in localStorage for persistent tracking
+      localStorage.setItem('currentPaymentReference', paymentRef);
+      console.log('Swish payment created with reference:', paymentRef);
+      
       setPaymentStatus(PaymentStatus.CREATED);
       setShowPaymentDialog(true);
       return true;
