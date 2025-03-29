@@ -263,7 +263,7 @@ const GiftCardConfirmation: React.FC<GiftCardConfirmationProps> = ({ flowData })
           De kan använda presentkortet direkt och lösa in det mot valfri kurs eller produkt på vår hemsida.
         </Typography>
         <Typography variant="body1">
-          Om du eller mottagaren har några frågor, kontakta oss gärna på info@studioclay.se.
+          Om du eller mottagaren har några frågor, kontakta oss gärna på eva@studioclay.se.
         </Typography>
       </Box>
 

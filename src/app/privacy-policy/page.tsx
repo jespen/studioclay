@@ -106,7 +106,7 @@ export default function PrivacyPolicy() {
         </p>
         <p className="my-4">
           <strong>Studio Clay</strong><br />
-          E-post: info@studioclay.se<br />
+          E-post: eva@studioclay.se<br />
           Adress: [Din studioaddress]<br />
         </p>
       </div>

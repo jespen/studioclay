@@ -51,7 +51,7 @@ export default function TermsPage() {
           <li>Vid sjukdom kan du boka om till ett annat kurstillfälle i mån av plats om du uppvisar läkarintyg.</li>
         </ul>
         <p>
-          Avbokning ska ske skriftligt via e-post till info@studioclay.se. 
+          Avbokning ska ske skriftligt via e-post till eva@studioclay.se. 
           Ombokning till annat kurstillfälle kan ske i mån av plats och måste göras senast 7 dagar före kursstart.
         </p>
 
@@ -82,7 +82,7 @@ export default function TermsPage() {
 
         <h2 className="text-2xl font-semibold mt-8 mb-4">9. Kontakt</h2>
         <p>
-          Vid frågor om dessa bokningsvillkor eller din bokning, vänligen kontakta oss på info@studioclay.se 
+          Vid frågor om dessa bokningsvillkor eller din bokning, vänligen kontakta oss på eva@studioclay.se 
           eller ring 08-123 45 67.
         </p>
       </div>
