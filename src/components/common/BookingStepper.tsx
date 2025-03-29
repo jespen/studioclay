@@ -92,12 +92,8 @@ const flowConfigs: Record<FlowType, StepConfig[]> = {
   ],
   [FlowType.ART_PURCHASE]: [
     {
-      label: 'Välj konstverk',
+      label: 'Produktdetaljer',
       icon: <ArtTrackIcon fontSize="small" />,
-    },
-    {
-      label: 'Detaljer',
-      icon: <InfoIcon fontSize="small" />,
     },
     {
       label: 'Dina uppgifter',
@@ -172,9 +168,12 @@ const GenericStepper: React.FC<StepperProps> = ({
       adjustedActiveStep = 3;
     }
   }
-  // Special mapping for ART_PURCHASE flow, skip DETAILS step
+  // Special mapping for ART_PURCHASE flow
   else if (flowType === FlowType.ART_PURCHASE && !customSteps) {
-    if (numericActiveStep === GenericStep.USER_INFO) {
+    if (numericActiveStep === GenericStep.DETAILS) {
+      // DETAILS (1) should map to index 0 in flowConfigs
+      adjustedActiveStep = 0;
+    } else if (numericActiveStep === GenericStep.USER_INFO) {
       // USER_INFO (2) should map to index 1 in flowConfigs
       adjustedActiveStep = 1;
     } else if (numericActiveStep === GenericStep.PAYMENT) {

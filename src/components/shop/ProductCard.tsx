@@ -28,8 +28,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     // Save product details to flow storage first
     saveItemDetails(product);
     
-    // Send user directly to the personal-info step
-    router.push(`/shop/${product.id}/personal-info`);
+    // Send user to the details step in accordance with the flow
+    router.push(`/shop/${product.id}/details`);
   };
 
   return (

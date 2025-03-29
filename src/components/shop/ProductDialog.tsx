@@ -53,7 +53,7 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ product, isOpen, onClose,
     } else {
       // Otherwise handle it here
       saveItemDetails(product);
-      router.push(`/shop/${product.id}/personal-info`);
+      router.push(`/shop/${product.id}/details`);
     }
   };
 

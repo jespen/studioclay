@@ -18,10 +18,10 @@ const STEP_URL_SEGMENTS: Record<FlowType, Record<GenericStep, string>> = {
   },
   [FlowType.ART_PURCHASE]: {
     [GenericStep.ITEM_SELECTION]: '',        // /shop/:id (not used now)
+    [GenericStep.DETAILS]: 'details',        // /shop/:id/details
     [GenericStep.USER_INFO]: 'personal-info', // /shop/:id/personal-info
     [GenericStep.PAYMENT]: 'payment',        // /shop/:id/payment
     [GenericStep.CONFIRMATION]: 'confirmation', // /shop/:id/confirmation
-    [GenericStep.DETAILS]: 'details',        // Not used in this flow
   },
   [FlowType.WAITLIST]: {
     [GenericStep.ITEM_SELECTION]: '',        // /waitlist/:id
@@ -84,7 +84,8 @@ export const getNextStep = (currentStep: GenericStep, flowType: FlowType): Gener
       GenericStep.CONFIRMATION
     ],
     [FlowType.ART_PURCHASE]: [
-      GenericStep.USER_INFO,    // Start directly with user info
+      GenericStep.DETAILS,    // Start with details
+      GenericStep.USER_INFO,  // Then user info
       GenericStep.PAYMENT,
       GenericStep.CONFIRMATION
     ],
@@ -124,7 +125,8 @@ export const getPreviousStep = (currentStep: GenericStep, flowType: FlowType): G
       GenericStep.CONFIRMATION
     ],
     [FlowType.ART_PURCHASE]: [
-      GenericStep.USER_INFO,    // Start directly with user info
+      GenericStep.DETAILS,    // Start with details
+      GenericStep.USER_INFO,  // Then user info
       GenericStep.PAYMENT,
       GenericStep.CONFIRMATION
     ],
