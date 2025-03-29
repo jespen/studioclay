@@ -194,8 +194,9 @@ const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({ params }) => {
       activeStep={GenericStep.DETAILS}
       title="Produktdetaljer"
       subtitle="Granska produkten innan du fortsätter"
-      validateData={() => !!product}
+      validateData={() => loading || !!product}
       itemId={params.id}
+      redirectOnInvalid={!loading}
     >
       {() => renderContent()}
     </FlowStepWrapper>
