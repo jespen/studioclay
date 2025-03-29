@@ -239,6 +239,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       onBack();
     } else if (flowType === FlowType.GIFT_CARD) {
       router.push('/gift-card-flow/personal-info');
+    } else if (flowType === FlowType.ART_PURCHASE) {
+      router.push(`/shop/${courseId}/personal-info`);
     } else {
       router.push(`/book-course/${courseId}/personal-info`);
     }
@@ -277,6 +279,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
         router.push(`/book-course/${courseId}/confirmation`);
       } else if (flowType === FlowType.GIFT_CARD) {
         router.push('/gift-card-flow/confirmation');
+      } else if (flowType === FlowType.ART_PURCHASE) {
+        router.push(`/shop/${courseId}/confirmation`);
       }
     }
   };

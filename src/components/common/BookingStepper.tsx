@@ -172,6 +172,19 @@ const GenericStepper: React.FC<StepperProps> = ({
       adjustedActiveStep = 3;
     }
   }
+  // Special mapping for ART_PURCHASE flow, skip DETAILS step
+  else if (flowType === FlowType.ART_PURCHASE && !customSteps) {
+    if (numericActiveStep === GenericStep.USER_INFO) {
+      // USER_INFO (2) should map to index 1 in flowConfigs
+      adjustedActiveStep = 1;
+    } else if (numericActiveStep === GenericStep.PAYMENT) {
+      // PAYMENT (3) should map to index 2 in flowConfigs
+      adjustedActiveStep = 2;
+    } else if (numericActiveStep === GenericStep.CONFIRMATION) {
+      // CONFIRMATION (4) should map to index 3 in flowConfigs
+      adjustedActiveStep = 3;
+    }
+  }
   
   // Make sure active step is within valid bounds
   const validActiveStep = Math.max(0, Math.min(adjustedActiveStep, steps.length - 1));

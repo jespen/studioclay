@@ -15,7 +15,7 @@ const ShopConfirmationWrapper: React.FC<ShopConfirmationWrapperProps> = ({ produ
     <FlowStepWrapper
       flowType={FlowType.ART_PURCHASE}
       activeStep={GenericStep.CONFIRMATION}
-      expectedPreviousSteps={[GenericStep.ITEM_SELECTION, GenericStep.USER_INFO, GenericStep.PAYMENT]}
+      expectedPreviousSteps={[GenericStep.USER_INFO, GenericStep.PAYMENT]}
       title="Bekräftelse"
       subtitle="Din beställning är bekräftad"
       validateData={(data: FlowStateData) => {

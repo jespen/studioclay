@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef } from 'react';
 import { Product } from './types';
+import { saveItemDetails } from '@/utils/dataFetcher';
+import { useRouter } from 'next/navigation';
 
 type ProductDialogProps = {
   product: Product;
@@ -12,6 +14,7 @@ type ProductDialogProps = {
 
 const ProductDialog: React.FC<ProductDialogProps> = ({ product, isOpen, onClose, onBuy }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -43,8 +46,14 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ product, isOpen, onClose,
 
   const handleBuyClick = (e: React.MouseEvent) => {
     onClose();
+    
+    // If parent provided a buy handler, use it
     if (onBuy) {
       onBuy(e);
+    } else {
+      // Otherwise handle it here
+      saveItemDetails(product);
+      router.push(`/shop/${product.id}/personal-info`);
     }
   };
 

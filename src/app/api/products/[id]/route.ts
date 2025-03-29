@@ -60,7 +60,7 @@ export async function GET(
     }
     
     // Fetch product from Supabase
-    const { data: product, error } = await supabase
+    const { data, error } = await supabase
       .from('products')
       .select('*')
       .eq('id', id)
@@ -71,9 +71,21 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to fetch product' }, { status: 500 });
     }
     
-    if (!product) {
+    if (!data) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
+    
+    // Transform data to match the frontend Product interface
+    const product = {
+      id: data.id,
+      title: data.title,
+      price: Number(data.price),
+      originalPrice: data.original_price ? Number(data.original_price) : undefined,
+      image: data.image,
+      isNew: data.is_new,
+      description: data.description || '',
+      discount: data.discount || null
+    };
     
     return NextResponse.json(product);
   } catch (error) {

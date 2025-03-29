@@ -33,7 +33,7 @@ interface PaymentMetadata {
 const SwishPaymentSchema = z.object({
   phone_number: z.string().min(1),
   payment_method: z.literal('swish'),
-  product_type: z.enum(['course', 'gift_card']),
+  product_type: z.enum(['course', 'gift_card', 'art_product']),
   product_id: z.string(),
   amount: z.number(),
   quantity: z.number(),

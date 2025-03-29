@@ -28,12 +28,24 @@ export async function GET(request: NextRequest) {
     query = query.order('created_at', { ascending: false });
     
     // Execute the query
-    const { data: products, error } = await query;
+    const { data, error } = await query;
     
     if (error) {
       console.error('Error fetching products:', error);
       return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 });
     }
+    
+    // Transform data to match the frontend Product interface
+    const products = data.map(item => ({
+      id: item.id,
+      title: item.title,
+      price: Number(item.price),
+      originalPrice: item.original_price ? Number(item.original_price) : undefined,
+      image: item.image,
+      isNew: item.is_new,
+      description: item.description || '',
+      discount: item.discount || null
+    }));
     
     return NextResponse.json({ products });
   } catch (error) {

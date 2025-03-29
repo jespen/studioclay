@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Product } from './types';
 import ProductDialog from './ProductDialog';
 import { useRouter } from 'next/navigation';
+import { saveItemDetails } from '@/utils/dataFetcher';
 
 type ProductCardProps = {
   product: Product;
@@ -23,7 +24,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   const handleBuyClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent dialog from opening
-    router.push(`/shop/${product.id}`);
+    
+    // Save product details to flow storage first
+    saveItemDetails(product);
+    
+    // Send user directly to the personal-info step
+    router.push(`/shop/${product.id}/personal-info`);
   };
 
   return (

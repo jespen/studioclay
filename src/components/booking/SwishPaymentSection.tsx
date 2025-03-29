@@ -81,7 +81,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     }
 
     try {
-      // Check if this is a gift card payment
+      // Check if this is a gift card or product payment
       const isGiftCard = courseId === 'gift-card';
       
       // For gift cards, get the item details from localStorage
@@ -97,6 +97,9 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         }
       }
       
+      // Check if this is an art product from the shop
+      const isArtProduct = localStorage.getItem('flow_type') === 'art_purchase';
+      
       const response = await fetch('/api/payments/swish/create', {
         method: 'POST',
         headers: {
@@ -106,7 +109,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         body: JSON.stringify({
           phone_number: phoneNumber,
           payment_method: 'swish',
-          product_type: isGiftCard ? 'gift_card' : 'course',
+          product_type: isGiftCard ? 'gift_card' : isArtProduct ? 'art_product' : 'course',
           product_id: courseId,
           amount: amount,
           quantity: parseInt(userInfo.numberOfParticipants || '1'),
