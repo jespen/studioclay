@@ -278,7 +278,7 @@ export async function fetchOrdersWithCache(
   
   // Use the generic fetchWithCache utility
   return fetchWithCache(
-    '/api/shop/orders',
+    '/api/art-orders',
     {},
     {
       useCache,
@@ -317,7 +317,7 @@ export async function fetchOrderWithCache(
   
   // Use the generic fetchWithCache utility
   return fetchWithCache(
-    `/api/shop/orders/${orderId}`,
+    `/api/art-orders/${orderId}`,
     {},
     {
       useCache,

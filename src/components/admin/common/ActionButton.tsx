@@ -1,13 +1,14 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 
-type ButtonVariant = 'edit' | 'publish' | 'unpublish' | 'delete' | 'confirm' | 'cancel';
+type ButtonVariant = 'edit' | 'publish' | 'unpublish' | 'delete' | 'confirm' | 'cancel' | 'pdf';
 
 interface ActionButtonProps {
   variant: ButtonVariant;
   onClick: () => void;
   label?: string;
   disabled?: boolean;
+  icon?: ReactNode;
 }
 
 /**
@@ -18,7 +19,8 @@ const ActionButton: React.FC<ActionButtonProps> = ({
   variant,
   onClick,
   label,
-  disabled = false
+  disabled = false,
+  icon
 }) => {
   // Define standard labels for each variant if not provided
   const getDefaultLabel = (variant: ButtonVariant): string => {
@@ -29,6 +31,7 @@ const ActionButton: React.FC<ActionButtonProps> = ({
       case 'delete': return 'Ta bort';
       case 'confirm': return 'Bekräfta';
       case 'cancel': return 'Avbryt';
+      case 'pdf': return 'PDF';
       default: return '';
     }
   };
@@ -42,6 +45,7 @@ const ActionButton: React.FC<ActionButtonProps> = ({
       case 'delete': return `${styles.actionButton} ${styles.deleteButton}`;
       case 'confirm': return `${styles.actionButton} ${styles.publishButton}`;
       case 'cancel': return `${styles.actionButton} ${styles.unpublishButton}`;
+      case 'pdf': return `${styles.actionButton} ${styles.pdfButton}`;
       default: return styles.actionButton;
     }
   };
@@ -54,8 +58,15 @@ const ActionButton: React.FC<ActionButtonProps> = ({
       className={buttonClass}
       onClick={onClick}
       disabled={disabled}
+      title={buttonLabel}
     >
-      {buttonLabel}
+      {icon ? (
+        <span className={styles.iconWrapper}>
+          {icon}
+        </span>
+      ) : (
+        buttonLabel
+      )}
     </button>
   );
 };

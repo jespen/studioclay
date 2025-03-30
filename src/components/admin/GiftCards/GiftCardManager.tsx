@@ -21,6 +21,7 @@ interface GiftCard {
   is_paid: boolean;
   created_at: string;
   expires_at: string;
+  invoice_number?: string;
 }
 
 const GiftCardManager: React.FC = () => {
@@ -185,77 +186,55 @@ const GiftCardManager: React.FC = () => {
       // Show loading state
       setUpdatingCards(prev => ({ ...prev, [card.id]: true }));
       
-      console.log(`Generating PDF for gift card: ${card.id}`);
+      console.log(`Handling PDF for gift card: ${card.id}`);
       
-      // Dynamically import jsPDF (to avoid SSR issues)
-      const { default: jsPDF } = await import('jspdf');
-      
-      // Create a new PDF document
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-      
-      // Set up some dimensions
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 20;
-      const contentWidth = pageWidth - (margin * 2);
-      
-      // Add title
-      doc.setFontSize(24);
-      doc.text('STUDIO CLAY', pageWidth / 2, 30, { align: 'center' });
-      
-      doc.setFontSize(18);
-      doc.text('PRESENTKORT', pageWidth / 2, 40, { align: 'center' });
-      
-      // Add a decorative border
-      doc.rect(margin, 50, contentWidth, pageHeight - 100);
-      
-      // Gift card details
-      doc.setFontSize(14);
-      doc.text(`Kod: ${card.code}`, margin + 5, 60);
-      
-      doc.setFontSize(16);
-      doc.text(`Värde: ${card.amount} SEK`, margin + 5, 70);
-      
-      // Recipient and sender info
-      doc.setFontSize(12);
-      doc.text(`Till: ${card.recipient_name}`, margin + 5, 85);
-      doc.text(`Från: ${card.sender_name}`, margin + 5, 95);
-      
-      // Expiration date
-      const expiryDate = new Date(card.expires_at).toLocaleDateString('sv-SE');
-      doc.text(`Giltigt till: ${expiryDate}`, margin + 5, 105);
-      
-      // Add message if available
-      if (card.message) {
-        doc.text('Meddelande:', margin + 5, 120);
+      // Check if the gift card has an invoice number
+      if (card.invoice_number) {
+        console.log(`Gift card has invoice number: ${card.invoice_number}, fetching invoice PDF`);
         
-        // Split long messages into multiple lines
-        const messageLines = doc.splitTextToSize(card.message, contentWidth - 10);
-        doc.text(messageLines, margin + 5, 130);
+        try {
+          // Use the existing API endpoint to fetch the invoice
+          const response = await fetch(`/api/invoice/${card.invoice_number}`);
+          const data = await response.json();
+          
+          if (!data.success) {
+            throw new Error(data.error || 'Failed to load invoice');
+          }
+          
+          // Open the PDF in a new tab
+          const pdfWindow = window.open('', '_blank');
+          if (pdfWindow) {
+            pdfWindow.document.write(`
+              <html>
+                <head>
+                  <title>Faktura ${card.invoice_number}</title>
+                </head>
+                <body style="margin:0;padding:0;">
+                  <iframe 
+                    src="data:application/pdf;base64,${data.pdf}" 
+                    width="100%" 
+                    height="100%" 
+                    style="border:none;position:absolute;top:0;left:0;right:0;bottom:0;"
+                  ></iframe>
+                </body>
+              </html>
+            `);
+          }
+          
+          console.log('Invoice PDF displayed successfully');
+        } catch (error) {
+          console.error('Error fetching invoice PDF:', error);
+          alert('Kunde inte hitta faktura-PDF. Kontakta systemadministratören.');
+        }
+        
+        return; // Always return here, no fallback
+      } else {
+        // If no invoice number
+        alert('Detta presentkort har ingen kopplad faktura.');
       }
-      
-      // Footer with terms
-      const footerY = pageHeight - 35;
-      doc.setFontSize(10);
-      doc.text('Villkor:', margin + 5, footerY);
-      
-      doc.setFontSize(8);
-      const terms = 'Detta presentkort kan användas för alla tjänster hos Studio Clay. Presentkortet kan inte bytas mot kontanter och är giltigt till och med det angivna utgångsdatumet.';
-      const termsLines = doc.splitTextToSize(terms, contentWidth - 10);
-      doc.text(termsLines, margin + 5, footerY + 5);
-      
-      // Save the PDF and trigger download
-      doc.save(`presentkort-${card.code}.pdf`);
-      
-      console.log('PDF generation completed successfully');
-      alert('PDF-generering slutförd!');
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      alert('Det gick inte att generera PDF: ' + (error instanceof Error ? error.message : 'Okänt fel'));
+      console.error('Error handling PDF:', error);
+      alert('Det gick inte att hantera PDF: ' + (error instanceof Error ? error.message : 'Okänt fel'));
     } finally {
       // Hide loading state
       setUpdatingCards(prev => ({ ...prev, [card.id]: false }));

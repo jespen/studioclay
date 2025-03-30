@@ -278,7 +278,7 @@ export async function generateInvoicePDF(
     'Studio Clay - Norrtullsgatan 65, 113 45 Stockholm',
     `Org.nr: ${COMPANY_INFO.orgNr} | Moms.nr: ${COMPANY_INFO.vatNr}`,
     'www.studioclay.se'
-  ], margin, footerY, { align: 'center' });
+  ], pageWidth / 2, footerY, { align: 'center' });
   
   // Return the PDF as a blob
   return doc.output('blob');

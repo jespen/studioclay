@@ -76,7 +76,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
             </Link>
             
             <Link href="/admin/dashboard/orders" className={styles.navButton}>
-              Beställningar
+              Shop beställningar
             </Link>
             
             <Link href="/admin/templates" className={styles.navButton}>

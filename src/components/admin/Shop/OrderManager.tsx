@@ -48,7 +48,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
 
   const handleSaveOrder = async (updatedOrder: ShopOrder) => {
     try {
-      const response = await fetch(`/api/shop/orders/${updatedOrder.id}`, {
+      const response = await fetch(`/api/art-orders/${updatedOrder.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -75,7 +75,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
 
   const handleUpdateOrderStatus = async (orderId: string, status: string) => {
     try {
-      const response = await fetch(`/api/shop/orders/${orderId}/status`, {
+      const response = await fetch(`/api/art-orders/${orderId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -105,7 +105,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
     }
     
     try {
-      const response = await fetch(`/api/shop/orders/${orderId}`, {
+      const response = await fetch(`/api/art-orders/${orderId}`, {
         method: 'DELETE',
       });
 

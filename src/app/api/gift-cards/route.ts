@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     // Create a base query
     let query = supabaseAdmin
       .from('gift_cards')
-      .select('id, code, amount, type, status, remaining_balance, sender_name, sender_email, recipient_name, recipient_email, message, is_emailed, is_printed, is_paid, created_at, expires_at');
+      .select('id, code, amount, type, status, remaining_balance, sender_name, sender_email, recipient_name, recipient_email, message, is_emailed, is_printed, is_paid, created_at, expires_at, invoice_number');
 
     // Apply filters based on the query parameter
     if (filter) {

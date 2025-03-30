@@ -69,11 +69,42 @@ export async function GET(
             invoiceNumber = artOrder.invoice_number;
             console.log('Found art order with invoice number:', invoiceNumber);
           } else {
-            console.log('Invoice number not found in any table');
-            return NextResponse.json(
-              { success: false, error: 'Invoice not found' },
-              { status: 404 }
-            );
+            console.log('Art order not found by invoice number either, trying gift_cards table');
+            
+            // Try to find in gift_cards table by ID
+            let { data: giftCard, error: giftCardError } = await supabase
+              .from('gift_cards')
+              .select('*')
+              .eq('id', identifier)
+              .single();
+            
+            console.log('Gift card search by ID result:', { giftCard, error: giftCardError?.message });
+            
+            // If not found by ID, try by invoice number
+            if (giftCardError || !giftCard) {
+              console.log('Gift card not found by ID, trying invoice number');
+              const { data: giftCardByInvoice, error: giftCardInvoiceError } = await supabase
+                .from('gift_cards')
+                .select('*')
+                .eq('invoice_number', identifier)
+                .single();
+              
+              console.log('Gift card search by invoice number result:', { giftCard: giftCardByInvoice, error: giftCardInvoiceError?.message });
+              
+              if (giftCardByInvoice) {
+                giftCard = giftCardByInvoice;
+                invoiceNumber = giftCard.invoice_number;
+                console.log('Found gift card with invoice number:', invoiceNumber);
+              } else {
+                console.log('Invoice number not found in any table');
+                return NextResponse.json(
+                  { success: false, error: 'Invoice not found' },
+                  { status: 404 }
+                );
+              }
+            } else {
+              invoiceNumber = giftCard.invoice_number;
+            }
           }
         } else {
           invoiceNumber = artOrder.invoice_number;

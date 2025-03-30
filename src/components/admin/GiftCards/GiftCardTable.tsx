@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box } from '@mui/material';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import StandardTable from '../common/StandardTable';
 import ActionButton from '../common/ActionButton';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
@@ -21,6 +22,7 @@ interface GiftCard {
   is_paid: boolean;
   created_at: string;
   expires_at: string;
+  invoice_number?: string;
 }
 
 interface GiftCardTableProps {
@@ -109,10 +111,10 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
           <td className={`${styles.tableCell} ${styles.actionsCell}`}>
             <div className={styles.actionButtonsContainer}>
               <ActionButton
-                variant="edit"
+                variant="pdf"
                 onClick={() => onGeneratePDF(card)}
                 disabled={updatingCards[card.id]}
-                label="PDF"
+                icon={<PictureAsPdfIcon />}
               />
               
               {card.type === 'digital' && !card.is_emailed && (
