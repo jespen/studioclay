@@ -281,15 +281,26 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const handlePaymentSuccess = (paymentData: any) => {
     console.log('Payment success handler called with data:', paymentData);
     
+    // Create the payment info with correct status
+    const paymentInfo = {
+      reference: typeof paymentData === 'string' ? paymentData : paymentData.reference || uuidv4(),
+      status: paymentDetails.method === 'invoice' ? 'CREATED' : 'PAID',
+      payment_method: paymentDetails.method,
+      payment_date: new Date().toISOString(),
+      amount: calculatePrice(),
+    };
+    
+    console.log('Saving payment info with status:', paymentInfo.status);
+    
     // Save payment info to flowStorage
-    setPaymentInfo(paymentData);
+    setPaymentInfo(paymentInfo);
     
     // Navigate to confirmation page
     if (onNext) {
-      onNext(paymentData);
+      onNext(paymentInfo);
     } else {
       // Legacy navigation as fallback
-      const nextUrl = getNextStepUrl(GenericStep.PAYMENT, FlowType.COURSE_BOOKING, courseId);
+      const nextUrl = getNextStepUrl(GenericStep.PAYMENT, flowType === FlowType.GIFT_CARD ? FlowType.GIFT_CARD : FlowType.COURSE_BOOKING, courseId);
       if (nextUrl) {
         router.push(nextUrl);
       }

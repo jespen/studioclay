@@ -18,7 +18,11 @@ interface InvoicePaymentSectionProps {
   courseId: string;
   amount: number;
   product_type: string;
-  onPaymentComplete: (success: boolean) => void;
+  onPaymentComplete: (success: boolean | {
+    reference: string;
+    status: string;
+    payment_method: string;
+  }) => void;
   onValidationError?: (error: string) => void;
   disabled?: boolean;
 }
@@ -155,7 +159,14 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
       setBookingReference(data.bookingReference);
       setStatus('success');
       setShowDialog(false);
-      onPaymentComplete(true);
+      
+      // Return the reference with the proper status
+      onPaymentComplete({
+        reference: data.invoiceNumber || data.bookingReference,
+        status: 'CREATED',
+        payment_method: 'invoice'
+      });
+      
       return true;
     } catch (error) {
       console.error('Error creating invoice:', error);

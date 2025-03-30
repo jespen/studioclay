@@ -363,7 +363,7 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
                     // Use less strict matching for more flexibility
                     if (status.includes('PAID') || status.includes('COMPLETE')) {
                       return 'Genomförd';
-                    } else if (status.includes('CREAT')) {
+                    } else if (status.includes('CREAT') || status.includes('PENDING')) {
                       return 'Ej betald';
                     } else if (status === '') {
                       return 'Status saknas';
