@@ -23,15 +23,21 @@ export async function POST(request: NextRequest) {
     // Create a complete gift card object with all required fields
     const giftCardData = {
       code: generateUniqueCode(),
-      amount: body.amount,
+      amount: Number(body.amount),
       type: body.type,
       sender_name: body.sender_name,
       sender_email: body.sender_email,
+      sender_phone: body.sender_phone || null,
       recipient_name: body.recipient_name,
       recipient_email: body.recipient_email || null,
       message: body.message || null,
+      invoice_address: body.invoice_address || null,
+      invoice_postal_code: body.invoice_postal_code || null,
+      invoice_city: body.invoice_city || null,
+      payment_reference: body.payment_reference || null,
+      payment_status: body.is_paid ? 'PAID' : 'CREATED',
       status: 'active',
-      remaining_balance: body.amount,
+      remaining_balance: Number(body.amount),
       is_emailed: false,
       is_printed: false,
       is_paid: body.is_paid === true ? true : false, // Handle the payment status from client

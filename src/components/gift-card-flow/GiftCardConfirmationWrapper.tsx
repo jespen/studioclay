@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react';
-import GiftCardConfirmation from './GiftCardConfirmation';
 import FlowStepWrapper from '../common/FlowStepWrapper';
 import { FlowType, GenericStep } from '../common/BookingStepper';
+import GenericConfirmation from '@/components/common/GenericConfirmation';
+import { FlowStateData } from '../common/FlowStepWrapper';
 
 export default function GiftCardConfirmationWrapper() {
   return (
@@ -13,11 +14,22 @@ export default function GiftCardConfirmationWrapper() {
       expectedPreviousSteps={[GenericStep.PAYMENT]}
       title="Bekräftelse"
       subtitle="Din beställning av presentkort är klar"
-      validateData={({ itemDetails, userInfo, paymentInfo }) => {
+      validateData={(data: FlowStateData) => {
+        const { itemDetails, userInfo, paymentInfo } = data;
+        console.log("Validating gift card confirmation data:", {
+          hasItemDetails: Boolean(itemDetails),
+          hasUserInfo: Boolean(userInfo),
+          hasPaymentInfo: Boolean(paymentInfo)
+        });
         return !!itemDetails && !!userInfo && !!paymentInfo;
       }}
     >
-      {(props) => <GiftCardConfirmation flowData={props.flowData} />}
+      {({ flowData }) => (
+        <GenericConfirmation 
+          flowType={FlowType.GIFT_CARD}
+          flowData={flowData}
+        />
+      )}
     </FlowStepWrapper>
   );
 } 

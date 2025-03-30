@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { SwishCallbackData, PaymentStatus } from '@/types/payment';
+import { SwishCallbackData, PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -93,15 +93,21 @@ async function createGiftCard(paymentId: string, amount: number, userInfo: any, 
   // Create gift card data
   const giftCardData = {
     code: generateUniqueCode(),
-    amount: amount,
+    amount: Number(amount),
     type: itemDetails.type || 'digital',
     sender_name: `${userInfo.firstName} ${userInfo.lastName}`,
     sender_email: userInfo.email,
+    sender_phone: userInfo.phone || null,
     recipient_name: itemDetails.recipientName || userInfo.recipientName || 'Mottagare',
     recipient_email: itemDetails.recipientEmail || userInfo.recipientEmail || null,
     message: itemDetails.message || userInfo.message || null,
+    invoice_address: userInfo.invoiceDetails?.address || null,
+    invoice_postal_code: userInfo.invoiceDetails?.postalCode || null,
+    invoice_city: userInfo.invoiceDetails?.city || null,
+    payment_reference: paymentId,
+    payment_status: PAYMENT_STATUS.PAID,
     status: 'active',
-    remaining_balance: amount,
+    remaining_balance: Number(amount),
     is_emailed: false,
     is_printed: false,
     is_paid: true, // Mark as paid since Swish payment was successful
@@ -168,16 +174,16 @@ export async function POST(request: Request) {
     let newStatus: PaymentStatus;
     switch (callbackData.status) {
       case 'PAID':
-        newStatus = 'PAID';
+        newStatus = PAYMENT_STATUS.PAID;
         break;
       case 'DECLINED':
-        newStatus = 'DECLINED';
+        newStatus = PAYMENT_STATUS.DECLINED;
         break;
       case 'ERROR':
-        newStatus = 'ERROR';
+        newStatus = PAYMENT_STATUS.ERROR;
         break;
       default:
-        newStatus = 'ERROR';
+        newStatus = PAYMENT_STATUS.ERROR;
     }
 
     // Uppdatera betalningsstatus och metadata
@@ -200,7 +206,7 @@ export async function POST(request: Request) {
 
     // Om betalningen lyckades, skapa bokning eller presentkort
     let result = null;
-    if (newStatus === 'PAID') {
+    if (newStatus === PAYMENT_STATUS.PAID) {
       try {
         if (payment.product_type === 'gift_card') {
           console.log('Creating gift card from successful Swish payment');

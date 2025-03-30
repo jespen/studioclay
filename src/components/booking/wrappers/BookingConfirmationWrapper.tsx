@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import BookingConfirmation from '@/components/booking/BookingConfirmation';
+import GenericConfirmation from '@/components/common/GenericConfirmation';
 import FlowStepWrapper from '@/components/common/FlowStepWrapper';
 import { FlowType, GenericStep } from '@/components/common/BookingStepper';
 
@@ -37,15 +37,13 @@ export default function BookingConfirmationWrapper({ id }: { id: string }) {
       hasPaymentInfo: Boolean(flowData?.paymentInfo)
     });
     
-    // Create a safe data object to pass to BookingConfirmation
-    const safeData = {
-      itemDetails: flowData?.itemDetails || null,
-      userInfo: flowData?.userInfo || null,
-      paymentInfo: flowData?.paymentInfo || null,
-      flowType: FlowType.COURSE_BOOKING
-    };
-    
-    return <BookingConfirmation courseId={id} flowData={safeData} />;
+    return (
+      <GenericConfirmation 
+        flowType={FlowType.COURSE_BOOKING}
+        flowData={flowData}
+        itemId={id}
+      />
+    );
   };
 
   return (

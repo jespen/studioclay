@@ -219,18 +219,24 @@ export async function POST(request: Request) {
       // Create gift card data
       const giftCardData = {
         code: generateUniqueCode(),
-        amount: amount || itemDetails.amount || 0,
+        amount: Number(amount) || Number(itemDetails.amount) || 0,
         type: itemDetails.type || 'digital',
         sender_name: `${userInfo.firstName} ${userInfo.lastName}`,
         sender_email: userInfo.email,
+        sender_phone: userInfo.phone || null,
         recipient_name: itemDetails.recipientName || '',
         recipient_email: itemDetails.recipientEmail || null,
         message: itemDetails.message || null,
+        invoice_address: paymentDetails.invoiceDetails?.address || null,
+        invoice_postal_code: paymentDetails.invoiceDetails?.postalCode || null,
+        invoice_city: paymentDetails.invoiceDetails?.city || null,
+        payment_reference: invoiceNumber,
+        payment_status: 'CREATED',
         status: 'active',
-        remaining_balance: amount || itemDetails.amount || 0,
+        remaining_balance: Number(amount) || Number(itemDetails.amount) || 0,
         is_emailed: false,
         is_printed: false,
-        is_paid: true, // Marked as paid since we're creating an invoice
+        is_paid: false, // Changed from true to false since invoice isn't paid yet
         expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(), // 1 year from now
         payment_method: 'invoice',
         invoice_number: invoiceNumber

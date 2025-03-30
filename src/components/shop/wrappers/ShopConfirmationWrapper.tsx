@@ -3,7 +3,7 @@
 import React from 'react';
 import FlowStepWrapper from '@/components/common/FlowStepWrapper';
 import { FlowType, GenericStep } from '@/components/common/BookingStepper';
-import ShopConfirmation from '../ShopConfirmation';
+import GenericConfirmation from '@/components/common/GenericConfirmation';
 import { FlowStateData } from '@/components/common/FlowStepWrapper';
 
 interface ShopConfirmationWrapperProps {
@@ -30,9 +30,11 @@ const ShopConfirmationWrapper: React.FC<ShopConfirmationWrapperProps> = ({
       itemId={productId}
       redirectOnInvalid={false} // Allow viewing confirmation even if data is missing
     >
-      {({ onNext, onBack, flowData }) => (
-        <ShopConfirmation 
+      {({ flowData }) => (
+        <GenericConfirmation
+          flowType={FlowType.ART_PURCHASE}
           flowData={flowData}
+          itemId={productId}
           orderReference={orderReference}
         />
       )}
