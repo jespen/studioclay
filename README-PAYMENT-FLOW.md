@@ -319,6 +319,27 @@ CREATE TABLE bookings (
    - Better error handling and user feedback
    - Added invoice PDF generation and storage
 
+4. **Gift Card Handling**
+   - Implemented proper storage of gift card fields in database:
+     - `amount`: Numeric amount of the gift card
+     - `recipient_name`: Name of the gift card recipient
+     - `recipient_email`: Email address of the recipient
+     - `message`: Personal message for the gift card
+     - `invoice_reference`: Reference for invoice payments
+     - `payment_reference`: Unique payment reference
+   - Payment status handling:
+     - For Swish payments: Status is set to `PAID` immediately upon success
+     - For Invoice payments: Status is set to `CREATED` initially, changes to `PAID` when paid
+   - Implemented consistent status display in confirmation page:
+     - `PAID` status shows as "Genomförd"
+     - `CREATED` and `pending` status shows as "Ej betald"
+     - Other statuses show as "Väntar på verifiering"
+
+5. **Storage Improvements**
+   - Enhanced data storage with multiple fallback mechanisms
+   - Implemented centralized `saveGiftCardDetails` function that stores data in multiple locations
+   - Improved compatibility with both legacy and new storage patterns
+
 ## Test Environment
 - Uses Swish MSS (Merchant Swish Simulator)
 - Test phone numbers:

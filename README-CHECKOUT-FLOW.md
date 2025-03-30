@@ -501,3 +501,44 @@ När en konstprodukt köps skapas en `art_order` i databasen med följande infor
    - Kunden anger personuppgifter
    - PDF-faktura genereras och skickas via e-post
    - Orderbekräftelse skickas tillsammans med fakturan
+
+## Gift Card Flow
+
+### Presentkortsflödet (Gift Card Flow)
+Presentkortsflödet tillåter användare att köpa digitala presentkort som kan användas för kurser eller produkter:
+
+1. **Steg 1: Presentkortsval (GiftCardSelection)**
+   - Välj belopp (fördefinierade alternativ eller eget belopp)
+   - Ange mottagarinformation (namn, e-post)
+   - Skriv personligt meddelande
+   - All data sparas via `saveGiftCardDetails` som säkerställer att data finns tillgänglig i hela flödet
+
+2. **Steg 2: Personuppgifter (UserInfoForm)**
+   - Avsändarinformation (namn, e-post, telefon)
+
+3. **Steg 3: Betalning (PaymentSelection)**
+   - Välj betalningsmetod (Swish eller faktura)
+   - För Swish: Betalning sker direkt och status sätts till `PAID`
+   - För faktura: Faktura skapas och status sätts till `CREATED`
+
+4. **Steg 4: Bekräftelse (GiftCardConfirmation)**
+   - Visar presentkortskod och detaljer
+   - Visar betalningsstatus: "Genomförd" för betalda och "Ej betald" för fakturor
+   - Visar mottagarinformation och personligt meddelande
+
+### Data i presentkortstabellen (gift_cards)
+Följande data sparas i databasen för varje presentkort:
+- `code`: Unik presentkortskod
+- `amount`: Belopp (numeriskt)
+- `type`: Typ av presentkort (digital)
+- `sender_name`: Avsändarens namn
+- `sender_email`: Avsändarens e-post
+- `sender_phone`: Avsändarens telefon
+- `recipient_name`: Mottagarens namn
+- `recipient_email`: Mottagarens e-post
+- `message`: Personligt meddelande
+- `payment_reference`: Betalningsreferens
+- `payment_status`: Betalningsstatus (`CREATED` för faktura, `PAID` för Swish)
+- `expires_at`: Giltighetsdatum (12 månader från skapande)
+- `is_paid`: Boolean som indikerar om presentkortet är betalt
+- `payment_method`: Betalningsmetod (`swish` eller `invoice`)
