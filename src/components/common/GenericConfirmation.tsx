@@ -94,7 +94,7 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
       let endpoint = '';
       switch (flowType) {
         case FlowType.ART_PURCHASE:
-          endpoint = `/api/art-orders/${reference}`;
+          endpoint = `/api/art-orders/by-reference/${reference}`;
           break;
         case FlowType.COURSE_BOOKING:
           endpoint = `/api/bookings/${reference}`;

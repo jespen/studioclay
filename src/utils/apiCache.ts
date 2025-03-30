@@ -215,6 +215,43 @@ export async function fetchCoursesWithCache(
 }
 
 /**
+ * Hook-friendly wrapper to fetch course templates with caching
+ * @param options Cache options
+ * @returns Promise with the templates data
+ */
+export async function fetchTemplatesWithCache(
+  options: {
+    useCache?: boolean;
+    expiry?: number;
+    forceRefresh?: boolean;
+  } = {}
+): Promise<any> {
+  const { 
+    useCache = true, 
+    expiry = DEFAULT_CACHE_EXPIRY,
+    forceRefresh = false
+  } = options;
+  
+  const cacheKey = 'course-templates';
+  
+  // If forceRefresh is true, invalidate cache first
+  if (forceRefresh) {
+    invalidateCache(cacheKey);
+  }
+  
+  // Use the generic fetchWithCache utility
+  return fetchWithCache(
+    '/api/templates',
+    {},
+    {
+      useCache,
+      expiry,
+      cacheKey
+    }
+  );
+}
+
+/**
  * Hook-friendly wrapper to fetch products with caching
  * @param options Cache options
  * @returns Promise with the products data

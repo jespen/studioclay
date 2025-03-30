@@ -8,7 +8,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import ClearIcon from '@mui/icons-material/Clear';
 import { createClient } from '@supabase/supabase-js';
 import Image from 'next/image';
-import { fetchWithCache } from '@/utils/apiCache';
+import { fetchWithCache, fetchTemplatesWithCache } from '@/utils/apiCache';
 
 // Initialize Supabase client with public key for storage operations
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -81,21 +81,25 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   const fetchTemplates = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await fetchWithCache<{templates: CourseTemplate[]}>(
-        '/api/courses/templates',
-        {},
-        {
-          useCache: true,
-          expiry: 5 * 60 * 1000, // Cache templates for 5 minutes
-          cacheKey: 'course-templates'
-        }
-      );
+      console.log('CourseForm: Fetching templates...');
+      const data = await fetchTemplatesWithCache({
+        useCache: true,
+        expiry: 5 * 60 * 1000, // Cache templates for 5 minutes
+        forceRefresh: false
+      });
+      
+      console.log('CourseForm: Templates API response:', data);
       
       if (Array.isArray(data.templates)) {
+        console.log(`CourseForm: Found ${data.templates.length} templates`);
         setTemplates(data.templates);
+      } else {
+        console.error('CourseForm: Templates data is not an array:', data.templates);
+        setError('Invalid templates data format');
       }
     } catch (error) {
-      console.error('Error fetching templates:', error);
+      console.error('CourseForm: Error fetching templates:', error);
+      setError('Failed to load templates');
     } finally {
       setLoading(false);
     }
@@ -361,6 +365,29 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     return <div>Laddar...</div>;
   }
 
+  if (error) {
+    return (
+      <Paper elevation={3} sx={{ p: 3, backgroundColor: '#ffebee' }}>
+        <Typography variant="h6" color="error" gutterBottom>
+          Kunde inte ladda kursmallarna
+        </Typography>
+        <Typography variant="body2">{error}</Typography>
+        <Box sx={{ mt: 2 }}>
+          <Button 
+            variant="outlined" 
+            color="primary"
+            onClick={() => {
+              setError('');
+              fetchTemplates();
+            }}
+          >
+            Försök igen
+          </Button>
+        </Box>
+      </Paper>
+    );
+  }
+
   // Custom styles for Material UI components
   const inputStyles = {
     '& .MuiOutlinedInput-root': {
@@ -427,6 +454,8 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           sx={inputStyles}
         >
           <MenuItem value="">Välj kursmall</MenuItem>
+          {/* Log template rendering outside JSX to avoid 'void' errors */}
+          {(() => { console.log('CourseForm: Rendering template dropdown with templates:', templates); return null; })()}
           {templates.map((template) => (
             <MenuItem key={template.id} value={template.id}>
               {template.title || template.categorie}

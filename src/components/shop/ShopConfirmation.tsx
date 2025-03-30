@@ -62,7 +62,7 @@ const ShopConfirmation: React.FC<ShopConfirmationProps> = ({ flowData, orderRefe
   const fetchOrderByReference = async (reference: string) => {
     try {
       console.log('Fetching order by reference:', reference);
-      const response = await fetch(`/api/art-orders/${reference}`);
+      const response = await fetch(`/api/art-orders/by-reference/${reference}`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch order: ${response.statusText}`);

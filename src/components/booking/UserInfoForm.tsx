@@ -319,6 +319,7 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
   const renderButtons = () => (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
       <StyledButton 
+      secondary
         onClick={handleBack}
         variant="outlined"
       >

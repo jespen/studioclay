@@ -26,7 +26,7 @@ export default function CourseManagementPage({
   const [bookings, setBookings] = useState<ExtendedBooking[]>(initialBookings);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [refreshData, setRefreshData] = useState(0);
+  const [refreshData, setRefreshData] = useState(1);
   const [openAddUserModal, setOpenAddUserModal] = useState(false);
   const [addUserFormData, setAddUserFormData] = useState({
     name: '',

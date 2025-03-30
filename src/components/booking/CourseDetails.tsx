@@ -146,9 +146,12 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext, onBack 
   };
 
   const handleBackToHome = () => {
+    console.log('handleBackToHome called, onBack exist:', !!onBack);
     if (onBack) {
+      console.log('Using onBack callback');
       onBack();
     } else {
+      console.log('Using router fallback to navigate to home');
       // Legacy navigation as fallback
       router.push('/');
     }
@@ -375,6 +378,7 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext, onBack 
         {/* Buttons */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
           <StyledButton 
+          secondary
             onClick={handleBackToHome}
             variant="outlined"
           >
@@ -387,7 +391,7 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext, onBack 
           >
             {isFullyBooked 
               ? 'Kursen är fullbokad' 
-              : 'Fortsätt till bokning'}
+              : 'Fortsätt till Dina uppgifter'}
           </StyledButton>
         </Box>
         

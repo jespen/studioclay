@@ -344,7 +344,7 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
           }}
           sx={{ mr: 2 }}
         >
-          Avbryt
+          Tillbaka
         </StyledButton>
         
         <StyledButton 

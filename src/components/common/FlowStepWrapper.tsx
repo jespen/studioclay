@@ -241,8 +241,9 @@ const FlowStepWrapper: React.FC<FlowStepWrapperProps> = ({
     if (previousStepUrl) {
       router.push(previousStepUrl);
     } else {
-      // If no previous step, go to the flow start or home
-      router.push(getStepUrl(flowType, GenericStep.ITEM_SELECTION, itemId));
+      // If no previous step, go to the home page
+      // This is especially important for the first step in the flow
+      router.push('/');
     }
   };
 
