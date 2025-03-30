@@ -204,6 +204,12 @@ export async function POST(request: Request) {
         newStatus = PAYMENT_STATUS.ERROR;
     }
 
+    console.log('Payment status mapped from Swish:', {
+      swishStatus: callbackData.status,
+      mappedStatus: newStatus,
+      paymentId: payment.id
+    });
+
     // Uppdatera betalningsstatus och metadata
     const { error: updateError } = await supabase
       .from('payments')

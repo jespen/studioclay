@@ -280,9 +280,12 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
   // Add debug info for status when rendering
   console.log('Rendering payment status:', {
     status: data?.paymentInfo?.status,
+    statusType: typeof data?.paymentInfo?.status,
+    statusValue: `"${data?.paymentInfo?.status}"`, // Show exact value with quotes
     method: data?.paymentInfo?.payment_method,
     isCreated: data?.paymentInfo?.status?.toUpperCase() === 'CREATED',
-    isPaid: data?.paymentInfo?.status?.toUpperCase() === 'PAID'
+    isPaid: data?.paymentInfo?.status?.toUpperCase() === 'PAID',
+    rawPaymentInfo: data?.paymentInfo,
   });
 
   return (
@@ -343,11 +346,20 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2" color="text.secondary">Betalstatus:</Typography>
                 <Typography variant="body2">
-                  {data.paymentInfo?.status?.toUpperCase() === 'PAID' || data.paymentInfo?.status?.toUpperCase() === 'COMPLETED' 
-                    ? 'Genomförd' 
-                    : data.paymentInfo?.status?.toUpperCase() === 'CREATED'
-                      ? 'Ej betald'
-                      : 'Väntar på verifiering'}
+                  {(() => {
+                    // Get the payment status and handle null/undefined
+                    const status = (data.paymentInfo?.status || '').toString().toUpperCase();
+                    
+                    if (status === 'PAID' || status === 'COMPLETED') {
+                      return 'Genomförd';
+                    } else if (status === 'CREATED') {
+                      return 'Ej betald';
+                    } else if (status === '') {
+                      return 'Status saknas';
+                    } else {
+                      return 'Väntar på verifiering';
+                    }
+                  })()}
                 </Typography>
               </Box>
               
