@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   Box, 
   Typography, 
@@ -29,15 +30,14 @@ import CreditCardIcon from '@mui/icons-material/CreditCard';
 import StyledButton from '../common/StyledButton';
 import Link from 'next/link';
 import { FlowStateData } from '../common/FlowStepWrapper';
-import { clearFlowData } from '@/utils/flowStorage';
+import { cleanupCheckoutFlow } from '@/utils/dataStorage';
 import { 
   CourseDetail, 
   UserInfo, 
   PaymentInfo, 
   generateBookingReference, 
   getUserInfo, 
-  getPaymentInfo,
-  cleanupCheckoutFlow
+  getPaymentInfo
 } from '@/utils/dataFetcher';
 
 interface BookingConfirmationProps {
@@ -54,7 +54,7 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flo
   useEffect(() => {
     // Use flowData if available (preferred and more efficient)
     if (flowData) {
-      setCourseDetail(flowData.itemDetails);
+      setCourseDetail(flowData.itemDetails as CourseDetail);
       setUserInfo(flowData.userInfo as UserInfo);
       setPaymentInfo(flowData.paymentInfo as PaymentInfo);
       
@@ -69,8 +69,7 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flo
     }
     
     // Fallback to utility functions if flowData is not available
-    const courseFromFlow = flowData ? flowData.itemDetails as CourseDetail : null;
-    setCourseDetail(courseFromFlow);
+    setCourseDetail(null);
     setUserInfo(getUserInfo());
     setPaymentInfo(getPaymentInfo());
     

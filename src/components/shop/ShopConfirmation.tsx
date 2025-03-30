@@ -31,7 +31,7 @@ import HomeIcon from '@mui/icons-material/Home';
 import StyledButton from '../common/StyledButton';
 import Link from 'next/link';
 import { FlowStateData } from '../common/FlowStepWrapper';
-import { clearFlowData } from '@/utils/flowStorage';
+import { cleanupCheckoutFlow } from '@/utils/dataStorage';
 
 interface ShopConfirmationProps {
   flowData?: FlowStateData;
@@ -197,7 +197,7 @@ const ShopConfirmation: React.FC<ShopConfirmationProps> = ({ flowData, orderRefe
   }, [flowData, productId, orderReference]);
 
   const handleBackToHome = () => {
-    clearFlowData();
+    cleanupCheckoutFlow();
   };
 
   const getMethodDisplayName = (method: string) => {

@@ -10,4 +10,5 @@ export interface Product {
   inStock?: boolean;
   stockQuantity?: number;
   published?: boolean;
+  category?: string;
 } 

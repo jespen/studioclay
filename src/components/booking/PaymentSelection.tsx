@@ -75,7 +75,7 @@ interface PaymentSelectionProps {
   courseId: string;
   activeStep?: number;
   flowType?: FlowType;
-  onNext?: (data?: any) => void;
+  onNext?: (data: any) => void;
   onBack?: () => void;
   flowData?: FlowStateData;
 }
@@ -227,7 +227,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             payment_date: new Date().toISOString(),
             reference: uuidv4()
           };
-          handlePaymentComplete(paymentInfo);
+          handlePaymentSuccess(paymentInfo);
         } else {
           setSubmitError('Det gick inte att skapa fakturan. Försök igen senare.');
         }
@@ -244,8 +244,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     if (onBack) {
       onBack();
     } else {
-      // Use flowNavigation to get the correct URL
-      const previousUrl = getPreviousStepUrl(GenericStep.PAYMENT, flowType, courseId);
+      // Legacy navigation as fallback
+      const previousUrl = getPreviousStepUrl(GenericStep.PAYMENT, FlowType.COURSE_BOOKING, courseId);
       if (previousUrl) {
         router.push(previousUrl);
       }
@@ -278,16 +278,18 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     };
   }, []);
 
-  const handlePaymentComplete = (paymentInfo: any) => {
-    // Store payment info in flow storage
-    setPaymentInfo(paymentInfo);
+  const handlePaymentSuccess = (paymentData: any) => {
+    console.log('Payment success handler called with data:', paymentData);
     
-    // Use the onNext callback if provided (new flow system)
+    // Save payment info to flowStorage
+    setPaymentInfo(paymentData);
+    
+    // Navigate to confirmation page
     if (onNext) {
-      onNext(paymentInfo);
+      onNext(paymentData);
     } else {
-      // Use flowNavigation to get the correct URL
-      const nextUrl = getNextStepUrl(GenericStep.PAYMENT, flowType, courseId);
+      // Legacy navigation as fallback
+      const nextUrl = getNextStepUrl(GenericStep.PAYMENT, FlowType.COURSE_BOOKING, courseId);
       if (nextUrl) {
         router.push(nextUrl);
       }
@@ -404,7 +406,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                       amount={flowType === FlowType.GIFT_CARD 
                         ? (flowData?.itemDetails?.amount || getGiftCardAmount())
                         : calculatePrice()}
-                      onPaymentComplete={handlePaymentComplete}
+                      onPaymentComplete={handlePaymentSuccess}
                       disabled={isSubmitting}
                     />
                   )}
@@ -450,7 +452,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                       courseId={courseId}
                       amount={calculatePrice()}
                       product_type={flowType === FlowType.GIFT_CARD ? 'gift_card' : flowType === FlowType.ART_PURCHASE ? 'art_product' : 'course'}
-                      onPaymentComplete={handlePaymentComplete}
+                      onPaymentComplete={handlePaymentSuccess}
                       onValidationError={(error) => setFormErrors(prev => ({ ...prev, invoice: error }))}
                       disabled={isSubmitting}
                     />

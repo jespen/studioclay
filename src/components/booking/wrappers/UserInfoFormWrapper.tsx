@@ -11,8 +11,19 @@ import { FlowType, GenericStep } from '@/components/common/BookingStepper';
  */
 function createValidateFunction() {
   return function validateUserInfoData({ itemDetails }: any) {
+    // More detailed logging for debugging
+    console.log("Validating UserInfoForm data:", { 
+      itemDetails: itemDetails ? JSON.stringify(itemDetails).substring(0, 100) + '...' : null,
+      hasItemDetails: Boolean(itemDetails),
+      hasItemId: itemDetails && Boolean(itemDetails.id),
+      itemId: itemDetails?.id
+    });
+    
     // Validate that we have course details
-    return Boolean(itemDetails) && Boolean(itemDetails.id);
+    const isValid = Boolean(itemDetails) && Boolean(itemDetails.id);
+    console.log("UserInfoForm validation result:", isValid);
+    
+    return isValid;
   };
 }
 
@@ -29,9 +40,16 @@ export default function UserInfoFormWrapper({ id }: { id: string }) {
   
   // Function to render children
   const renderChildren = ({ flowData, onNext, onBack }: any) => {
+    const courseData = flowData?.itemDetails;
+    console.log("UserInfoFormWrapper renderChildren:", { 
+      hasFlowData: Boolean(flowData),
+      hasCourseData: Boolean(courseData),
+      courseId: courseData?.id || id
+    });
+    
     return (
       <UserInfoForm 
-        courseId={id} 
+        courseId={courseData?.id || id} 
         onNext={onNext}
         onBack={onBack}
       />

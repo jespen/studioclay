@@ -1,4 +1,11 @@
-import { setItemDetails, getItemDetails, setUserInfo as setFlowUserInfo, getUserInfo as getFlowUserInfo, setPaymentInfo as setFlowPaymentInfo, getPaymentInfo as getFlowPaymentInfo, clearFlowData } from './flowStorage';
+import { 
+  setItemDetails as setFlowItemDetails, 
+  getItemDetails as getFlowItemDetails,
+  setUserInfo as setFlowUserInfo, 
+  getUserInfo as getFlowUserInfo,
+  setPaymentInfo as setFlowPaymentInfo, 
+  getPaymentInfo as getFlowPaymentInfo 
+} from './dataStorage';
 
 /**
  * Interface for course details
@@ -53,7 +60,7 @@ export async function fetchCourseDetail(
 ): Promise<CourseDetail> {
   // First check if we already have this in flowStorage
   if (!options.skipFlowStorage && !options.forceRefresh) {
-    const storedItem = getItemDetails<CourseDetail>();
+    const storedItem = getFlowItemDetails<CourseDetail>();
     if (storedItem && storedItem.id === courseId) {
       return storedItem;
     }
@@ -68,7 +75,7 @@ export async function fetchCourseDetail(
         if (parsedDetail && parsedDetail.id === courseId) {
           // Store in flowStorage for future use
           if (!options.skipFlowStorage) {
-            setItemDetails(parsedDetail);
+            setFlowItemDetails(parsedDetail);
           }
           return parsedDetail;
         }
@@ -99,7 +106,7 @@ export async function fetchCourseDetail(
     
     // Store in flowStorage and localStorage for compatibility
     if (!options.skipFlowStorage) {
-      setItemDetails(course);
+      setFlowItemDetails(course);
     }
     localStorage.setItem('courseDetail', JSON.stringify(course));
     
@@ -246,33 +253,9 @@ export function getPaymentInfo(): PaymentInfo | null {
  * @returns A unique booking reference
  */
 export function generateBookingReference(): string {
-  const timestamp = new Date().getTime().toString().slice(-6);
+  const timestamp = new Date().getTime().toString().slice(-5);
   const randomChars = Math.random().toString(36).substring(2, 5).toUpperCase();
   return `SC-${randomChars}-${timestamp}`;
-}
-
-/**
- * Cleans up all flow data after a checkout flow is completed
- * Removes both flowStorage data and legacy localStorage data
- */
-export function cleanupCheckoutFlow(): void {
-  // Clear flow storage data
-  clearFlowData();
-  
-  // Clear legacy localStorage data that might not be covered by clearFlowData
-  // This is for backwards compatibility with older components
-  localStorage.removeItem('userInfo');
-  localStorage.removeItem('courseDetail');
-  localStorage.removeItem('paymentDetails');
-  localStorage.removeItem('paymentInfo');
-  localStorage.removeItem('currentPaymentReference');
-  localStorage.removeItem('giftCardDetails');
-  localStorage.removeItem('bookingReference');
-  
-  // Also clear sessionStorage items if any exist
-  sessionStorage.removeItem('giftCardAmount');
-  sessionStorage.removeItem('giftCardType');
-  sessionStorage.removeItem('giftCardDetails');
 }
 
 /**
@@ -281,7 +264,7 @@ export function cleanupCheckoutFlow(): void {
  */
 export function saveItemDetails<T>(itemDetails: T): void {
   // Save to flow storage
-  setItemDetails(itemDetails);
+  setFlowItemDetails(itemDetails);
   
   // For backwards compatibility (if it's a course)
   if (itemDetails && typeof itemDetails === 'object' && 'id' in itemDetails) {

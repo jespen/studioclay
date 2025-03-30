@@ -12,6 +12,11 @@ import { FlowType, GenericStep } from '@/components/common/BookingStepper';
 function createValidateFunction() {
   // Validate we have all necessary information
   return function validateData({ itemDetails, userInfo, paymentInfo }: any) {
+    console.log("Validating confirmation data:", {
+      hasItemDetails: Boolean(itemDetails),
+      hasUserInfo: Boolean(userInfo),
+      hasPaymentInfo: Boolean(paymentInfo)
+    });
     return Boolean(itemDetails) && Boolean(userInfo) && Boolean(paymentInfo);
   };
 }
@@ -23,17 +28,24 @@ export default function BookingConfirmationWrapper({ id }: { id: string }) {
   // Create validation function inside the component
   const validateBookingData = createValidateFunction();
   
-  // Function to render children with safe flow data
+  // Function to render children with data from storage
   const renderChildren = ({ flowData }: any) => {
-    // Only pass the data we need to avoid serialization issues
-    const safeFlowData = {
+    console.log("BookingConfirmationWrapper renderChildren:", {
+      hasFlowData: Boolean(flowData),
+      itemDetailsId: flowData?.itemDetails?.id,
+      hasUserInfo: Boolean(flowData?.userInfo),
+      hasPaymentInfo: Boolean(flowData?.paymentInfo)
+    });
+    
+    // Create a safe data object to pass to BookingConfirmation
+    const safeData = {
       itemDetails: flowData?.itemDetails || null,
       userInfo: flowData?.userInfo || null,
       paymentInfo: flowData?.paymentInfo || null,
       flowType: FlowType.COURSE_BOOKING
     };
     
-    return <BookingConfirmation courseId={id} flowData={safeFlowData} />;
+    return <BookingConfirmation courseId={id} flowData={safeData} />;
   };
 
   return (

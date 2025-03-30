@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/utils/supabase';
+import React, { useState, useEffect, useCallback } from 'react';
+import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 import AdminHeader from '../Dashboard/AdminHeader';
 import SectionContainer from '../Dashboard/SectionContainer';
-import styles from '../../../app/admin/dashboard/courses/courses.module.css';
-import { Product } from '@/components/shop/types';
-import Image from 'next/image';
 import ProductForm from './ProductForm';
+import { Product } from '@/components/shop/types';
+import { fetchProductsWithCache, invalidateCache } from '@/utils/apiCache';
+import Image from 'next/image';
 
 interface ProductManagerProps {
   /**
@@ -16,7 +16,7 @@ interface ProductManagerProps {
 
 const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) => {
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -24,72 +24,57 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
   const [loadingImages, setLoadingImages] = useState(false);
   const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([]);
 
-  // Load products from API
-  useEffect(() => {
-    async function loadProducts() {
-      setLoading(true);
-      try {
-        const response = await fetch('/api/products');
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch products: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data && Array.isArray(data.products)) {
-          setProducts(data.products);
-        } else {
-          throw new Error('Invalid response format');
-        }
-        
-        setLoading(false);
-      } catch (err: any) {
-        console.error('Error loading products:', err);
-        setError(err.message);
-        setLoading(false);
+  // Memoize fetch functions to prevent unnecessary rerenders
+  const fetchProducts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchProductsWithCache({
+        useCache: true,
+        expiry: 2 * 60 * 1000 // 2 minutes cache
+      });
+      
+      if (data && Array.isArray(data.products)) {
+        setProducts(data.products);
+      } else {
+        throw new Error('Unexpected data format received');
       }
+    } catch (err) {
+      console.error('Error fetching products:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load products');
+    } finally {
+      setLoading(false);
     }
-    
-    loadProducts();
   }, []);
 
-  // Load images from Supabase storage
-  useEffect(() => {
-    const fetchImages = async () => {
-      try {
-        setLoadingImages(true);
-        // First try to get images from Supabase storage
-        const response = await fetch('/api/storage/pictures');
-        
-        if (!response.ok) {
-          console.error(`Failed to fetch images from storage: ${response.status} ${response.statusText}`);
-          // Fallback to local public images
-          const localResponse = await fetch('/api/images');
-          if (!localResponse.ok) {
-            console.error(`Failed to fetch local images: ${localResponse.status} ${localResponse.statusText}`);
-            return;
-          }
-          const data = await localResponse.json();
-          setGalleryImages(data.images || []);
-          return;
-        }
-        
-        const data = await response.json();
-        console.log('Images data received from storage:', data);
-        
-        if (Array.isArray(data.images)) {
-          setGalleryImages(data.images);
-        }
-      } catch (error) {
-        console.error('Error fetching images:', error);
-      } finally {
-        setLoadingImages(false);
+  const fetchGalleryImages = useCallback(async () => {
+    setLoadingImages(true);
+    try {
+      const response = await fetch('/api/storage/pictures');
+      if (!response.ok) {
+        throw new Error('Failed to fetch gallery images');
       }
-    };
-    
-    fetchImages();
+      const data = await response.json();
+      setGalleryImages(Array.isArray(data.images) ? data.images : []);
+    } catch (err) {
+      console.error('Error fetching gallery images:', err);
+      // Don't set error state here to avoid blocking the product form
+    } finally {
+      setLoadingImages(false);
+    }
   }, []);
+
+  // Fetch products on component mount
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  // Fetch gallery images when needed
+  useEffect(() => {
+    if (showForm) {
+      fetchGalleryImages();
+    }
+  }, [showForm, fetchGalleryImages]);
 
   const handleAddProduct = () => {
     // Create an empty product template
@@ -125,6 +110,9 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
         
         // Update local state
         setProducts(products.filter(product => product.id !== id));
+        
+        // After successful deletion, invalidate the products cache
+        invalidateCache('products');
       } catch (err: any) {
         console.error('Error deleting product:', err);
         setError(err.message);
@@ -133,22 +121,12 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
   };
 
   const handleSaveProduct = async (product: Product) => {
-    // Validate required fields
-    if (!product.title || !product.price || !product.image) {
-      setError('Vänligen fyll i alla obligatoriska fält (titel, pris, bild)');
-      return;
-    }
-
     try {
-      // Determine if this is a create or update operation
-      const isUpdate = product.id && products.some(p => p.id === product.id);
+      const isNew = !product.id;
+      const url = isNew ? '/api/shop/products' : `/api/shop/products/${product.id}`;
+      const method = isNew ? 'POST' : 'PUT';
       
-      // API endpoint and method
-      const endpoint = isUpdate ? `/api/products/${product.id}` : '/api/products';
-      const method = isUpdate ? 'PATCH' : 'POST';
-      
-      // Make API request
-      const response = await fetch(endpoint, {
+      const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -157,25 +135,23 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
       });
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Failed with status ${response.status}`);
+        throw new Error('Failed to save product');
       }
       
-      const result = await response.json();
+      // Invalidate products cache to ensure fresh data on next fetch
+      invalidateCache('products');
       
-      // Update local state
-      if (isUpdate) {
-        setProducts(products.map(p => p.id === product.id ? result.product : p));
-      } else {
-        setProducts([...products, result.product]);
-      }
+      // Refresh the products list
+      await fetchProducts();
       
-      setSelectedProduct(null);
+      // Reset form state
       setShowForm(false);
-      setError(null);
-    } catch (err: any) {
+      setSelectedProduct(null);
+      
+      alert(`Product ${isNew ? 'added' : 'updated'} successfully!`);
+    } catch (err) {
       console.error('Error saving product:', err);
-      setError(err.message);
+      alert(err instanceof Error ? err.message : 'An error occurred while saving the product');
     }
   };
 

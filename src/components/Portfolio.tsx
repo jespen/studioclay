@@ -14,7 +14,7 @@ interface GalleryItem {
   hasFrame: boolean;
 }
 
-// List of image files from the pictures directory - moved outside component to prevent recreation on each render
+// Define image files outside the component to prevent recreating on each render
 const imageFiles = [
   '479196463_17909922606091314_2475985145275366154_n_17937954905977933.jpg',
   '472534095_17905386474091314_5180778659628596723_n_18040731992073806.jpg',
@@ -114,7 +114,7 @@ const Portfolio = () => {
     
     setCategorizedItems(categories);
     setLoading(false);
-  }, []); // Remove imageFiles from dependency array since it's now defined outside the component
+  }, []); // No dependencies needed since imageFiles is defined outside component
 
   // Initialize gallery on component mount
   useEffect(() => {

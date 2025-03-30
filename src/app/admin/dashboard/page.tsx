@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminDashboard from '../../../components/admin/Dashboard/AdminDashboard';
 import { supabaseClient as supabase } from '../../../lib/supabase';
@@ -11,14 +11,52 @@ export default function DashboardPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isDev, setIsDev] = useState(false);
+  const [connectionVerified, setConnectionVerified] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
+  const [isLocalAuth, setIsLocalAuth] = useState(false);
+  const [session, setSession] = useState<any>(null);
   const router = useRouter();
+
+  // Memoize the verification function to prevent unnecessary renders
+  const verifyConnection = useCallback(async () => {
+    try {
+      // First check if we already have a session before testing the connection
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (sessionData.session) {
+        console.log('Existing session found, skipping connection test');
+        setIsAuthenticated(true);
+        setUserEmail(sessionData.session.user?.email || null);
+        setIsLoading(false);
+        return;
+      }
+      
+      const response = await fetch('/api/auth/supabase-auth-test');
+      const result = await response.json();
+      
+      if (!result.success) {
+        console.warn('Using local authentication as fallback');
+        // Handle local auth if needed
+      }
+    } catch (err) {
+      console.error('Connection test failed:', err);
+      setError('Failed to connect to authentication service');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);  // No dependencies as all used state setters are stable
 
   // Only run in development mode
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       setIsDev(true);
     }
-  }, []);
+  }, []);  // Empty dependency array as this only needs to run once
+
+  // Verify connection to Supabase at startup
+  useEffect(() => {
+    verifyConnection();
+  }, [verifyConnection]);  // Re-run when verifyConnection changes (which it shouldn't)
 
   useEffect(() => {
     async function checkAuthentication() {

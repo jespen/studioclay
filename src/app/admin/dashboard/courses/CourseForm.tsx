@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Course, Category, Instructor, CourseInstance, CourseTemplate } from '../../../../types/course';
 import { TextField, Button, Box, Paper, Typography, FormControlLabel, Switch, Grid, MenuItem, IconButton, Select, FormControl, InputLabel, SelectChangeEvent } from '@mui/material';
 import RichTextEditor from '../../../../components/common/RichTextEditor';
@@ -8,6 +8,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import ClearIcon from '@mui/icons-material/Clear';
 import { createClient } from '@supabase/supabase-js';
 import Image from 'next/image';
+import { fetchWithCache } from '@/utils/apiCache';
 
 // Initialize Supabase client with public key for storage operations
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -51,72 +52,66 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   // Primary color from globals.css
   const primaryColor = '#547264';
   
-  // Fetch images from API
-  useEffect(() => {
-    const fetchImages = async () => {
-      try {
-        setLoadingImages(true);
-        const response = await fetch('/api/images');
-        
-        if (!response.ok) {
-          console.error(`Failed to fetch images: ${response.status} ${response.statusText}`);
-          return;
+  // Memoize fetch functions to prevent unnecessary renders
+  const fetchImages = useCallback(async () => {
+    try {
+      setLoadingImages(true);
+      const data = await fetchWithCache<{images: string[]}>(
+        '/api/images',
+        {},
+        {
+          useCache: true,
+          expiry: 10 * 60 * 1000, // Cache images for 10 minutes
+          cacheKey: 'gallery-images'
         }
-        
-        const data = await response.json();
-        console.log('Images data received:', data);
-        
-        if (Array.isArray(data.images)) {
-          setGalleryImages(data.images);
-        }
-      } catch (error) {
-        console.error('Error fetching images:', error);
-      } finally {
-        setLoadingImages(false);
+      );
+      
+      console.log('Images data received:', data);
+      
+      if (Array.isArray(data.images)) {
+        setGalleryImages(data.images);
       }
-    };
-    
-    fetchImages();
+    } catch (error) {
+      console.error('Error fetching images:', error);
+    } finally {
+      setLoadingImages(false);
+    }
   }, []);
   
-  // Fetch templates
-  useEffect(() => {
-    const fetchTemplates = async () => {
-      try {
-        console.log('Fetching templates from API...');
-        const response = await fetch('/api/templates/');
-        
-        if (!response.ok) {
-          console.error(`Failed to fetch templates: ${response.status} ${response.statusText}`);
-          throw new Error(`Kunde inte hämta kursmallar: ${response.status} ${response.statusText}`);
+  const fetchTemplates = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await fetchWithCache<{templates: CourseTemplate[]}>(
+        '/api/courses/templates',
+        {},
+        {
+          useCache: true,
+          expiry: 5 * 60 * 1000, // Cache templates for 5 minutes
+          cacheKey: 'course-templates'
         }
-        
-        const data = await response.json();
-        console.log('Templates data received:', data);
-        
-        const fetchedTemplates = Array.isArray(data.templates) ? data.templates : [];
-        console.log(`Loaded ${fetchedTemplates.length} templates`);
-        setTemplates(fetchedTemplates);
-        
-        // If we have a templateId but no description, set the rich description from the template
-        if (templateId && !richDescription && !course) {
-          const selectedTemplate = fetchedTemplates.find((temp: CourseTemplate) => temp.id === templateId);
-          if (selectedTemplate?.rich_description) {
-            setRichDescription(selectedTemplate.rich_description);
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching templates:', err);
-        setError(err instanceof Error ? err.message : 'Kunde inte hämta kursmallar');
-      } finally {
-        setLoading(false);
+      );
+      
+      if (Array.isArray(data.templates)) {
+        setTemplates(data.templates);
       }
-    };
-    
-    fetchTemplates();
-  }, [templateId, richDescription, course]);
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
   
-  // Initialize form with course data if editing
+  // Fetch images when the component mounts
+  useEffect(() => {
+    fetchImages();
+  }, [fetchImages]);
+  
+  // Fetch templates when the component mounts
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
+  
+  // Initialize form with course data when course prop changes
   useEffect(() => {
     if (course) {
       setTitle(course.title || '');

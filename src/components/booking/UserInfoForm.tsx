@@ -25,7 +25,7 @@ import { getNextStepUrl, getPreviousStepUrl } from '@/utils/flowNavigation';
 
 interface UserInfoFormProps {
   courseId: string;
-  onNext?: () => void;
+  onNext?: (data: any) => void;
   onBack?: () => void;
 }
 
@@ -181,7 +181,7 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
     return isValid;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) {
@@ -197,9 +197,9 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
       
       // Navigate to next step
       if (onNext) {
-        onNext();
+        onNext(formData);
       } else {
-        // Use flowNavigation to get the correct URL
+        // Legacy navigation as fallback
         const nextUrl = getNextStepUrl(GenericStep.USER_INFO, FlowType.COURSE_BOOKING, courseId);
         if (nextUrl) {
           router.push(nextUrl);
@@ -213,10 +213,11 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
   };
 
   const handleBack = () => {
+    // Navigate to previous step
     if (onBack) {
       onBack();
     } else {
-      // Use flowNavigation to get the correct URL
+      // Legacy navigation as fallback
       const previousUrl = getPreviousStepUrl(GenericStep.USER_INFO, FlowType.COURSE_BOOKING, courseId);
       if (previousUrl) {
         router.push(previousUrl);
@@ -316,20 +317,20 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
 
   // Extract buttons rendering
   const renderButtons = () => (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-      <StyledButton
-        type="button"
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+      <StyledButton 
         onClick={handleBack}
-        disabled={isSubmitting}
-        secondary
+        variant="outlined"
       >
         Tillbaka
       </StyledButton>
-      <StyledButton
-        type="submit"
+      
+      <StyledButton 
+        onClick={handleSubmit}
+        sx={{ minWidth: 150 }}
         disabled={isSubmitting}
       >
-        {isSubmitting ? <CircularProgress size={24} /> : 'Fortsätt till betalning'}
+        Fortsätt
       </StyledButton>
     </Box>
   );

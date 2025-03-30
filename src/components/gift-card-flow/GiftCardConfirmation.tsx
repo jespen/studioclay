@@ -15,11 +15,16 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import EmailIcon from '@mui/icons-material/Email';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
+import Link from 'next/link';
 
 import { FlowStateData } from '../common/FlowStepWrapper';
 import StyledButton from '../common/StyledButton';
-import { cleanupCheckoutFlow } from '@/utils/dataFetcher';
-import { getUserInfo, getPaymentInfo, getGiftCardDetails } from '@/utils/flowStorage';
+import { 
+  cleanupCheckoutFlow, 
+  getUserInfo, 
+  getPaymentInfo, 
+  getGiftCardDetails 
+} from '@/utils/dataStorage';
 
 // Define types
 interface GiftCardDetails {
@@ -114,9 +119,6 @@ const GiftCardConfirmation: React.FC<GiftCardConfirmationProps> = ({ flowData })
   const handleHome = () => {
     // Clear all flow data before going home
     cleanupCheckoutFlow();
-    
-    // Navigate to home page
-    router.push('/');
   };
 
   const purchaseDate = paymentInfo?.payment_date 
@@ -267,13 +269,12 @@ const GiftCardConfirmation: React.FC<GiftCardConfirmationProps> = ({ flowData })
         </Typography>
       </Box>
 
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-        <StyledButton 
-          onClick={handleHome}
-          sx={{ minWidth: 200 }}
-        >
-          Tillbaka till startsidan
-        </StyledButton>
+      <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+        <Link href="/" passHref>
+          <StyledButton onClick={handleHome}>
+            Tillbaka till startsidan
+          </StyledButton>
+        </Link>
       </Box>
     </Paper>
   );

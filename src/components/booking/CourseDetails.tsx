@@ -28,12 +28,16 @@ import CategoryIcon from '@mui/icons-material/Category';
 import { GenericStep, FlowType } from '../common/BookingStepper';
 import BackToCourses from '../common/BackToCourses';
 import StyledButton from '../common/StyledButton';
-import { fetchCourseDetail, CourseDetail, hasMinimalCourseData } from '@/utils/dataFetcher';
+import { CourseDetail, hasMinimalCourseData } from '@/utils/dataFetcher';
+import { fetchCourseWithCache } from '@/utils/apiCache';
 import '@/styles/richText.css';
+import { getNextStepUrl } from '@/utils/flowNavigation';
+import { setItemDetails } from '@/utils/dataStorage';
 
 interface CourseDetailsProps {
   courseId: string;
-  onNext?: () => void;
+  onNext?: (data: any) => void;
+  onBack?: () => void;
 }
 
 interface Instructor {
@@ -80,20 +84,24 @@ const RichTextContent = ({ content }: { content: string }) => {
   );
 };
 
-const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext }) => {
+const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext, onBack }) => {
   const router = useRouter();
   const [courseDetail, setCourseDetail] = React.useState<CourseDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [hasLimitedData, setHasLimitedData] = React.useState(false);
 
+  // Load course data with cache support
   React.useEffect(() => {
     let isMounted = true;
     
     const loadCourseDetails = async () => {
       try {
         setLoading(true);
-        const course = await fetchCourseDetail(courseId);
+        
+        // Use the cached fetch function
+        const response = await fetchCourseWithCache(courseId);
+        const course = response.course;
         
         // Only update state if component is still mounted
         if (isMounted) {
@@ -119,10 +127,30 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext }) => {
   }, [courseId]);
 
   const handleContinue = () => {
-    if (onNext) {
-      onNext();
+    // Make sure we save the course details to flow storage before continuing
+    if (courseDetail) {
+      // Save course details to flow storage
+      setItemDetails(courseDetail);
+      
+      // Now proceed with navigation
+      if (onNext) {
+        onNext(courseDetail);
+      } else {
+        // Legacy navigation as fallback
+        const nextUrl = getNextStepUrl(GenericStep.ITEM_SELECTION, FlowType.COURSE_BOOKING, courseId);
+        if (nextUrl) {
+          router.push(nextUrl);
+        }
+      }
+    }
+  };
+
+  const handleBackToHome = () => {
+    if (onBack) {
+      onBack();
     } else {
-      router.push(`/book-course/${courseId}/personal-info`);
+      // Legacy navigation as fallback
+      router.push('/');
     }
   };
 
@@ -345,10 +373,10 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext }) => {
         </Box>
         
         {/* Buttons */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
           <StyledButton 
-            secondary
-            onClick={() => router.push('/')}
+            onClick={handleBackToHome}
+            variant="outlined"
           >
             Tillbaka
           </StyledButton>

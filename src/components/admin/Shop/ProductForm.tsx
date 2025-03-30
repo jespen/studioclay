@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Product } from '@/components/shop/types';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 
@@ -34,6 +34,80 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const [showGalleryDropdown, setShowGalleryDropdown] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Memoize the fetchCategories function to prevent unnecessary rerenders
+  const fetchCategories = useCallback(async () => {
+    setUploading(true);
+    try {
+      const response = await fetch('/api/shop/categories');
+      if (!response.ok) {
+        throw new Error('Failed to fetch categories');
+      }
+      const data = await response.json();
+      
+      if (data && Array.isArray(data.categories) && data.categories.length > 0) {
+        // Only update if we don't already have a category set
+        if (!currentProduct.category) {
+          setCurrentProduct(prev => ({
+            ...prev,
+            category: data.categories[0]?.name || ''
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      setError('Failed to load categories');
+    } finally {
+      setUploading(false);
+    }
+  }, []);  // Remove currentProduct from dependencies to avoid infinite loop
+
+  // Use the useCallback hook for the submit handler to prevent recreating on every render
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!currentProduct.title || !currentProduct.price) {
+      setError('Vänligen fyll i alla obligatoriska fält (titel, pris)');
+      return;
+    }
+    
+    setUploading(true);
+    setError(null);
+    
+    try {
+      if (selectedImage) {
+        // Upload the image and get the URL
+        const uploadedUrl = await uploadImage();
+        if (uploadedUrl) {
+          // Update the product with the new image URL
+          onSave({
+            ...currentProduct,
+            image: uploadedUrl
+          });
+        }
+      } else if (selectedGalleryImage) {
+        // Use the selected gallery image
+        onSave({
+          ...currentProduct,
+          image: selectedGalleryImage
+        });
+      } else {
+        // No image selected, show error
+        setError('En bild måste väljas');
+      }
+    } catch (err) {
+      console.error('Error handling submit:', err);
+      setError(err instanceof Error ? err.message : 'Ett fel uppstod');
+    } finally {
+      setUploading(false);
+    }
+  }, [currentProduct, selectedImage, selectedGalleryImage, onSave]);
+
+  // Add proper dependency array to load initial data only when needed
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  // Add proper dependency array for loading product data
   useEffect(() => {
     if (product) {
       setCurrentProduct(product);
@@ -122,42 +196,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
       return null;
     } finally {
       setUploading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validate required fields
-    if (!currentProduct.title || !currentProduct.price) {
-      setError('Vänligen fyll i alla obligatoriska fält (titel, pris)');
-      return;
-    }
-
-    try {
-      if (selectedImage) {
-        // Upload the image and get the URL
-        const uploadedUrl = await uploadImage();
-        if (uploadedUrl) {
-          // Update the product with the new image URL
-          onSave({
-            ...currentProduct,
-            image: uploadedUrl
-          });
-        }
-      } else if (selectedGalleryImage) {
-        // Use the selected gallery image
-        onSave({
-          ...currentProduct,
-          image: selectedGalleryImage
-        });
-      } else {
-        // No image selected, show error
-        setError('En bild måste väljas');
-      }
-    } catch (err) {
-      console.error('Error handling submit:', err);
-      setError(err instanceof Error ? err.message : 'Ett fel uppstod');
     }
   };
 

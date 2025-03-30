@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import CourseDetails from '@/components/booking/CourseDetails';
 import FlowStepWrapper from '@/components/common/FlowStepWrapper';
 import { FlowType, GenericStep } from '@/components/common/BookingStepper';
-import { setFlowType, setItemId, getFlowType, getItemId } from '@/utils/flowStorage';
+import { setFlowType, setItemId, getFlowType, getItemId } from '@/utils/dataStorage';
 
 export default function CourseDetailsWrapper({ id }: { id: string }) {
   // Use ref instead of state to prevent re-renders
@@ -41,6 +41,22 @@ export default function CourseDetailsWrapper({ id }: { id: string }) {
     return null; // Wait until flow is prepared
   }
   
+  // Function to render children
+  const renderChildren = ({ flowData, onNext, onBack }: any) => {
+    console.log("CourseDetailsWrapper renderChildren:", { 
+      hasFlowData: Boolean(flowData),
+      flowItemDetailsId: flowData?.itemDetails?.id
+    });
+    
+    return (
+      <CourseDetails 
+        courseId={id} 
+        onNext={onNext}
+        onBack={onBack}
+      />
+    );
+  };
+  
   return (
     <FlowStepWrapper
       flowType={FlowType.COURSE_BOOKING}
@@ -48,7 +64,7 @@ export default function CourseDetailsWrapper({ id }: { id: string }) {
       itemId={id}
       redirectOnInvalid={false}
     >
-      {({ flowData }) => <CourseDetails courseId={id} />}
+      {renderChildren}
     </FlowStepWrapper>
   );
 } 

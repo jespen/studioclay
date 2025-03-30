@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import styles from '@/styles/Courses.module.css';
+import { fetchCoursesWithCache } from '@/utils/apiCache';
 
 // Define the course type based on the API response
 interface ApiCourse {
@@ -204,28 +205,34 @@ const Courses = () => {
     };
   };
 
-  const fetchCourses = async () => {
+  // Memoize the filter to prevent unnecessary re-renders
+  const filterCourses = useCallback((allCourses: DisplayCourse[]) => {
+    // Ensure we have courses to filter
+    if (!allCourses.length) return { tryOn: [], longer: [] };
+    
+    // Improved filtering for try-on courses
+    const tryOn = allCourses.filter((course: DisplayCourse) => {
+      // Check both the course name and possible properties that might contain "prova"
+      return course.name.toLowerCase().includes('prova') || 
+             (course.description && course.description.toLowerCase().includes('prova på'));
+    });
+    
+    const longer = allCourses.filter((course: DisplayCourse) => {
+      // Exclude any course that's classified as a try-on course
+      return !(course.name.toLowerCase().includes('prova') ||
+              (course.description && course.description.toLowerCase().includes('prova på')));
+    });
+    
+    return { tryOn, longer };
+  }, []);
+
+  // Fetch and process courses
+  const fetchCourses = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // Always use the admin API endpoint that works
-      const apiUrl = '/api/courses/?published=true';
-      console.log(`Fetching courses from: ${apiUrl}`);
-      
-      const response = await fetch(apiUrl, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch courses');
-      }
-      
-      const data = await response.json();
-      console.log('Courses API response:', data);
+      // Use cached data when possible
+      const data = await fetchCoursesWithCache(true);
       
       // Ensure we have the expected data structure
       const apiCourses = Array.isArray(data.courses) ? data.courses : [];
@@ -236,45 +243,23 @@ const Courses = () => {
         .filter((course: ApiCourse) => course.is_published) // Only display published courses
         .map(mapApiCourseToDisplayCourse);
       
-      // Improved filtering for try-on courses
-      const tryOn = processed.filter((course: DisplayCourse) => {
-        // Check both the course name and possible properties that might contain "prova"
-        const isProva = 
-          course.name.toLowerCase().includes('prova') || 
-          (course.description && course.description.toLowerCase().includes('prova på'));
-        
-        console.log(`Course ${course.id} - ${course.name}: isProva = ${isProva}`);
-        return isProva;
-      });
-      
-      const longer = processed.filter((course: DisplayCourse) => {
-        // Exclude any course that's classified as a try-on course
-        const isProva = 
-          course.name.toLowerCase().includes('prova') ||
-          (course.description && course.description.toLowerCase().includes('prova på'));
-        
-        return !isProva;
-      });
-
-      console.log(`Split into: ${tryOn.length} try-on courses and ${longer.length} longer courses`);
-      
-      // Log the course names for better debugging
-      if (tryOn.length > 0) {
-        console.log('Try-on course names:', tryOn.map((c: DisplayCourse) => c.name));
-      }
-      if (longer.length > 0) {
-        console.log('Longer course names:', longer.map((c: DisplayCourse) => c.name));
-      }
+      // Apply the filtering
+      const { tryOn, longer } = filterCourses(processed);
       
       setTryCourses(tryOn);
       setLongerCourses(longer);
     } catch (error) {
-      console.error('Error fetching courses:', error);
+      console.error('Failed to fetch courses:', error);
       setError('Failed to load courses. Please try again later.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filterCourses]);
+
+  // Fetch courses on component mount and when the fetch function changes
+  useEffect(() => {
+    fetchCourses();
+  }, [fetchCourses]);
 
   const getSpotsClass = (spots: number | null): string => {
     if (spots === null) return '';
@@ -282,10 +267,6 @@ const Courses = () => {
     if (spots <= 5) return styles.medium;
     return styles.high;
   };
-
-  useEffect(() => {
-    fetchCourses();
-  }, []);
 
   return (
     <section id="courses" className={styles.section}>
