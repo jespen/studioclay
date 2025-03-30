@@ -22,6 +22,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
   const [showForm, setShowForm] = useState(false);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [loadingImages, setLoadingImages] = useState(false);
+  const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([]);
 
   // Load products from API
   useEffect(() => {
@@ -178,6 +179,58 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
     }
   };
 
+  // Dedicated function to handle publish toggle
+  const togglePublished = async (productId: string, newValue: boolean) => {
+    // Mark this product as updating
+    setUpdatingProductIds(prev => [...prev, productId]);
+    
+    try {
+      // First immediately update the UI for better perceived performance
+      setProducts(currentProducts => 
+        currentProducts.map(p => 
+          p.id === productId ? { ...p, published: newValue } : p
+        )
+      );
+      
+      // Then make the API call
+      const response = await fetch(`/api/products/${productId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ published: newValue }),
+      });
+      
+      if (!response.ok) {
+        // If the API call fails, revert the UI change
+        setProducts(currentProducts => 
+          currentProducts.map(p => 
+            p.id === productId ? { ...p, published: !newValue } : p
+          )
+        );
+        throw new Error('Failed to update product');
+      }
+      
+      // Get the updated product from the response
+      const result = await response.json();
+      
+      // Ensure we have the latest data from the server
+      if (result.product) {
+        setProducts(currentProducts => 
+          currentProducts.map(p => 
+            p.id === productId ? result.product : p
+          )
+        );
+      }
+    } catch (err) {
+      console.error('Error updating product:', err);
+      alert('Kunde inte uppdatera produkten');
+    } finally {
+      // Remove this product from the updating list
+      setUpdatingProductIds(prev => prev.filter(id => id !== productId));
+    }
+  };
+
   // Render product form if in form mode
   if (showForm) {
     return (
@@ -227,6 +280,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pris</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rabatt</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ny</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Publicerad</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Åtgärder</th>
                   </tr>
                 </thead>
@@ -251,6 +305,38 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {product.isNew ? 'Ja' : 'Nej'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <label className="inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={product.published !== false}
+                            disabled={updatingProductIds.includes(product.id)}
+                            onChange={(e) => togglePublished(product.id, e.target.checked)}
+                            className="mr-2 h-4 w-4 rounded border-gray-300 cursor-pointer"
+                          />
+                          <span 
+                            className={`text-sm ${
+                              updatingProductIds.includes(product.id)
+                                ? 'text-gray-400 italic'
+                                : product.published !== false
+                                  ? 'text-green-600'
+                                  : 'text-gray-500'
+                            }`}
+                            onClick={() => {
+                              if (!updatingProductIds.includes(product.id)) {
+                                togglePublished(product.id, !(product.published !== false));
+                              }
+                            }}
+                          >
+                            {updatingProductIds.includes(product.id)
+                              ? 'Sparar...'
+                              : product.published !== false
+                                ? 'Ja'
+                                : 'Nej'
+                            }
+                          </span>
+                        </label>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <button

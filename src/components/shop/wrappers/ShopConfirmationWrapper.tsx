@@ -8,9 +8,13 @@ import { FlowStateData } from '@/components/common/FlowStepWrapper';
 
 interface ShopConfirmationWrapperProps {
   productId: string;
+  orderReference?: string;
 }
 
-const ShopConfirmationWrapper: React.FC<ShopConfirmationWrapperProps> = ({ productId }) => {
+const ShopConfirmationWrapper: React.FC<ShopConfirmationWrapperProps> = ({ 
+  productId, 
+  orderReference 
+}) => {
   return (
     <FlowStepWrapper
       flowType={FlowType.ART_PURCHASE}
@@ -19,15 +23,17 @@ const ShopConfirmationWrapper: React.FC<ShopConfirmationWrapperProps> = ({ produ
       title="Bekräftelse"
       subtitle="Din beställning är bekräftad"
       validateData={(data: FlowStateData) => {
-        // For confirmation, we should have all data including payment info
-        return Boolean(data.itemDetails) && Boolean(data.userInfo) && Boolean(data.paymentInfo);
+        // For confirmation, allow access even without complete data (for page reloads)
+        // This is a fallback for when users reload the confirmation page
+        return true;
       }}
       itemId={productId}
-      redirectOnInvalid={false} // Allow viewing confirmation even if data is missing (for users who refresh the page)
+      redirectOnInvalid={false} // Allow viewing confirmation even if data is missing
     >
-      {({ onNext, onBack }) => (
+      {({ onNext, onBack, flowData }) => (
         <ShopConfirmation 
-          productId={productId}
+          flowData={flowData}
+          orderReference={orderReference}
         />
       )}
     </FlowStepWrapper>

@@ -20,7 +20,14 @@ Systemet stödjer fyra huvudsakliga flödestyper:
    - Steg: Presentkort → Dina uppgifter → Betalning → Bekräftelse
 
 3. **ART_PURCHASE**: För köp av konstverk och andra produkter
-   - Steg: Välj konstverk → Detaljer → Dina uppgifter → Betalning → Bekräftelse
+   - Steg: Produktdetaljer → Dina uppgifter → Betalning → Bekräftelse
+   - Alla produkter hämtas i butiken (Studio Clay, Norrtullsgatan 65)
+   - Bekräftelsesidan visar:
+     - Ordernummer och orderdetaljer
+     - Produktinformation
+     - Kundinformation
+     - Betalningsinformation
+     - Upphämtningsinstruktioner
 
 4. **WAITLIST**: För att skriva upp sig på väntelista
    - Steg: Kursinformation → Dina uppgifter → Bekräftelse
@@ -68,6 +75,16 @@ export enum GenericStep {
 │   │   ├── PaymentWrapper.tsx             # Steg 3: Betalning
 │   │   └── GiftCardConfirmation.tsx       # Steg 4: Bekräftelse
 │   │
+│   ├── shop/                              # Konstverksflöde
+│   │   ├── ProductCard.tsx                # Produktkort i butiken
+│   │   ├── ProductDialog.tsx              # Detaljerad produktvy
+│   │   ├── ShopConfirmation.tsx           # Bekräftelsesida
+│   │   │
+│   │   └── wrappers/                      # Wrapper-komponenter för varje steg
+│   │       ├── UserInfoWrapper.tsx         # Wrapper för personuppgifter
+│   │       ├── PaymentWrapper.tsx          # Wrapper för betalning
+│   │       └── ShopConfirmationWrapper.tsx # Wrapper för bekräftelse
+│   │
 │   └── waitlist/                          # Väntelisteflöde
 │       ├── WaitlistForm.tsx               # Steg 2: Personuppgifter för väntelista
 │       └── WaitlistConfirmation.tsx       # Steg 3: Bekräftelse
@@ -81,6 +98,12 @@ export enum GenericStep {
 │   │
 │   ├── gift-card-flow/                    # Presentkortsflöde
 │   │   ├── page.tsx                       # Steg 1: Presentkortsval
+│   │   ├── personal-info/page.tsx         # Steg 2: Personuppgifter
+│   │   ├── payment/page.tsx               # Steg 3: Betalning
+│   │   └── confirmation/page.tsx          # Steg 4: Bekräftelse
+│   │
+│   ├── shop/[id]/                         # Konstverksflöde
+│   │   ├── details/page.tsx               # Steg 1: Produktdetaljer
 │   │   ├── personal-info/page.tsx         # Steg 2: Personuppgifter
 │   │   ├── payment/page.tsx               # Steg 3: Betalning
 │   │   └── confirmation/page.tsx          # Steg 4: Bekräftelse
@@ -458,3 +481,23 @@ if (product_type === 'gift_card') {
 
 ## Relaterade dokument
 - [README-PAYMENT-FLOW.md](./README-PAYMENT-FLOW.md) - Dokumentation för betalningssystemet
+
+## Datahantering
+
+### Art Orders
+När en konstprodukt köps skapas en `art_order` i databasen med följande information:
+- Kundinformation (namn, e-post, telefon)
+- Produktinformation
+- Betalningsinformation (metod, status, referens)
+- Orderstatus (pending, completed, picked_up)
+
+### Betalningsflöde
+1. **Swish**:
+   - Kunden anger telefonnummer
+   - Betalning initieras via Swish API
+   - Orderbekräftelse skickas när betalningen är genomförd
+
+2. **Faktura**:
+   - Kunden anger personuppgifter
+   - PDF-faktura genereras och skickas via e-post
+   - Orderbekräftelse skickas tillsammans med fakturan

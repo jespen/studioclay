@@ -161,9 +161,21 @@ const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({ params }) => {
               {product.description}
             </Typography>
             
-            <Alert severity="info" sx={{ mb: 3 }}>
-              Produkter från butiken hämtas för närvarande på Studio Clay, Norrtullsgatan 65. Leverans är inte tillgängligt.
-            </Alert>
+            {product.inStock === false ? (
+              <Alert severity="error" sx={{ mb: 3 }}>
+                Tyvärr är denna produkt slutsåld.
+              </Alert>
+            ) : (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                Produkter från butiken hämtas för närvarande på Studio Clay, Norrtullsgatan 65. Leverans är inte tillgängligt.
+              </Alert>
+            )}
+            
+            {product.stockQuantity !== undefined && product.inStock !== false && (
+              <Typography variant="body2" sx={{ color: 'green', mb: 2 }}>
+                {product.stockQuantity} i lager
+              </Typography>
+            )}
           </Box>
         </Box>
         
@@ -178,11 +190,20 @@ const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({ params }) => {
             Tillbaka
           </StyledButton>
           
-          <StyledButton 
-            onClick={handleContinue}
-          >
-            Fortsätt till dina uppgifter
-          </StyledButton>
+          {product.inStock !== false ? (
+            <StyledButton 
+              onClick={handleContinue}
+            >
+              Fortsätt till dina uppgifter
+            </StyledButton>
+          ) : (
+            <StyledButton 
+              disabled
+              sx={{ opacity: 0.5, cursor: 'not-allowed' }}
+            >
+              Slutsåld
+            </StyledButton>
+          )}
         </Box>
       </Paper>
     );

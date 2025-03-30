@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
     // Get query parameters
     const url = new URL(request.url);
     const inStock = url.searchParams.get('inStock');
+    const published = url.searchParams.get('published');
     
     // Build the query
     let query = supabase.from('products').select('*');
@@ -22,6 +23,13 @@ export async function GET(request: NextRequest) {
       query = query.eq('in_stock', true);
     } else if (inStock === 'false') {
       query = query.eq('in_stock', false);
+    }
+    
+    // Filter by published if provided
+    if (published === 'true') {
+      query = query.eq('published', true);
+    } else if (published === 'false') {
+      query = query.eq('published', false);
     }
     
     // Order by created_at (newest first)
@@ -44,7 +52,10 @@ export async function GET(request: NextRequest) {
       image: item.image,
       isNew: item.is_new,
       description: item.description || '',
-      discount: item.discount || null
+      discount: item.discount || null,
+      inStock: item.in_stock,
+      stockQuantity: item.stock_quantity,
+      published: item.published
     }));
     
     return NextResponse.json({ products });
@@ -77,7 +88,8 @@ export async function POST(request: NextRequest) {
       is_new: productData.isNew || false,
       discount: productData.discount || null,
       in_stock: productData.inStock !== undefined ? productData.inStock : true,
-      stock_quantity: productData.stockQuantity || 1
+      stock_quantity: productData.stockQuantity || 1,
+      published: productData.published !== undefined ? productData.published : true
     };
     
     // If id is provided, update existing product
@@ -107,7 +119,8 @@ export async function POST(request: NextRequest) {
           isNew: data.is_new,
           description: data.description || '',
           discount: data.discount,
-          inStock: data.in_stock
+          inStock: data.in_stock,
+          published: data.published
         }
       });
     } 
@@ -137,7 +150,8 @@ export async function POST(request: NextRequest) {
         isNew: data.is_new,
         description: data.description || '',
         discount: data.discount,
-        inStock: data.in_stock
+        inStock: data.in_stock,
+        published: data.published
       }
     });
   } catch (error) {

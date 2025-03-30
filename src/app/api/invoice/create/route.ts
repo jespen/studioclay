@@ -146,6 +146,7 @@ export async function POST(request: Request) {
           invoice_number: invoiceNumber,
           unit_price: amount,
           total_price: amount,
+          status: 'confirmed',
           metadata: {
             user_info: userInfo
           }
@@ -159,6 +160,42 @@ export async function POST(request: Request) {
       }
 
       console.log('Created art order:', orderData);
+
+      // Update product stock quantity
+      try {
+        // First get the current product to check stock_quantity
+        const { data: productStockData, error: productFetchError } = await supabase
+          .from('products')
+          .select('stock_quantity, in_stock')
+          .eq('id', productData.id)
+          .single();
+          
+        if (productFetchError) {
+          console.error('Error fetching product for stock update:', productFetchError);
+          // Continue execution - stock update is not critical for payment process
+        } else if (productStockData) {
+          // Calculate new stock quantity
+          const newQuantity = Math.max(0, (productStockData.stock_quantity || 1) - 1);
+          
+          // Update the product with new stock quantity
+          const { error: updateError } = await supabase
+            .from('products')
+            .update({ 
+              stock_quantity: newQuantity,
+              in_stock: newQuantity > 0
+            })
+            .eq('id', productData.id);
+            
+          if (updateError) {
+            console.error('Error updating product stock:', updateError);
+          } else {
+            console.log(`Updated product ${productData.id} stock to ${newQuantity}`);
+          }
+        }
+      } catch (stockError) {
+        console.error('Error in stock quantity update:', stockError);
+        // Continue - don't fail the transaction for stock update issues
+      }
 
       return NextResponse.json({
         success: true,

@@ -84,7 +84,10 @@ export async function GET(
       image: data.image,
       isNew: data.is_new,
       description: data.description || '',
-      discount: data.discount || null
+      discount: data.discount || null,
+      inStock: data.in_stock,
+      stockQuantity: data.stock_quantity,
+      published: data.published
     };
     
     return NextResponse.json(product);
@@ -124,6 +127,7 @@ export async function PATCH(
     if (updates.discount !== undefined) dbUpdates.discount = updates.discount;
     if (updates.inStock !== undefined) dbUpdates.in_stock = updates.inStock;
     if (updates.stockQuantity !== undefined) dbUpdates.stock_quantity = updates.stockQuantity;
+    if (updates.published !== undefined) dbUpdates.published = updates.published;
     
     // Update the product in Supabase
     const { data, error } = await supabaseAdmin
@@ -152,7 +156,8 @@ export async function PATCH(
       description: data.description || '',
       discount: data.discount,
       inStock: data.in_stock,
-      stockQuantity: data.stock_quantity
+      stockQuantity: data.stock_quantity,
+      published: data.published
     };
     
     return NextResponse.json({ product });

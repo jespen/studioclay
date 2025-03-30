@@ -24,7 +24,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
     image: '',
     isNew: false,
     description: '',
-    discount: null
+    discount: null,
+    published: true
   });
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -260,6 +261,18 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     className="mr-2"
                   />
                   <span className="text-sm font-medium text-gray-700">Markera som ny produkt</span>
+                </label>
+              </div>
+              
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={currentProduct.published !== false}
+                    onChange={(e) => setCurrentProduct({ ...currentProduct, published: e.target.checked })}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Publicerad (synlig på sidan)</span>
                 </label>
               </div>
             </div>

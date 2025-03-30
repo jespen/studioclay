@@ -15,7 +15,7 @@ const Shop = () => {
     async function fetchProducts() {
       setLoading(true);
       try {
-        const response = await fetch('/api/products?inStock=true');
+        const response = await fetch('/api/products?published=true');
         
         if (!response.ok) {
           throw new Error(`Failed to fetch products: ${response.status}`);

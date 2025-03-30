@@ -343,6 +343,7 @@ export async function POST(request: Request) {
               order_reference: paymentReference,
               unit_price: amount,
               total_price: amount,
+              status: 'confirmed',
               metadata: {
                 payment_id: payment.id,
                 user_info: user_info
@@ -357,6 +358,42 @@ export async function POST(request: Request) {
             }
 
             console.log('Created art order:', orderData);
+            
+            // Update product stock quantity
+            try {
+              // First get the current product to check stock_quantity
+              const { data: productData, error: productFetchError } = await supabase
+                .from('products')
+                .select('stock_quantity, in_stock')
+                .eq('id', product_id)
+                .single();
+                
+              if (productFetchError) {
+                console.error('Error fetching product for stock update:', productFetchError);
+                // Continue execution - stock update is not critical for payment process
+              } else if (productData) {
+                // Calculate new stock quantity
+                const newQuantity = Math.max(0, (productData.stock_quantity || 1) - 1);
+                
+                // Update the product with new stock quantity
+                const { error: updateError } = await supabase
+                  .from('products')
+                  .update({ 
+                    stock_quantity: newQuantity,
+                    in_stock: newQuantity > 0
+                  })
+                  .eq('id', product_id);
+                  
+                if (updateError) {
+                  console.error('Error updating product stock:', updateError);
+                } else {
+                  console.log(`Updated product ${product_id} stock to ${newQuantity}`);
+                }
+              }
+            } catch (stockError) {
+              console.error('Error in stock quantity update:', stockError);
+              // Continue - don't fail the transaction for stock update issues
+            }
           } catch (error) {
             console.error('Error in art order creation:', error);
             throw error;

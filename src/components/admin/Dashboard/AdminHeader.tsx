@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabase';
+import { supabaseClient as supabase } from '@/lib/supabase';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 import { SupabaseClient } from '@supabase/supabase-js';
 
@@ -73,6 +73,10 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
             
             <Link href="/admin/dashboard/shop" className={styles.navButton}>
               Webshop
+            </Link>
+            
+            <Link href="/admin/dashboard/orders" className={styles.navButton}>
+              Beställningar
             </Link>
             
             <Link href="/admin/templates" className={styles.navButton}>

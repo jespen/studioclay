@@ -102,12 +102,27 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ product, isOpen, onClose,
             <p>{product.description}</p>
           </div>
           
+          {product.stockQuantity !== undefined && (
+            <div className="mt-4 text-sm">
+              <span className={product.inStock === false ? 'text-red-500' : 'text-green-600'}>
+                {product.inStock === false 
+                  ? 'Slutsåld' 
+                  : `${product.stockQuantity} i lager`}
+              </span>
+            </div>
+          )}
+          
           <div className="mt-auto pt-8">
             <button 
-              className="w-full py-3 btn-primary text-white hover:bg-primary-dark transition-colors"
-              onClick={handleBuyClick}
+              className={`w-full py-3 ${
+                product.inStock === false 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'btn-primary text-white hover:bg-primary-dark transition-colors'
+              }`}
+              onClick={product.inStock === false ? undefined : handleBuyClick}
+              disabled={product.inStock === false}
             >
-              KÖP
+              {product.inStock === false ? 'SLUTSÅLD' : 'KÖP'}
             </button>
           </div>
         </div>

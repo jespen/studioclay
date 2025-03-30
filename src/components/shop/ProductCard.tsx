@@ -52,6 +52,13 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </div>
         )}
         
+        {/* Sold out overlay */}
+        {product.inStock === false && (
+          <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+            <span className="bg-white px-3 py-1 text-sm font-medium">SLUTSÅLD</span>
+          </div>
+        )}
+        
         {/* Product image */}
         <div className="aspect-[3/4] relative">
           <img
@@ -76,10 +83,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           )}
         </div>
         <button 
-          className="mt-3 w-full py-2 btn-primary text-white hover:bg-primary-dark transition-colors"
-          onClick={handleBuyClick}
+          className={`mt-3 w-full py-2 ${
+            product.inStock === false 
+              ? 'bg-gray-400 cursor-not-allowed' 
+              : 'btn-primary text-white hover:bg-primary-dark transition-colors'
+          }`}
+          onClick={product.inStock === false ? undefined : handleBuyClick}
+          disabled={product.inStock === false}
         >
-          KÖP
+          {product.inStock === false ? 'SLUTSÅLD' : 'KÖP'}
         </button>
       </div>
 

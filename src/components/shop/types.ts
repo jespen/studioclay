@@ -7,4 +7,7 @@ export interface Product {
   isNew: boolean;
   description: string;
   discount: number | null;
+  inStock?: boolean;
+  stockQuantity?: number;
+  published?: boolean;
 } 

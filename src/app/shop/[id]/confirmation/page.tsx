@@ -5,12 +5,21 @@ interface ShopConfirmationPageProps {
   params: {
     id: string;
   };
+  searchParams?: {
+    reference?: string;
+  };
 }
 
-const ShopConfirmationPage: React.FC<ShopConfirmationPageProps> = ({ params }) => {
+const ShopConfirmationPage: React.FC<ShopConfirmationPageProps> = ({ params, searchParams }) => {
+  // Extract the reference from searchParams if available
+  const orderReference = searchParams?.reference;
+  
   return (
     <Suspense fallback={<div>Laddar bekräftelsesida...</div>}>
-      <ShopConfirmationWrapper productId={params.id} />
+      <ShopConfirmationWrapper 
+        productId={params.id} 
+        orderReference={orderReference} 
+      />
     </Suspense>
   );
 };
