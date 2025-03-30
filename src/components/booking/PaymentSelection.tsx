@@ -473,7 +473,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       {/* Order Summary */}
       <Grid item xs={12} md={5}>
         <Typography variant="h6" gutterBottom>
-          Sammanfattning av bokning
+          Sammanfattning
         </Typography>
         
         {courseDetail && (

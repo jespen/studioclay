@@ -7,8 +7,7 @@ import FlowStepWrapper from '../common/FlowStepWrapper';
 import { FlowType, GenericStep } from '../common/BookingStepper';
 import StyledButton from '../common/StyledButton';
 import { setFlowType } from '@/utils/flowStorage';
-import { saveItemDetails } from '@/utils/dataFetcher';
-import { setGiftCardDetails } from '@/utils/flowStorage';
+import { saveItemDetails, saveGiftCardDetails } from '@/utils/dataFetcher';
 import { getNextStepUrl } from '@/utils/flowNavigation';
 import styles from '@/styles/GiftCardSelection.module.css';
 
@@ -120,9 +119,10 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
       message: recipient.message
     };
     
-    // Save details to flow storage and use dedicated function for gift card details
-    saveItemDetails(giftCardDetails);
-    setGiftCardDetails(giftCardDetails);
+    // Save details to all storage mechanisms for maximum compatibility
+    saveGiftCardDetails(giftCardDetails);
+    
+    console.log('Gift card details saved:', giftCardDetails);
 
     // For backwards compatibility with PaymentSelection, also save as a "course"
     const fakeGiftCardCourse = {

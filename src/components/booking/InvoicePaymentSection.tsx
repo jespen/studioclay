@@ -90,12 +90,34 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
       let itemDetails = null;
       if (isGiftCard) {
         try {
-          const storedItemDetails = localStorage.getItem('itemDetails');
-          if (storedItemDetails) {
-            itemDetails = JSON.parse(storedItemDetails);
+          // Try to get gift card details using both storage helpers
+          const giftCardDetails = await import('@/utils/flowStorage').then(module => 
+            module.getGiftCardDetails()
+          );
+          
+          if (giftCardDetails) {
+            itemDetails = giftCardDetails;
+            console.log('Using gift card details from flowStorage:', itemDetails);
+          } else {
+            // Fallback to general item details
+            const generalItemDetails = await import('@/utils/flowStorage').then(module => 
+              module.getItemDetails()
+            );
+            
+            if (generalItemDetails) {
+              itemDetails = generalItemDetails;
+              console.log('Using item details from flowStorage:', itemDetails);
+            } else {
+              // Last resort: try legacy localStorage directly
+              const storedItemDetails = localStorage.getItem('itemDetails');
+              if (storedItemDetails) {
+                itemDetails = JSON.parse(storedItemDetails);
+                console.log('Using item details from direct localStorage:', itemDetails);
+              }
+            }
           }
         } catch (e) {
-          console.error('Error parsing itemDetails from localStorage:', e);
+          console.error('Error getting gift card details:', e);
         }
       }
 

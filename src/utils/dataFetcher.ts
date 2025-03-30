@@ -270,4 +270,36 @@ export function saveItemDetails<T>(itemDetails: T): void {
   if (itemDetails && typeof itemDetails === 'object' && 'id' in itemDetails) {
     localStorage.setItem('courseDetail', JSON.stringify(itemDetails));
   }
+}
+
+/**
+ * Gift card details interface
+ */
+export interface GiftCardDetails {
+  amount: number;
+  type: string;
+  recipientName: string;
+  recipientEmail: string;
+  message?: string;
+}
+
+/**
+ * Save gift card details to both flowStorage and other storage methods
+ * for maximum compatibility
+ * @param giftCardDetails The gift card details to save
+ */
+export function saveGiftCardDetails(giftCardDetails: GiftCardDetails): void {
+  // Save directly to itemDetails for the flow
+  setFlowItemDetails(giftCardDetails);
+  
+  // Also save to specialized gift card storage
+  import('./flowStorage').then(module => {
+    module.setGiftCardDetails(giftCardDetails);
+  });
+  
+  // For backwards compatibility with direct localStorage access
+  localStorage.setItem('itemDetails', JSON.stringify(giftCardDetails));
+  localStorage.setItem('giftCardDetails', JSON.stringify(giftCardDetails));
+  
+  console.log('Saved gift card details to all storage mechanisms:', giftCardDetails);
 } 

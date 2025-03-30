@@ -90,6 +90,16 @@ async function createGiftCard(paymentId: string, amount: number, userInfo: any, 
     return `GC-${random}`;
   };
   
+  console.log('Creating gift card with payment ID:', paymentId);
+  console.log('Gift card amount:', amount);
+  console.log('User info for gift card:', userInfo);
+  console.log('Item details for gift card:', itemDetails);
+  console.log('Recipient info:', {
+    recipientName: itemDetails.recipientName || userInfo.recipientName,
+    recipientEmail: itemDetails.recipientEmail || userInfo.recipientEmail,
+    message: itemDetails.message || userInfo.message
+  });
+  
   // Create gift card data
   const giftCardData = {
     code: generateUniqueCode(),
@@ -115,6 +125,14 @@ async function createGiftCard(paymentId: string, amount: number, userInfo: any, 
     payment_method: 'swish'
   };
   
+  console.log('Final gift card data to insert:', {
+    amount: giftCardData.amount,
+    recipient_name: giftCardData.recipient_name,
+    recipient_email: giftCardData.recipient_email,
+    message: giftCardData.message,
+    payment_reference: giftCardData.payment_reference
+  });
+
   // Insert gift card into database
   const { data: giftCard, error } = await supabase
     .from('gift_cards')

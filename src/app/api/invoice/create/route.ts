@@ -210,6 +210,8 @@ export async function POST(request: Request) {
       // Extract gift card details from localStorage or session data
       const itemDetails = data.itemDetails || {};
       
+      console.log('Processing gift card with itemDetails:', itemDetails);
+      
       // Generate a unique code for the gift card
       const generateUniqueCode = () => {
         const random = Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -242,7 +244,13 @@ export async function POST(request: Request) {
         invoice_number: invoiceNumber
       };
       
-      console.log('Creating gift card with data:', giftCardData);
+      console.log('Creating gift card with data:', {
+        amount: giftCardData.amount,
+        recipient_name: giftCardData.recipient_name,
+        recipient_email: giftCardData.recipient_email,
+        message: giftCardData.message,
+        payment_reference: giftCardData.payment_reference,
+      });
       
       // Insert gift card into database
       const { data: giftCardResult, error: giftCardError } = await supabase
