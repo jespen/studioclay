@@ -141,6 +141,7 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
         // If we have flow data, use it directly (preferred and most complete)
         if (flowData && flowData.itemDetails) {
           console.log('Using flowData for confirmation:', flowData);
+          console.log('Payment status from flowData:', flowData.paymentInfo?.status);
           
           let title = 'Din beställning är bekräftad';
           switch (flowType) {
@@ -276,6 +277,14 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
     );
   }
 
+  // Add debug info for status when rendering
+  console.log('Rendering payment status:', {
+    status: data?.paymentInfo?.status,
+    method: data?.paymentInfo?.payment_method,
+    isCreated: data?.paymentInfo?.status?.toUpperCase() === 'CREATED',
+    isPaid: data?.paymentInfo?.status?.toUpperCase() === 'PAID'
+  });
+
   return (
     <>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -334,9 +343,9 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2" color="text.secondary">Betalstatus:</Typography>
                 <Typography variant="body2">
-                  {data.paymentInfo?.status === 'PAID' || data.paymentInfo?.status === 'completed' 
+                  {data.paymentInfo?.status?.toUpperCase() === 'PAID' || data.paymentInfo?.status?.toUpperCase() === 'COMPLETED' 
                     ? 'Genomförd' 
-                    : data.paymentInfo?.status === 'CREATED'
+                    : data.paymentInfo?.status?.toUpperCase() === 'CREATED'
                       ? 'Ej betald'
                       : 'Väntar på verifiering'}
                 </Typography>
