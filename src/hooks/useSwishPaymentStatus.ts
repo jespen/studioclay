@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
+import { getPaymentReference, setPaymentReference, setBookingReference } from '@/utils/flowStorage';
 
 interface UseSwishPaymentStatusProps {
   paymentReference: string | null;
@@ -27,7 +28,7 @@ export const useSwishPaymentStatus = ({
 
   // Check payment status
   const checkPaymentStatus = async (directReference?: string): Promise<PaymentStatus> => {
-    const reference = directReference || paymentReference || localStorage.getItem('currentPaymentReference');
+    const reference = directReference || paymentReference || getPaymentReference();
     console.log('checkPaymentStatus called with reference:', reference);
     
     if (!reference || reference === 'undefined' || reference === 'null') {
@@ -49,7 +50,7 @@ export const useSwishPaymentStatus = ({
       
       if (data.data?.booking?.reference) {
         console.log('Booking reference received:', data.data.booking.reference);
-        localStorage.setItem('bookingReference', data.data.booking.reference);
+        setBookingReference(data.data.booking.reference);
       }
       
       const status = data.data?.payment?.status as string;
@@ -83,7 +84,8 @@ export const useSwishPaymentStatus = ({
     if (paymentStatus === PAYMENT_STATUS.ERROR || paymentStatus === PAYMENT_STATUS.DECLINED) {
       setShowPaymentDialog(false);
       setPaymentStatus(null);
-      localStorage.removeItem('currentPaymentReference');
+      // Clear the payment reference from flowStorage
+      setPaymentReference("");
     }
   };
 
@@ -104,7 +106,7 @@ export const useSwishPaymentStatus = ({
         return;
       }
 
-      const currentReference = paymentReference || localStorage.getItem('currentPaymentReference');
+      const currentReference = paymentReference || getPaymentReference();
       if (!currentReference || currentReference === 'undefined' || currentReference === 'null') {
         console.log('No valid reference available for polling');
         setPaymentStatus(PAYMENT_STATUS.ERROR);
@@ -145,7 +147,7 @@ export const useSwishPaymentStatus = ({
       }
     };
 
-    if (showPaymentDialog && (paymentReference || localStorage.getItem('currentPaymentReference'))) {
+    if (showPaymentDialog && (paymentReference || getPaymentReference())) {
       console.log('Starting payment status polling');
       pollStatus();
       intervalId = setInterval(pollStatus, 2000);

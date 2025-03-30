@@ -12,6 +12,10 @@ This guide will help you set up the Studio Clay shop feature using Supabase as a
 4. Paste the contents of the `supabase/products.sql` file
 5. Run the query to create the products table and sample data
 
+The products table includes important fields for stock management:
+- `stock_quantity`: Tracks how many items are available
+- `in_stock`: Boolean flag indicating if the product is available for purchase
+
 ### Art Orders Table
 
 1. In the SQL Editor, create another query
@@ -41,6 +45,11 @@ The shop feature requires several API routes:
 
 - `src/app/api/art-orders/[reference]/route.ts`: Handles GET for retrieving order information by reference
 - Payment creation is handled by `/api/payments/swish/create` and `/api/invoice/create` (see README-PAYMENT-FLOW.md)
+- Both payment handlers automatically update product stock when an order is created
+
+### Invoice Routes
+
+- `src/app/api/invoice/[id]/route.ts`: Universal invoice handler that can retrieve invoices from both bookings and art_orders
 
 ## Step 4: Shop Components
 
@@ -66,6 +75,14 @@ The shop implementation consists of several key components:
 - `src/components/shop/ProductDialog.tsx`: Product quick view modal
 - `src/components/shop/ProductDetails.tsx`: Detailed product view for the checkout flow
 - `src/components/shop/ShopConfirmation.tsx`: Displays order confirmation details
+- `src/components/shop/types.ts`: Type definitions including Product interface with stock management fields
+
+### Admin Shop Components
+
+- `src/components/admin/Shop/ProductManager.tsx`: Admin interface for managing products (CRUD operations)
+- `src/components/admin/Shop/ProductForm.tsx`: Form for creating and editing products, including stock quantity
+- `src/components/admin/Shop/OrderManager.tsx`: Admin interface for viewing and managing all art orders
+- `src/components/admin/Shop/OrderForm.tsx`: Detailed view and editor for individual orders
 
 ## Step 5: Checkout Flow Integration
 
@@ -100,8 +117,9 @@ Art purchases support:
 
 1. User selects a payment method in `PaymentSelection.tsx`
 2. `product_type: 'art_product'` is passed to the payment API
-3. After successful payment, an `art_order` record is created
-4. User is redirected to the confirmation page
+3. After successful payment, an `art_order` record is created with status `confirmed`
+4. Product's stock quantity is automatically decremented and `in_stock` status is updated
+5. User is redirected to the confirmation page
 
 ## Step 7: Confirmation Page Implementation
 
@@ -117,6 +135,24 @@ The confirmation page supports three data sources:
 - URL reference parameter for direct links
 - API data fetching for page refreshes
 
+## Step 8: Admin Dashboard Integration
+
+The shop admin components are integrated into the admin dashboard:
+
+1. **Product Management**:
+   - Accessible from the admin dashboard navigation
+   - Lists all products with status, price, and availability
+   - Products can be published/unpublished with a checkbox
+   - Create, edit, and delete product functionality
+
+2. **Order Management**:
+   - Accessible from the admin dashboard via "Beställningar" link
+   - Shows all art orders with status, payment info, and customer details
+   - View detailed information including payment status
+   - Access to invoice PDF via built-in viewer
+   - Contact customers directly from the interface
+   - Update order status (confirmed, processing, completed, cancelled)
+
 ## Art Order Data Structure
 
 The `art_orders` table stores:
@@ -130,7 +166,7 @@ CREATE TABLE art_orders (
     customer_name TEXT NOT NULL,
     customer_email TEXT NOT NULL,
     customer_phone TEXT,
-    status TEXT NOT NULL DEFAULT 'pending',
+    status TEXT NOT NULL DEFAULT 'pending', -- Now set to 'confirmed' when created
     payment_status TEXT NOT NULL DEFAULT 'CREATED',
     payment_method TEXT NOT NULL,
     order_reference TEXT NOT NULL,
@@ -138,9 +174,44 @@ CREATE TABLE art_orders (
     unit_price INTEGER NOT NULL,
     total_price INTEGER NOT NULL,
     currency TEXT NOT NULL DEFAULT 'SEK',
-    metadata JSONB
+    metadata JSONB,
+    CONSTRAINT valid_payment_status CHECK (payment_status IN ('CREATED', 'PAID', 'DECLINED', 'ERROR')),
+    CONSTRAINT valid_status CHECK (status IN ('confirmed', 'processing', 'completed', 'cancelled'))
 );
 ```
+
+## Stock Management
+
+Products include stock management with automatic updates during the purchase process:
+
+1. **Stock Fields in Products Table**:
+   - `stock_quantity`: Numeric value of available items
+   - `in_stock`: Boolean flag for quick filtering
+
+2. **Automatic Stock Updates**:
+   - When an order is created (via Swish or Invoice), the stock is automatically decreased
+   - If stock reaches 0, `in_stock` is set to `false`
+
+3. **Admin Management**:
+   - Stock levels can be updated manually via the ProductForm
+
+## Invoice Handling
+
+Invoices are managed through a unified system:
+
+1. **Invoice Creation**:
+   - Generated during order creation for invoice payments
+   - Stored in Supabase Storage in the `invoices` bucket
+   - Same invoice format for courses, gift cards, and art products
+
+2. **Invoice Retrieval**:
+   - Universal API endpoint `/api/invoice/[id]` that works with both bookings and art_orders
+   - Identifies the correct record source and retrieves the associated PDF
+   - Handles multiple ID formats (order ID, invoice number)
+
+3. **Invoice Display**:
+   - Admin interface shows invoices directly in the browser
+   - Uses Base64 encoding for secure transfer
 
 ## Troubleshooting
 
@@ -154,6 +225,10 @@ If you encounter issues with the shop feature:
    - Flow data in localStorage
    - API responses from `/api/art-orders/[reference]`
    - Product data from `/api/products/[id]`
+6. For invoice display problems:
+   - Ensure the invoice exists in Supabase Storage
+   - Check the server logs for specific error messages
+   - Verify the correct invoice number is being passed to the API
 
 ## Future Enhancements
 
@@ -162,4 +237,4 @@ If you encounter issues with the shop feature:
 - **Product Categories**: Add categories to organize products
 - **Product Search**: Implement search functionality for the shop
 - **Product Variations**: Support for product variations such as size, color, etc.
-- **Order Management**: Enhance admin dashboard for art order management 
+- **Order Management**: Further enhance admin dashboard for art order management with reporting 

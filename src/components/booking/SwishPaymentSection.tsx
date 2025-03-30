@@ -4,6 +4,7 @@ import { PaymentStatus } from '@/types/payment';
 import SwishPaymentForm from './SwishPaymentForm';
 import SwishPaymentDialog from './SwishPaymentDialog';
 import { useSwishPaymentStatus } from '@/hooks/useSwishPaymentStatus';
+import { getGiftCardDetails, getFlowType, setPaymentReference } from '@/utils/flowStorage';
 
 export interface SwishPaymentSectionRef {
   handleCreatePayment: () => Promise<boolean>;
@@ -84,21 +85,14 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       // Check if this is a gift card or product payment
       const isGiftCard = courseId === 'gift-card';
       
-      // For gift cards, get the item details from localStorage
+      // For gift cards, get the item details from flowStorage
       let itemDetails = null;
       if (isGiftCard) {
-        try {
-          const storedDetails = localStorage.getItem('giftCardDetails');
-          if (storedDetails) {
-            itemDetails = JSON.parse(storedDetails);
-          }
-        } catch (e) {
-          console.error('Error parsing gift card details from localStorage:', e);
-        }
+        itemDetails = getGiftCardDetails();
       }
       
       // Check if this is an art product from the shop
-      const isArtProduct = localStorage.getItem('flow_type') === 'art_purchase';
+      const isArtProduct = getFlowType() === 'art_purchase';
       
       const response = await fetch('/api/payments/swish/create', {
         method: 'POST',
@@ -129,8 +123,8 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
 
       const paymentRef = result.data.reference;
       setPaymentReference(paymentRef);
-      // Store payment reference in localStorage for persistent tracking
-      localStorage.setItem('currentPaymentReference', paymentRef);
+      // Store payment reference in flowStorage rather than directly in localStorage
+      setPaymentReference(paymentRef);
       console.log('Swish payment created with reference:', paymentRef);
       
       setPaymentStatus(PaymentStatus.CREATED);

@@ -259,12 +259,20 @@ export function cleanupCheckoutFlow(): void {
   // Clear flow storage data
   clearFlowData();
   
-  // Clear legacy localStorage data
+  // Clear legacy localStorage data that might not be covered by clearFlowData
+  // This is for backwards compatibility with older components
   localStorage.removeItem('userInfo');
   localStorage.removeItem('courseDetail');
   localStorage.removeItem('paymentDetails');
   localStorage.removeItem('paymentInfo');
   localStorage.removeItem('currentPaymentReference');
+  localStorage.removeItem('giftCardDetails');
+  localStorage.removeItem('bookingReference');
+  
+  // Also clear sessionStorage items if any exist
+  sessionStorage.removeItem('giftCardAmount');
+  sessionStorage.removeItem('giftCardType');
+  sessionStorage.removeItem('giftCardDetails');
 }
 
 /**

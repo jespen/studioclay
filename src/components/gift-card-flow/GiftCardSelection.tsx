@@ -8,6 +8,8 @@ import { FlowType, GenericStep } from '../common/BookingStepper';
 import StyledButton from '../common/StyledButton';
 import { setFlowType } from '@/utils/flowStorage';
 import { saveItemDetails } from '@/utils/dataFetcher';
+import { setGiftCardDetails } from '@/utils/flowStorage';
+import { getNextStepUrl } from '@/utils/flowNavigation';
 import styles from '@/styles/GiftCardSelection.module.css';
 
 interface GiftCardSelectionProps {
@@ -118,9 +120,9 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
       message: recipient.message
     };
     
-    // Save details to flow storage and localStorage for API access
+    // Save details to flow storage and use dedicated function for gift card details
     saveItemDetails(giftCardDetails);
-    localStorage.setItem('giftCardDetails', JSON.stringify(giftCardDetails));
+    setGiftCardDetails(giftCardDetails);
 
     // For backwards compatibility with PaymentSelection, also save as a "course"
     const fakeGiftCardCourse = {
@@ -137,7 +139,11 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
     if (onNext) {
       onNext(giftCardDetails);
     } else {
-      router.push('/gift-card-flow/personal-info');
+      // Use flowNavigation to get the correct URL
+      const nextUrl = getNextStepUrl(GenericStep.ITEM_SELECTION, FlowType.GIFT_CARD);
+      if (nextUrl) {
+        router.push(nextUrl);
+      }
     }
   };
 
@@ -331,10 +337,14 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
       {/* Buttons */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
         <StyledButton 
-          secondary
-          onClick={() => router.push('/')}
+          secondary 
+          onClick={() => {
+            // Use flowNavigation to go back to home
+            router.push('/');
+          }}
+          sx={{ mr: 2 }}
         >
-          Tillbaka
+          Avbryt
         </StyledButton>
         
         <StyledButton 

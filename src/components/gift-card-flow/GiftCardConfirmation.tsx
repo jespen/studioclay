@@ -19,6 +19,7 @@ import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import { FlowStateData } from '../common/FlowStepWrapper';
 import StyledButton from '../common/StyledButton';
 import { cleanupCheckoutFlow } from '@/utils/dataFetcher';
+import { getUserInfo, getPaymentInfo, getGiftCardDetails } from '@/utils/flowStorage';
 
 // Define types
 interface GiftCardDetails {
@@ -94,15 +95,15 @@ const GiftCardConfirmation: React.FC<GiftCardConfirmationProps> = ({ flowData })
       setUserInfo(flowData.userInfo as UserInfo);
       setPaymentInfo(flowData.paymentInfo as PaymentInfo);
     } else {
-      // Fallback to local storage
+      // Fallback to flowStorage functions
       try {
-        const storedUserInfo = localStorage.getItem('userInfo');
-        const storedGiftCardDetails = sessionStorage.getItem('giftCardDetails');
-        const storedPaymentInfo = localStorage.getItem('paymentInfo');
+        const storedUserInfo = getUserInfo<UserInfo>();
+        const storedGiftCardDetails = getGiftCardDetails<GiftCardDetails>();
+        const storedPaymentInfo = getPaymentInfo<PaymentInfo>();
         
-        if (storedUserInfo) setUserInfo(JSON.parse(storedUserInfo));
-        if (storedGiftCardDetails) setGiftCardDetails(JSON.parse(storedGiftCardDetails));
-        if (storedPaymentInfo) setPaymentInfo(JSON.parse(storedPaymentInfo));
+        if (storedUserInfo) setUserInfo(storedUserInfo);
+        if (storedGiftCardDetails) setGiftCardDetails(storedGiftCardDetails);
+        if (storedPaymentInfo) setPaymentInfo(storedPaymentInfo);
       } catch (error) {
         console.error('Error loading stored data:', error);
         setError('Ett fel uppstod vid laddning av orderinformation.');
@@ -111,11 +112,10 @@ const GiftCardConfirmation: React.FC<GiftCardConfirmationProps> = ({ flowData })
   }, [flowData]);
 
   const handleHome = () => {
-    // Clear flow data before going home
+    // Clear all flow data before going home
     cleanupCheckoutFlow();
-    sessionStorage.removeItem('giftCardAmount');
-    sessionStorage.removeItem('giftCardType');
     
+    // Navigate to home page
     router.push('/');
   };
 

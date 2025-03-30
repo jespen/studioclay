@@ -64,6 +64,12 @@ import {
   fetchCourseDetail, 
   getUserInfo 
 } from '@/utils/dataFetcher';
+import { 
+  getPaymentReference, 
+  setPaymentReference, 
+  getGiftCardDetails 
+} from '@/utils/flowStorage';
+import { getPreviousStepUrl, getNextStepUrl } from '@/utils/flowNavigation';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -237,12 +243,12 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const handleBack = () => {
     if (onBack) {
       onBack();
-    } else if (flowType === FlowType.GIFT_CARD) {
-      router.push('/gift-card-flow/personal-info');
-    } else if (flowType === FlowType.ART_PURCHASE) {
-      router.push(`/shop/${courseId}/personal-info`);
     } else {
-      router.push(`/book-course/${courseId}/personal-info`);
+      // Use flowNavigation to get the correct URL
+      const previousUrl = getPreviousStepUrl(GenericStep.PAYMENT, flowType, courseId);
+      if (previousUrl) {
+        router.push(previousUrl);
+      }
     }
   };
 
@@ -268,7 +274,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   useEffect(() => {
     return () => {
       // Clean up any stored payment references when navigating away
-      localStorage.removeItem('currentPaymentReference');
+      setPaymentReference('');
     };
   }, []);
 
@@ -280,13 +286,10 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     if (onNext) {
       onNext(paymentInfo);
     } else {
-      // Legacy navigation
-      if (flowType === FlowType.COURSE_BOOKING) {
-        router.push(`/book-course/${courseId}/confirmation`);
-      } else if (flowType === FlowType.GIFT_CARD) {
-        router.push('/gift-card-flow/confirmation');
-      } else if (flowType === FlowType.ART_PURCHASE) {
-        router.push(`/shop/${courseId}/confirmation`);
+      // Use flowNavigation to get the correct URL
+      const nextUrl = getNextStepUrl(GenericStep.PAYMENT, flowType, courseId);
+      if (nextUrl) {
+        router.push(nextUrl);
       }
     }
   };
@@ -294,17 +297,21 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   // Helper function to get gift card amount from localStorage
   const getGiftCardAmount = (): number => {
     try {
-      const giftCardDetails = localStorage.getItem('giftCardDetails');
-      if (giftCardDetails) {
-        const parsed = JSON.parse(giftCardDetails);
-        if (parsed && parsed.amount) {
-          return parsed.amount;
-        }
+      interface GiftCardDetails {
+        amount: number | string;
+      }
+      
+      const giftCardDetailsData = getGiftCardDetails<GiftCardDetails>();
+      if (giftCardDetailsData && giftCardDetailsData.amount) {
+        // Convert to number if it's a string
+        return typeof giftCardDetailsData.amount === 'string' 
+          ? parseInt(giftCardDetailsData.amount, 10) 
+          : giftCardDetailsData.amount;
       }
       // Fallback to courseDetail if it exists (it might be stored as a fake course)
       return courseDetail?.price || 0;
     } catch (e) {
-      console.error('Error parsing gift card amount from localStorage:', e);
+      console.error('Error getting gift card amount:', e);
       return courseDetail?.price || 0;
     }
   };

@@ -21,6 +21,7 @@ import StyledButton from '../common/StyledButton';
 import { FormTextField } from '../common/FormField';
 import { fetchCourseDetail, CourseDetail, saveUserInfo, getUserInfo } from '@/utils/dataFetcher';
 import { getFlowType } from '@/utils/flowStorage';
+import { getNextStepUrl, getPreviousStepUrl } from '@/utils/flowNavigation';
 
 interface UserInfoFormProps {
   courseId: string;
@@ -198,7 +199,11 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
       if (onNext) {
         onNext();
       } else {
-        router.push(`/book-course/${courseId}/payment`);
+        // Use flowNavigation to get the correct URL
+        const nextUrl = getNextStepUrl(GenericStep.USER_INFO, FlowType.COURSE_BOOKING, courseId);
+        if (nextUrl) {
+          router.push(nextUrl);
+        }
       }
     } catch (error) {
       setSubmitError('Det gick inte att skicka formuläret. Försök igen senare.');
@@ -211,7 +216,11 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
     if (onBack) {
       onBack();
     } else {
-      router.push(`/book-course/${courseId}`);
+      // Use flowNavigation to get the correct URL
+      const previousUrl = getPreviousStepUrl(GenericStep.USER_INFO, FlowType.COURSE_BOOKING, courseId);
+      if (previousUrl) {
+        router.push(previousUrl);
+      }
     }
   };
 

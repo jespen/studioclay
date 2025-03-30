@@ -18,6 +18,7 @@ import FlowStepWrapper from '../common/FlowStepWrapper';
 import { FlowType, GenericStep } from '../common/BookingStepper';
 import StyledButton from '../common/StyledButton';
 import { saveUserInfo } from '@/utils/dataFetcher';
+import { getNextStepUrl, getPreviousStepUrl } from '@/utils/flowNavigation';
 
 interface FormData {
   firstName: string;
@@ -149,7 +150,10 @@ const UserInfoWrapper: React.FC<UserInfoWrapperProps> = ({ onNext, onBack }) => 
       if (onNext) {
         onNext(formData);
       } else {
-        router.push('/gift-card-flow/payment');
+        const nextUrl = getNextStepUrl(GenericStep.USER_INFO, FlowType.GIFT_CARD);
+        if (nextUrl) {
+          router.push(nextUrl);
+        }
       }
     } catch (error) {
       console.error('Error submitting form:', error);
@@ -162,7 +166,10 @@ const UserInfoWrapper: React.FC<UserInfoWrapperProps> = ({ onNext, onBack }) => 
     if (onBack) {
       onBack();
     } else {
-      router.push('/gift-card-flow/selection');
+      const previousUrl = getPreviousStepUrl(GenericStep.USER_INFO, FlowType.GIFT_CARD);
+      if (previousUrl) {
+        router.push(previousUrl);
+      }
     }
   };
 

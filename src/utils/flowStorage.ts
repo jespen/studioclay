@@ -7,6 +7,9 @@ const STORAGE_KEYS = {
   ITEM_DETAILS: 'item_details',
   USER_INFO: 'user_info',
   PAYMENT_INFO: 'payment_info',
+  GIFT_CARD_DETAILS: 'gift_card_details',
+  PAYMENT_REFERENCE: 'payment_reference',
+  BOOKING_REFERENCE: 'booking_reference',
 };
 
 /**
@@ -105,6 +108,90 @@ export const getPaymentInfo = <T>(): T | null => {
 };
 
 /**
+ * Sets the gift card details for the flow
+ */
+export const setGiftCardDetails = <T>(details: T): void => {
+  localStorage.setItem(STORAGE_KEYS.GIFT_CARD_DETAILS, JSON.stringify(details));
+};
+
+/**
+ * Gets the gift card details for the flow
+ */
+export const getGiftCardDetails = <T>(): T | null => {
+  const detailsString = localStorage.getItem(STORAGE_KEYS.GIFT_CARD_DETAILS);
+  if (!detailsString) {
+    // Backwards compatibility: Check old key
+    const legacyDetails = localStorage.getItem('giftCardDetails');
+    if (legacyDetails) {
+      try {
+        const parsedDetails = JSON.parse(legacyDetails);
+        // Store in new format for future use
+        setGiftCardDetails(parsedDetails);
+        return parsedDetails as T;
+      } catch (error) {
+        console.error('Error parsing legacy gift card details:', error);
+      }
+    }
+    return null;
+  }
+  
+  try {
+    return JSON.parse(detailsString) as T;
+  } catch (error) {
+    console.error('Error parsing gift card details from localStorage:', error);
+    return null;
+  }
+};
+
+/**
+ * Sets the payment reference for the current payment
+ */
+export const setPaymentReference = (reference: string): void => {
+  localStorage.setItem(STORAGE_KEYS.PAYMENT_REFERENCE, reference);
+};
+
+/**
+ * Gets the payment reference for the current payment
+ */
+export const getPaymentReference = (): string | null => {
+  const reference = localStorage.getItem(STORAGE_KEYS.PAYMENT_REFERENCE);
+  if (!reference) {
+    // Backwards compatibility: Check old key
+    const legacyReference = localStorage.getItem('currentPaymentReference');
+    if (legacyReference) {
+      // Store in new format for future use
+      setPaymentReference(legacyReference);
+      return legacyReference;
+    }
+  }
+  return reference;
+};
+
+/**
+ * Sets the booking reference for the current booking
+ */
+export const setBookingReference = (reference: string): void => {
+  localStorage.setItem(STORAGE_KEYS.BOOKING_REFERENCE, reference);
+};
+
+/**
+ * Gets the booking reference for the current booking
+ */
+export const getBookingReference = (): string | null => {
+  const reference = localStorage.getItem(STORAGE_KEYS.BOOKING_REFERENCE);
+  if (!reference) {
+    // Backwards compatibility: Check old key
+    const legacyReference = localStorage.getItem('bookingReference');
+    if (legacyReference) {
+      // Store in new format for future use
+      setBookingReference(legacyReference);
+      return legacyReference;
+    }
+  }
+  return reference;
+};
+
+/**
  * Clears all flow-related data from localStorage
  */
 export const clearFlowData = (): void => {
@@ -113,6 +200,14 @@ export const clearFlowData = (): void => {
   localStorage.removeItem(STORAGE_KEYS.ITEM_DETAILS);
   localStorage.removeItem(STORAGE_KEYS.USER_INFO);
   localStorage.removeItem(STORAGE_KEYS.PAYMENT_INFO);
+  localStorage.removeItem(STORAGE_KEYS.GIFT_CARD_DETAILS);
+  localStorage.removeItem(STORAGE_KEYS.PAYMENT_REFERENCE);
+  localStorage.removeItem(STORAGE_KEYS.BOOKING_REFERENCE);
+  
+  // Clear legacy keys for backwards compatibility
+  localStorage.removeItem('giftCardDetails');
+  localStorage.removeItem('currentPaymentReference');
+  localStorage.removeItem('bookingReference');
 };
 
 /**
@@ -125,5 +220,8 @@ export const getAllFlowData = (): Record<string, any> => {
     itemDetails: getItemDetails(),
     userInfo: getUserInfo(),
     paymentInfo: getPaymentInfo(),
+    giftCardDetails: getGiftCardDetails(),
+    paymentReference: getPaymentReference(),
+    bookingReference: getBookingReference(),
   };
 }; 
