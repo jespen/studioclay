@@ -232,14 +232,15 @@ export async function POST(request: Request) {
         invoice_address: paymentDetails.invoiceDetails?.address || null,
         invoice_postal_code: paymentDetails.invoiceDetails?.postalCode || null,
         invoice_city: paymentDetails.invoiceDetails?.city || null,
+        invoice_reference: paymentDetails.invoiceDetails?.reference || null,
         payment_reference: invoiceNumber,
         payment_status: 'CREATED',
         status: 'active',
         remaining_balance: Number(amount) || Number(itemDetails.amount) || 0,
         is_emailed: false,
         is_printed: false,
-        is_paid: false, // Changed from true to false since invoice isn't paid yet
-        expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(), // 1 year from now
+        is_paid: false,
+        expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
         payment_method: 'invoice',
         invoice_number: invoiceNumber
       };
@@ -250,6 +251,7 @@ export async function POST(request: Request) {
         recipient_email: giftCardData.recipient_email,
         message: giftCardData.message,
         payment_reference: giftCardData.payment_reference,
+        invoice_reference: giftCardData.invoice_reference
       });
       
       // Insert gift card into database

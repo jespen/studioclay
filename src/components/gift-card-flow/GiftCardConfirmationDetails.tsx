@@ -63,6 +63,14 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
     ? giftCardDetails.amount
     : Number(giftCardDetails?.amount) || 0;
 
+  console.log('GiftCardConfirmationDetails rendering with:', {
+    giftCardNumber,
+    amount,
+    originalAmount: giftCardDetails?.amount,
+    recipient_name: giftCardDetails?.recipient_name || giftCardDetails?.recipientName,
+    recipient_email: giftCardDetails?.recipient_email || giftCardDetails?.recipientEmail
+  });
+
   return (
     <>
       {/* Gift Card Details */}

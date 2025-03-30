@@ -332,11 +332,13 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
               </Box>
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" color="text.secondary">Status:</Typography>
+                <Typography variant="body2" color="text.secondary">Betalstatus:</Typography>
                 <Typography variant="body2">
                   {data.paymentInfo?.status === 'PAID' || data.paymentInfo?.status === 'completed' 
                     ? 'Genomförd' 
-                    : 'Väntar på verifiering'}
+                    : data.paymentInfo?.status === 'CREATED'
+                      ? 'Ej betald'
+                      : 'Väntar på verifiering'}
                 </Typography>
               </Box>
               
@@ -347,7 +349,11 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2" color="text.secondary">Summa:</Typography>
-                <Typography variant="body2" fontWeight="bold">{data.paymentInfo?.amount || data.itemDetails?.price || 0} kr</Typography>
+                <Typography variant="body2" fontWeight="bold">
+                  {flowType === FlowType.GIFT_CARD && data.itemDetails?.amount 
+                    ? data.itemDetails.amount 
+                    : data.paymentInfo?.amount || data.itemDetails?.price || 0} kr
+                </Typography>
               </Box>
             </Paper>
           </Grid>
