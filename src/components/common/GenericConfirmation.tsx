@@ -347,12 +347,23 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
                 <Typography variant="body2" color="text.secondary">Betalstatus:</Typography>
                 <Typography variant="body2">
                   {(() => {
-                    // Get the payment status and handle null/undefined
-                    const status = (data.paymentInfo?.status || '').toString().toUpperCase();
+                    // Extra logging to debug the status
+                    const rawStatus = data.paymentInfo?.status;
+                    console.log('RAW PAYMENT STATUS:', JSON.stringify(rawStatus));
                     
-                    if (status === 'PAID' || status === 'COMPLETED') {
+                    // Get the payment status and handle null/undefined
+                    const status = String(rawStatus || '').trim().toUpperCase();
+                    console.log('NORMALIZED STATUS:', JSON.stringify(status));
+                    console.log('STATUS CHECKS:', {
+                      isPaid: status.includes('PAID'),
+                      isCompleted: status.includes('COMPLETE'),
+                      isCreated: status.includes('CREAT'),
+                    });
+                    
+                    // Use less strict matching for more flexibility
+                    if (status.includes('PAID') || status.includes('COMPLETE')) {
                       return 'Genomförd';
-                    } else if (status === 'CREATED') {
+                    } else if (status.includes('CREAT')) {
                       return 'Ej betald';
                     } else if (status === '') {
                       return 'Status saknas';
