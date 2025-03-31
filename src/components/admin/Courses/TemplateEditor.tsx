@@ -158,6 +158,12 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template, onSave, onCan
         category_id: categoryId
       };
 
+      console.log('Sending template data to API:', {
+        ...templateData,
+        id_type: template?.id ? typeof template.id : 'undefined',
+        id_valid: template?.id ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(template.id) : 'N/A'
+      });
+
       await onSave(templateData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save template');

@@ -8,6 +8,16 @@ export async function GET(
   try {
     const { id } = params;
     
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      console.error('Invalid UUID format:', id);
+      return NextResponse.json(
+        { error: 'Invalid ID format' },
+        { status: 400 }
+      );
+    }
+    
     const { data, error } = await supabaseAdmin
       .from('course_templates')
       .select(`
@@ -50,7 +60,19 @@ export async function PATCH(
 ) {
   try {
     const { id } = params;
+    
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      console.error('Invalid UUID format:', id);
+      return NextResponse.json(
+        { error: 'Invalid ID format' },
+        { status: 400 }
+      );
+    }
+    
     const body = await request.json();
+    console.log('PATCH request for template:', id, 'with body:', body);
     
     // Check if template exists
     const { data: existingTemplate, error: checkError } = await supabaseAdmin
@@ -121,6 +143,16 @@ export async function DELETE(
 ) {
   try {
     const { id } = params;
+    
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      console.error('Invalid UUID format:', id);
+      return NextResponse.json(
+        { error: 'Invalid ID format' },
+        { status: 400 }
+      );
+    }
     
     // First check if there are any instances using this template
     const { data: instances, error: checkError } = await supabaseAdmin

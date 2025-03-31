@@ -16,7 +16,7 @@ export default function TemplatesPage() {
     try {
       const isNewTemplate = !template.id;
       const url = isNewTemplate ? '/api/templates' : `/api/templates/${template.id}`;
-      const method = isNewTemplate ? 'POST' : 'PUT';
+      const method = isNewTemplate ? 'POST' : 'PATCH';
 
       const response = await fetch(url, {
         method,
