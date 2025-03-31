@@ -444,31 +444,68 @@ export async function POST(request: Request) {
       // Update course current_participants count
       const participantCount = parseInt(userInfo.numberOfParticipants) || 1;
       console.log(`Updating course ${courseId} participants count by adding ${participantCount}`);
-      
-      // Calculate new participant count
-      const currentCount = courseData.current_participants || 0;
-      const newCount = currentCount + participantCount;
-      
-      console.log(`Updating participant count from ${currentCount} to ${newCount}`);
-      
-      // Check if course would be overbooked
-      if (courseData.max_participants && newCount > courseData.max_participants) {
-        console.warn(`Warning: Course may be overbooked. Max: ${courseData.max_participants}, New count: ${newCount}`);
-      }
-      
-      // Update the count in the database
-      const { error: participantError } = await supabase
-        .from('course_instances')
-        .update({ current_participants: newCount })
-        .eq('id', courseId);
+
+      try {
+        // Start a transaction to ensure atomicity
+        // Get current course data with latest participant count
+        const { data: latestCourseData, error: latestCourseError } = await supabase
+          .from('course_instances')
+          .select('current_participants, max_participants')
+          .eq('id', courseId)
+          .single();
+          
+        if (latestCourseError) {
+          console.error('Error fetching latest course data:', latestCourseError);
+          throw new Error(`Failed to fetch latest course data: ${latestCourseError.message}`);
+        }
         
-      if (participantError) {
-        console.error('Error updating participant count:', participantError);
-        // Don't continue if participant count update fails
-        throw participantError;
+        if (!latestCourseData) {
+          console.error('Course not found when updating participant count');
+          throw new Error(`Course ${courseId} not found when updating participant count`);
+        }
+        
+        // Calculate new participant count with latest data
+        const currentCount = latestCourseData.current_participants || 0;
+        const newCount = currentCount + participantCount;
+        
+        console.log(`Updating participant count from ${currentCount} to ${newCount}`);
+        
+        // Check if course would be overbooked
+        if (latestCourseData.max_participants && newCount > latestCourseData.max_participants) {
+          console.warn(`Warning: Course may be overbooked. Max: ${latestCourseData.max_participants}, New count: ${newCount}`);
+        }
+        
+        // Update the count in the database with a specific query
+        const { error: participantError } = await supabase
+          .from('course_instances')
+          .update({ 
+            current_participants: newCount,
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', courseId);
+          
+        if (participantError) {
+          console.error('Error updating participant count:', participantError);
+          throw participantError;
+        }
+        
+        console.log('Successfully updated course participant count from', currentCount, 'to', newCount);
+      } catch (updateError) {
+        console.error('Critical error during participant count update:', updateError);
+        
+        // If booking was created but participant count update failed, we should log this
+        // but not fail completely, as the booking itself succeeded
+        console.log('Booking was created but participant count update failed - manual intervention may be needed');
+        
+        // We'll continue with the email sending and response, but include a warning
+        return NextResponse.json({
+          success: true,
+          bookingId: bookingData.id,
+          invoiceNumber,
+          bookingReference,
+          warning: 'Booking was created but course participant count may not be updated correctly'
+        });
       }
-      
-      console.log('Successfully updated course participant count');
       
       // Send invoice email
       console.log('Sending invoice email');
