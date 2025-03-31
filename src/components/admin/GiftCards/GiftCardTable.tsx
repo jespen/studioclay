@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Box } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import StandardTable from '../common/StandardTable';
@@ -33,7 +33,7 @@ interface GiftCardTableProps {
   onGeneratePDF: (card: GiftCard) => void;
   onSendEmail: (card: GiftCard) => void;
   onMarkAsEmailed: (id: string) => void;
-  onMarkAsPrinted: (id: string) => void;
+  onUpdateBalance: (id: string, newBalance: number) => void;
 }
 
 export const GiftCardTable: React.FC<GiftCardTableProps> = ({
@@ -44,16 +44,80 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
   onGeneratePDF,
   onSendEmail,
   onMarkAsEmailed,
-  onMarkAsPrinted
+  onUpdateBalance
 }) => {
+  const [editingBalance, setEditingBalance] = useState<{[key: string]: string | undefined}>({});
+  const [balanceErrors, setBalanceErrors] = useState<{[key: string]: string | undefined}>({});
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('sv-SE');
   };
 
+  const handleBalanceChange = (id: string, value: string) => {
+    setEditingBalance({...editingBalance, [id]: value});
+    
+    // Clear any previous error
+    if (balanceErrors[id]) {
+      setBalanceErrors({...balanceErrors, [id]: undefined});
+    }
+    
+    // Validate input
+    const card = giftCards.find(card => card.id === id);
+    if (!card) return;
+    
+    const numValue = Number(value);
+    if (isNaN(numValue)) {
+      setBalanceErrors({...balanceErrors, [id]: "Måste vara ett giltigt nummer"});
+    } else if (numValue < 0) {
+      setBalanceErrors({...balanceErrors, [id]: "Kan inte vara negativt"});
+    } else if (numValue > card.amount) {
+      setBalanceErrors({...balanceErrors, [id]: `Kan inte överstiga ${card.amount} kr`});
+    }
+  };
+
+  const handleBalanceSubmit = (id: string) => {
+    // Ensure there's a valid number
+    const numBalance = Number(editingBalance[id]);
+    if (isNaN(numBalance)) {
+      setBalanceErrors({...balanceErrors, [id]: "Måste vara ett giltigt nummer"});
+      return;
+    }
+    
+    // Validate range
+    const card = giftCards.find(card => card.id === id);
+    if (!card) return;
+    
+    if (numBalance < 0) {
+      setBalanceErrors({...balanceErrors, [id]: "Kan inte vara negativt"});
+      return;
+    }
+    
+    if (numBalance > card.amount) {
+      setBalanceErrors({...balanceErrors, [id]: `Kan inte överstiga ${card.amount} kr`});
+      return;
+    }
+    
+    // No errors, update the balance
+    onUpdateBalance(id, numBalance);
+    setEditingBalance({...editingBalance, [id]: undefined});
+    setBalanceErrors({...balanceErrors, [id]: undefined});
+  };
+
+  const startEditing = (id: string, currentBalance: number) => {
+    setEditingBalance({...editingBalance, [id]: currentBalance.toString()});
+    // Clear any previous errors
+    setBalanceErrors({...balanceErrors, [id]: undefined});
+  };
+
+  const cancelEditing = (id: string) => {
+    setEditingBalance({...editingBalance, [id]: undefined});
+    setBalanceErrors({...balanceErrors, [id]: undefined});
+  };
+
   return (
     <StandardTable 
-      headers={['Kod', 'Belopp', 'Typ', 'Status', 'Betald', 'Mottagare', 'Skapat', 'Utgår', 'Åtgärder']}
+      headers={['Kod', 'Belopp', 'Saldo', 'Typ', 'Status', 'Betald', 'Mottagare', 'Skapat', 'Utgår', 'Åtgärder']}
       emptyMessage="Inga presentkort att visa"
     >
       {giftCards.map((card) => (
@@ -61,12 +125,52 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
           <td className={`${styles.tableCell} ${styles.codeCell}`}>
             <div>
               <h3 className={styles.courseTitle}>{card.code}</h3>
-              <p className={styles.courseDescription}>
-                Saldo: {card.remaining_balance}/{card.amount} kr
-              </p>
             </div>
           </td>
           <td className={styles.tableCell}>{card.amount} kr</td>
+          <td className={styles.tableCell}>
+            {editingBalance[card.id] !== undefined ? (
+              <div className={styles.balanceEditContainer}>
+                <input 
+                  type="number"
+                  min="0"
+                  max={card.amount}
+                  value={editingBalance[card.id]}
+                  onChange={(e) => handleBalanceChange(card.id, e.target.value)}
+                  className={`${styles.balanceInput} ${balanceErrors[card.id] ? styles.inputError : ''}`}
+                  disabled={updatingCards[card.id]}
+                />
+                {balanceErrors[card.id] && (
+                  <div className={styles.errorMessage}>{balanceErrors[card.id]}</div>
+                )}
+                <div className={styles.balanceEditActions}>
+                  <button 
+                    onClick={() => handleBalanceSubmit(card.id)}
+                    disabled={updatingCards[card.id] || !!balanceErrors[card.id]}
+                    className={styles.saveButton}
+                  >
+                    Spara
+                  </button>
+                  <button 
+                    onClick={() => cancelEditing(card.id)}
+                    disabled={updatingCards[card.id]}
+                    className={styles.cancelButton}
+                  >
+                    Avbryt
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div 
+                className={styles.balanceDisplay} 
+                onClick={() => startEditing(card.id, card.remaining_balance)}
+                title="Klicka för att redigera saldo"
+              >
+                {card.remaining_balance} kr
+                <span className={styles.editIcon}>✎</span>
+              </div>
+            )}
+          </td>
           <td className={styles.tableCell}>
             <span className={`${styles.statusBadge} ${card.type === 'digital' ? styles.publishedBadge : styles.draftBadge}`}>
               {card.type === 'digital' ? 'Digitalt' : 'Fysiskt'}
@@ -132,15 +236,6 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
                   onClick={() => onMarkAsEmailed(card.id)}
                   disabled={updatingCards[card.id]}
                   label="Markera skickat"
-                />
-              )}
-              
-              {!card.is_printed && card.type === 'physical' && (
-                <ActionButton
-                  variant="confirm"
-                  onClick={() => onMarkAsPrinted(card.id)}
-                  disabled={updatingCards[card.id]}
-                  label="Markera utskrivet"
                 />
               )}
             </div>

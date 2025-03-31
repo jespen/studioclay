@@ -106,32 +106,6 @@ const GiftCardManager: React.FC = () => {
     }
   }
 
-  async function handleMarkAsPrinted(id: string) {
-    try {
-      const response = await fetch(`/api/gift-cards/${id}/print-status`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ is_printed: true }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update print status');
-      }
-      
-      // Update the local state
-      setGiftCards(giftCards.map(card =>
-        card.id === id ? { ...card, is_printed: true } : card
-      ));
-    } catch (error) {
-      console.error('Error updating print status:', error);
-      alert('Det gick inte att uppdatera presentkortet: ' + 
-        (error instanceof Error ? error.message : 'Ett oväntat fel inträffade'));
-    }
-  }
-
   async function handleChangeStatus(id: string, status: GiftCard['status']) {
     try {
       console.log(`Attempting to update gift card ${id} status to ${status}`);
@@ -297,6 +271,77 @@ const GiftCardManager: React.FC = () => {
     }
   }
 
+  async function handleUpdateRemainingBalance(id: string, newBalance: number) {
+    setUpdatingCards(prev => ({ ...prev, [id]: true }));
+    
+    try {
+      const card = giftCards.find(card => card.id === id);
+      if (!card) {
+        throw new Error('Presentkortet kunde inte hittas');
+      }
+      
+      // Validate input
+      if (isNaN(newBalance)) {
+        throw new Error('Ogiltigt belopp. Vänligen ange ett nummer.');
+      }
+      
+      if (newBalance < 0) {
+        throw new Error('Saldot kan inte vara negativt');
+      }
+      
+      if (newBalance > card.amount) {
+        throw new Error(`Saldot kan inte överstiga ursprungsbeloppet på ${card.amount} kr`);
+      }
+      
+      console.log(`Updating gift card ${id} remaining balance to ${newBalance}`);
+      
+      const response = await fetch(`/api/gift-cards/update-balance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id, remaining_balance: newBalance }),
+      });
+      
+      // Handle non-OK responses
+      if (!response.ok) {
+        // Try to get a detailed error message from the response
+        try {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Serverfel: ${response.status}`);
+        } catch (jsonError) {
+          // If we can't parse the JSON, use a generic message
+          throw new Error(`Kunde inte uppdatera saldo. Serverfel: ${response.status}`);
+        }
+      }
+      
+      // Get the response data
+      const data = await response.json();
+      
+      // Update locally with the new balance
+      setGiftCards(giftCards.map(card => 
+        card.id === id ? { ...card, remaining_balance: newBalance } : card
+      ));
+      
+      console.log(`Successfully updated gift card ${id} remaining balance to ${newBalance}`);
+      
+      // If the remaining balance is 0, also update the card status locally
+      if (newBalance === 0) {
+        setGiftCards(prevCards =>
+          prevCards.map(card => 
+            card.id === id ? { ...card, status: 'redeemed' as const } : card
+          )
+        );
+      }
+      
+    } catch (err) {
+      console.error('Error updating remaining balance:', err);
+      alert('Ett fel inträffade: ' + (err instanceof Error ? err.message : 'Okänt fel'));
+    } finally {
+      setUpdatingCards(prev => ({ ...prev, [id]: false }));
+    }
+  }
+
   const handleCreateCard = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -435,7 +480,7 @@ const GiftCardManager: React.FC = () => {
                 onGeneratePDF={generateGiftCardPDF}
                 onSendEmail={sendGiftCardEmail}
                 onMarkAsEmailed={handleMarkAsEmailed}
-                onMarkAsPrinted={handleMarkAsPrinted}
+                onUpdateBalance={handleUpdateRemainingBalance}
               />
             )}
           </SectionContainer>
