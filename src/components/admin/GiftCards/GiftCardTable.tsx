@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { Box } from '@mui/material';
-import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import ReceiptIcon from '@mui/icons-material/Receipt';
+import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
+import EditIcon from '@mui/icons-material/Edit';
 import StandardTable from '../common/StandardTable';
 import ActionButton from '../common/ActionButton';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
+import { EditAttributesOutlined } from '@mui/icons-material';
 
 interface GiftCard {
   id: string;
@@ -218,26 +221,27 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
                 variant="pdf"
                 onClick={() => onGeneratePDF(card)}
                 disabled={updatingCards[card.id]}
-                icon={<PictureAsPdfIcon />}
+                icon={<CardGiftcardIcon />}
+                label="Visa presentkort"
               />
               
-              {card.type === 'digital' && !card.is_emailed && (
+              {card.invoice_number && (
                 <ActionButton
-                  variant="publish"
-                  onClick={() => onSendEmail(card)}
-                  disabled={updatingCards[card.id] || !card.is_paid}
-                  label="Skicka"
+                  variant="pdf"
+                  onClick={() => onGeneratePDF(card)}
+                  disabled={updatingCards[card.id]}
+                  icon={<ReceiptIcon />}
+                  label="Visa faktura"
                 />
               )}
               
-              {!card.is_emailed && card.type === 'digital' && (
-                <ActionButton
-                  variant="confirm"
-                  onClick={() => onMarkAsEmailed(card.id)}
-                  disabled={updatingCards[card.id]}
-                  label="Markera skickat"
-                />
-              )}
+              <ActionButton
+                variant="edit"
+                onClick={() => startEditing(card.id, card.remaining_balance)}
+                disabled={updatingCards[card.id]}
+                icon={<EditIcon />}
+                label="Redigera saldo"
+              />
             </div>
           </td>
         </tr>
