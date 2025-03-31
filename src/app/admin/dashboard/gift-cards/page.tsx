@@ -32,10 +32,11 @@ export default function GiftCardsPage() {
 
   return (
     <div className={styles.pageContainer}>
+      
       <AdminHeader 
         title="Presentkort" 
-        subtitle="Hantera presentkort för Studio Clay" 
-        userEmail={userEmail}
+        subtitle={userEmail ? `Välkommen ${userEmail}` : 'Välkommen'} 
+        // userEmail={userEmail}
       />
       
       <main className={styles.mainContent}>

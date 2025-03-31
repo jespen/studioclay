@@ -231,7 +231,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
   return (
     <div className={styles.pageContainer}>
       {showHeader && (
-        <AdminHeader title="Produkthantering" subtitle="Hantera produkter i webshopen" />
+        <AdminHeader title="Produkthantering" subtitle="Hantera produkter i webshopen"  />
       )}
       
       <main className={styles.dashboardMainContent}>
