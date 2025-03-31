@@ -25,7 +25,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
     isNew: false,
     description: '',
     discount: null,
-    published: true
+    published: true,
+    inStock: true,
+    stockQuantity: 1
   });
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -33,33 +35,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const [uploading, setUploading] = useState(false);
   const [showGalleryDropdown, setShowGalleryDropdown] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Memoize the fetchCategories function to prevent unnecessary rerenders
-  const fetchCategories = useCallback(async () => {
-    setUploading(true);
-    try {
-      const response = await fetch('/api/shop/categories');
-      if (!response.ok) {
-        throw new Error('Failed to fetch categories');
-      }
-      const data = await response.json();
-      
-      if (data && Array.isArray(data.categories) && data.categories.length > 0) {
-        // Only update if we don't already have a category set
-        if (!currentProduct.category) {
-          setCurrentProduct(prev => ({
-            ...prev,
-            category: data.categories[0]?.name || ''
-          }));
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      setError('Failed to load categories');
-    } finally {
-      setUploading(false);
-    }
-  }, []);  // Remove currentProduct from dependencies to avoid infinite loop
 
   // Use the useCallback hook for the submit handler to prevent recreating on every render
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -101,11 +76,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
       setUploading(false);
     }
   }, [currentProduct, selectedImage, selectedGalleryImage, onSave]);
-
-  // Add proper dependency array to load initial data only when needed
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
 
   // Add proper dependency array for loading product data
   useEffect(() => {
@@ -312,6 +282,34 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   />
                   <span className="text-sm font-medium text-gray-700">Publicerad (synlig på sidan)</span>
                 </label>
+              </div>
+
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={currentProduct.inStock !== false}
+                    onChange={(e) => setCurrentProduct({ ...currentProduct, inStock: e.target.checked })}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Till Salu (finns i lager)</span>
+                </label>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Lagersaldo
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={currentProduct.stockQuantity || 0}
+                  onChange={(e) => setCurrentProduct({ 
+                    ...currentProduct, 
+                    stockQuantity: e.target.value ? Number(e.target.value) : 0 
+                  })}
+                  className="w-full p-2 border border-gray-300 rounded"
+                />
               </div>
             </div>
             

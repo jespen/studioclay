@@ -469,7 +469,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
           
           {/* Gallery Image Selection */}
           <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel id="gallery-image-label">Välj bild från galleri</InputLabel>
+            {/* <InputLabel id="gallery-image-label">Välj bild från galleri</InputLabel> */}
             <Select
               labelId="gallery-image-label"
               id="gallery-image"

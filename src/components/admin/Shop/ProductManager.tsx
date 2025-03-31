@@ -86,6 +86,9 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
       isNew: false,
       description: '',
       discount: null,
+      inStock: true,
+      stockQuantity: 1,
+      published: true
     };
     
     setSelectedProduct(newProduct);
@@ -123,7 +126,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
   const handleSaveProduct = async (product: Product) => {
     try {
       const isNew = !product.id;
-      const url = isNew ? '/api/shop/products' : `/api/shop/products/${product.id}`;
+      const url = isNew ? '/api/products' : `/api/products/${product.id}`;
       const method = isNew ? 'POST' : 'PUT';
       
       const response = await fetch(url, {
@@ -256,6 +259,8 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pris</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rabatt</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ny</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lagerstatus</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lagersaldo</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Publicerad</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Åtgärder</th>
                   </tr>
@@ -281,6 +286,14 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {product.isNew ? 'Ja' : 'Nej'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={product.inStock === false ? 'text-red-500' : 'text-green-600'}>
+                          {product.inStock === false ? 'Såld' : 'Till Salu'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {product.stockQuantity !== undefined ? product.stockQuantity : '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <label className="inline-flex items-center cursor-pointer">

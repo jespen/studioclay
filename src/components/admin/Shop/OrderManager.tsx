@@ -30,7 +30,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
       });
       
       if (data && Array.isArray(data.orders)) {
-        setOrders(data.orders);
+        console.log('Orders from API:', JSON.stringify(data.orders, null, 2));
+        
+        // Process the orders to transform payment status display
+        const processedOrders = data.orders.map((order: ShopOrder) => {
+          console.log('Processing order payment status:', order.id, order.payment_status);
+          return order;
+        });
+        
+        setOrders(processedOrders);
       } else {
         alert('Unexpected data format received from server');
       }
@@ -186,18 +194,29 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                           order.status === 'completed' ? 'bg-green-100 text-green-800' : 
                           order.status === 'processing' ? 'bg-yellow-100 text-yellow-800' : 
+                          order.status === 'confirmed' ? 'bg-green-100 text-green-800' :
                           'bg-red-100 text-red-800'
                         }`}>
-                          {order.status}
+                          {order.status === 'confirmed' ? 'Bekräftad' : order.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          order.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 
-                          order.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                          order.payment_status.toUpperCase() === 'PAID' ? 'bg-green-100 text-green-800' : 
                           'bg-red-100 text-red-800'
                         }`}>
-                          {order.payment_status}
+                          {(() => {
+                            // Use the same approach as in GenericConfirmation.tsx
+                            const status = String(order.payment_status || '').toUpperCase();
+                            
+                            if (status === 'PAID') {
+                              return 'Betald';
+                            } else if (status === 'CREATED' || status === 'PENDING') {
+                              return 'Ej betald';
+                            } else {
+                              return status;
+                            }
+                          })()}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
