@@ -35,7 +35,8 @@ export default function CourseManagementPage({
     city: '',
     email: '',
     phone: '',
-    numberOfParticipants: '1'
+    numberOfParticipants: '1',
+    paymentMethod: 'invoice' // Default to invoice
   });
   const [addUserLoading, setAddUserLoading] = useState(false);
   
@@ -151,7 +152,8 @@ export default function CourseManagementPage({
       city: '',
       email: '',
       phone: '',
-      numberOfParticipants: '1'
+      numberOfParticipants: '1',
+      paymentMethod: 'invoice'
     });
   };
 
@@ -190,7 +192,7 @@ export default function CourseManagementPage({
           specialRequirements: '' // Optional field
         },
         paymentDetails: {
-          method: 'invoice',
+          method: addUserFormData.paymentMethod,
           invoiceDetails: {
             address: addUserFormData.address,
             postalCode: addUserFormData.postalCode,
@@ -411,6 +413,22 @@ export default function CourseManagementPage({
                       onChange={handleAddUserFormChange}
                       required
                     />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <FormControl fullWidth required>
+                      <InputLabel id="payment-method-label">Betalningsmetod</InputLabel>
+                      <Select
+                        labelId="payment-method-label"
+                        name="paymentMethod"
+                        value={addUserFormData.paymentMethod}
+                        label="Betalningsmetod"
+                        onChange={handleSelectChange}
+                      >
+                        <MenuItem value="invoice">Faktura</MenuItem>
+                        <MenuItem value="swish">Swish</MenuItem>
+                        <MenuItem value="giftCard">Presentkort</MenuItem>
+                      </Select>
+                    </FormControl>
                   </Grid>
                   <Grid item xs={12}>
                     <FormControl fullWidth required>

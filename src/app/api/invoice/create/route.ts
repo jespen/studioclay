@@ -30,8 +30,8 @@ export async function POST(request: Request) {
     }
     
     // Validate payment method
-    if (paymentDetails.method !== 'invoice') {
-      console.error('Invalid payment method for invoice:', paymentDetails.method);
+    if (!['invoice', 'swish', 'giftCard'].includes(paymentDetails.method)) {
+      console.error('Invalid payment method:', paymentDetails.method);
       return NextResponse.json(
         { success: false, error: 'Invalid payment method' },
         { status: 400 }
@@ -413,18 +413,16 @@ export async function POST(request: Request) {
           customer_phone: userInfo.phone,
           number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
           message: userInfo.specialRequirements || null,
-          payment_method: 'invoice',
+          payment_method: paymentDetails.method,
           booking_date: new Date().toISOString(),
-          status: 'confirmed', // Invoice bookings are confirmed immediately
-          payment_status: 'CREATED', // Initial payment status for invoices
+          status: 'confirmed',
+          payment_status: paymentDetails.method === 'giftCard' ? 'PAID' : 'CREATED',
           booking_reference: bookingReference,
-          // Add invoice details to the booking record
           invoice_number: invoiceNumber,
           invoice_address: paymentDetails.invoiceDetails?.address,
           invoice_postal_code: paymentDetails.invoiceDetails?.postalCode,
           invoice_city: paymentDetails.invoiceDetails?.city,
           invoice_reference: paymentDetails.invoiceDetails?.reference || null,
-          // Add price information
           unit_price: courseData.price,
           total_price: courseData.price * (parseInt(userInfo.numberOfParticipants) || 1)
         })
@@ -521,7 +519,7 @@ export async function POST(request: Request) {
           price: courseData.price
         },
         invoiceNumber,
-        pdfBuffer // Pass the PDF buffer to the email function
+        pdfBuffer
       });
       
       console.log('Invoice email sending result:', emailResult);
