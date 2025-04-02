@@ -418,8 +418,7 @@ export async function getBookings() {
         *,
         template:course_templates(
           *,
-          category:categories(*),
-          instructor:instructors(*)
+          category:categories(*)
         )
       )
     `)
