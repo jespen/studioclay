@@ -11,6 +11,13 @@ En modern webbplats för Studio Clay, en kreativ designstudio som specialiserar 
 - Contact form with validation
 - SEO optimized
 
+## Dokumentation
+
+- [README-CHECKOUT-FLOW.md](./README-CHECKOUT-FLOW.md) - Detaljerad dokumentation om checkout-flödet
+- [README-PAYMENT-FLOW.md](./README-PAYMENT-FLOW.md) - Dokumentation om betalningssystemet
+- [src/docs/GIFT-CARD-SYSTEM.md](./src/docs/GIFT-CARD-SYSTEM.md) - Dokumentation om presentkortssystemet
+- [BOOKING-SYSTEM.md](./BOOKING-SYSTEM.md) - Dokumentation om bokningssystemet
+
 ## Tech Stack
 
 - [Next.js](https://nextjs.org/) - React framework
