@@ -3,6 +3,7 @@ import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 import GiftCardTable from './GiftCardTable';
 import { Box, Paper, Typography, Button, CircularProgress } from '@mui/material';
 import SectionContainer from '../Dashboard/SectionContainer';
+import { jsPDF } from 'jspdf';
 
 interface GiftCard {
   id: string;
@@ -243,10 +244,77 @@ const GiftCardManager: React.FC = () => {
     }
   }
 
-  function sendGiftCardEmail(card: GiftCard) {
-    // In a real implementation, this would send an email
-    // For now, we'll just alert that this feature is coming soon
-    alert(`E-postutskick för presentkort ${card.code} kommer snart!`);
+  async function sendGiftCardEmail(card: GiftCard) {
+    try {
+      setUpdatingCards(prev => ({ ...prev, [card.id]: true }));
+      
+      // Validate recipient email
+      if (!card.recipient_email) {
+        throw new Error('Mottagarens e-postadress saknas');
+      }
+      
+      // Generate PDF if not already generated
+      const pdfBlob = await generateGiftCardPDFFromGiftCard(card);
+      if (!pdfBlob) {
+        throw new Error('Failed to generate gift card PDF');
+      }
+      
+      // Convert blob to buffer
+      const arrayBuffer = await pdfBlob.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      
+      // Prepare gift card data
+      const requestData = {
+        giftCardData: {
+          id: card.id,
+          code: card.code,
+          amount: card.amount,
+          type: card.type,
+          recipient_name: card.recipient_name,
+          recipient_email: card.recipient_email || '',
+          message: card.message,
+          expires_at: card.expires_at
+        },
+        senderInfo: {
+          name: card.sender_name,
+          email: card.sender_email
+        },
+        pdfBuffer: Array.from(new Uint8Array(buffer))
+      };
+      
+      console.log('Sending gift card email with data:', {
+        code: requestData.giftCardData.code,
+        recipient: requestData.giftCardData.recipient_email,
+        amount: requestData.giftCardData.amount
+      });
+      
+      // Send email via API
+      const response = await fetch('/api/gift-cards/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send gift card email');
+      }
+      
+      // Gift card should be automatically marked as emailed by the API
+      
+      // Update UI with an alert
+      alert(`Presentkort ${card.code} har skickats via e-post till ${card.recipient_email}`);
+      
+      // Refresh gift cards
+      fetchGiftCards();
+    } catch (error) {
+      console.error('Error sending gift card email:', error);
+      alert(`Kunde inte skicka presentkort: ${error instanceof Error ? error.message : 'Okänt fel'}`);
+    } finally {
+      setUpdatingCards(prev => ({ ...prev, [card.id]: false }));
+    }
   }
 
   // Format date helper function
@@ -430,6 +498,7 @@ const GiftCardManager: React.FC = () => {
 
   // Get filter description for UI feedback
   const getFilterDescription = () => {
+    // Return filter description based on selected filters
     switch(filter) {
       case 'all': return 'Visar alla presentkort';
       case 'active': return 'Visar aktiva presentkort';
@@ -440,9 +509,122 @@ const GiftCardManager: React.FC = () => {
       case 'physical': return 'Visar fysiska presentkort';
       case 'PAID': return 'Visar betalda presentkort';
       case 'CREATED': return 'Visar ej betalda presentkort';
-      default: return '';
+      default: return 'Alla presentkort';
     }
   };
+
+  // Helper function to generate PDF from gift card data
+  async function generateGiftCardPDFFromGiftCard(card: GiftCard): Promise<Blob | null> {
+    try {
+      // Create a new PDF document
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 20;
+      const contentWidth = pageWidth - (margin * 2);
+      
+      // Add Studio Clay logo/header
+      doc.setFillColor(84, 114, 100); // Studio Clay green
+      doc.rect(0, 0, pageWidth, 30, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Studio Clay', pageWidth / 2, 17, { align: 'center' });
+      
+      // Add gift card title
+      doc.setFontSize(24);
+      doc.setTextColor(84, 114, 100);
+      doc.text('PRESENTKORT', pageWidth / 2, 50, { align: 'center' });
+      
+      // Add amount
+      doc.setFontSize(36);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${card.amount} kr`, pageWidth / 2, 70, { align: 'center' });
+      
+      // Add gift card code
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(margin, 85, contentWidth, 25, 3, 3, 'F');
+      
+      doc.setTextColor(50, 50, 50);
+      doc.setFontSize(14);
+      doc.text('Presentkortskod:', margin + 10, 97);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text(card.code, margin + 70, 97);
+      
+      // Add validity info
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Giltigt till: ${new Date(card.expires_at).toLocaleDateString('sv-SE')}`, pageWidth / 2, 120, { align: 'center' });
+      
+      // Add recipient information
+      if (card.recipient_name) {
+        doc.setFontSize(14);
+        doc.setTextColor(50, 50, 50);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Till: ${card.recipient_name}`, margin, pageHeight / 2 + 35);
+        
+        if (card.recipient_email) {
+          doc.setFontSize(12);
+          doc.setFont('helvetica', 'normal');
+          doc.text(`E-post: ${card.recipient_email}`, margin, pageHeight / 2 + 45);
+        }
+      }
+      
+      // Add sender information
+      doc.setFontSize(12);
+      doc.setTextColor(80, 80, 80);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Från: ${card.sender_name}`, margin, pageHeight / 2 + 60);
+      
+      // Add personal message if available
+      if (card.message) {
+        // Create a box for the message
+        doc.setFillColor(245, 245, 245);
+        const messageBoxY = pageHeight / 2 + 70;
+        doc.roundedRect(margin, messageBoxY, contentWidth, 40, 3, 3, 'F');
+        
+        doc.setFontSize(12);
+        doc.setTextColor(80, 80, 80);
+        doc.setFont('helvetica', 'italic');
+        
+        // Wrap the message text to fit within the box
+        const splitMessage = doc.splitTextToSize(card.message, contentWidth - 20);
+        doc.text(splitMessage, margin + 10, messageBoxY + 15);
+      }
+      
+      // Add instructions
+      doc.setFontSize(11);
+      doc.setTextColor(80, 80, 80);
+      doc.setFont('helvetica', 'normal');
+      doc.text([
+        'Detta presentkort kan användas som betalning för kurser och produkter hos Studio Clay.',
+        'För att lösa in presentkortet, ange koden vid betalning på vår hemsida eller i butiken.'
+      ], pageWidth / 2, pageHeight - margin - 25, { align: 'center' });
+      
+      // Add footer with contact information
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text([
+        `Studio Clay | Storgatan 6, 414 53 Göteborg`,
+        `Tel: 079-312 06 05 | E-post: eva@studioclay.se | www.studioclay.se`
+      ], pageWidth / 2, pageHeight - margin - 5, { align: 'center' });
+      
+      // Output as blob
+      const pdfBlob = doc.output('blob');
+      return pdfBlob;
+    } catch (error) {
+      console.error('Error generating gift card PDF:', error);
+      return null;
+    }
+  }
 
   return (
     <>
