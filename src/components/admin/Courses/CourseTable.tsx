@@ -6,6 +6,46 @@ import ActionButton from '../common/ActionButton';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 
+// Add DeleteConfirmationDialog component
+interface DeleteConfirmationDialogProps {
+  isOpen: boolean;
+  courseTitle: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
+  isOpen,
+  courseTitle,
+  onConfirm,
+  onCancel
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className={styles.dialogOverlay}>
+      <div className={styles.dialogContent}>
+        <h3>Bekräfta borttagning</h3>
+        <p>Är du verkligen säker på att du vill ta bort kursen "{courseTitle}"?</p>
+        <div className={styles.dialogButtons}>
+          <button 
+            className={`${styles.dialogButton} ${styles.confirmButton}`}
+            onClick={onConfirm}
+          >
+            JA
+          </button>
+          <button 
+            className={`${styles.dialogButton} ${styles.cancelButton}`}
+            onClick={onCancel}
+          >
+            NEJ
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface CourseTableProps {
   courses: Course[];
   variant?: 'default' | 'draft' | 'past';
@@ -26,6 +66,9 @@ export const CourseTable: React.FC<CourseTableProps> = ({
 }) => {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  // Add state for delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
 
   const rowClassName = variant === 'past'
     ? `${styles.tableRow} ${styles.pastRow}`
@@ -121,65 +164,90 @@ export const CourseTable: React.FC<CourseTableProps> = ({
   ];
 
   return (
-    <StandardTable 
-      headers={tableHeaders}
-      emptyMessage="Inga kurser att visa"
-      variant={variant}
-    >
-      {sortedCourses.map((course) => (
-        <tr key={course.id} className={rowClassName}>
-          <td className={styles.tableCell}>
-            <div>
-              <h3 className={styles.courseTitle}>{course.title}</h3>
-              <p className={styles.courseDescription}>{course.template?.description || 'Ingen beskrivning tillgänglig'}</p>
-            </div>
-          </td>
-          <td className={styles.tableCell}>
-            <div>
-              <div>Start: {formatDate(course.start_date)}</div>
-              <div>Slut: {formatDate(course.end_date)}</div>
-            </div>
-          </td>
-          <td className={styles.tableCell}>
-            <span className={`${styles.statusBadge} ${course.is_published ? styles.publishedBadge : styles.draftBadge}`}>
-              {course.is_published ? 'Publicerad' : 'Avpublicerad'}
-            </span>
-          </td>
-          <td className={styles.tableCell}>
-            {formatPrice(course.price)}
-          </td>
-          <td className={styles.tableCell}>
-            {formatParticipants(course.current_participants, course.max_participants)}
-          </td>
-          <td className={styles.tableCell}>
-            <div className={styles.actionButtonsContainer}>
-              {onEdit && (
-                <ActionButton
-                  variant="edit"
-                  onClick={() => onEdit(course)}
-                />
-              )}
-              {onPublish && variant !== 'past' && (
-                <ActionButton
-                  variant={course.is_published ? "unpublish" : "publish"}
-                  onClick={() => onPublish(course)}
-                />
-              )}
-              {onDelete && (
-                <ActionButton
-                  variant="delete"
-                  onClick={() => {
-                    if (confirm(`Är du säker på att du vill ta bort kursen "${course.title}"?`)) {
-                      onDelete(course.id);
-                    }
-                  }}
-                />
-              )}
-            </div>
-          </td>
-        </tr>
-      ))}
-    </StandardTable>
+    <>
+      <StandardTable 
+        headers={tableHeaders}
+        emptyMessage="Inga kurser att visa"
+        variant={variant}
+      >
+        {sortedCourses.map((course) => (
+          <tr key={course.id} className={rowClassName}>
+            <td className={styles.tableCell}>
+              <div>
+                <h3 className={styles.courseTitle}>{course.title}</h3>
+                <p 
+                  className={styles.courseDescription} 
+                  title={course.template?.rich_description || 'Ingen beskrivning tillgänglig'}
+                >
+                  {course.template?.rich_description 
+                    ? `${course.template.rich_description.substring(0, 70)}${course.template.rich_description.length > 70 ? '...' : ''}` 
+                    : 'Ingen beskrivning tillgänglig'}
+                </p>
+              </div>
+            </td>
+            <td className={styles.tableCell}>
+              <div>
+                <div>Start: {formatDate(course.start_date)}</div>
+                <div>Slut: {formatDate(course.end_date)}</div>
+              </div>
+            </td>
+            <td className={styles.tableCell}>
+              <span className={`${styles.statusBadge} ${course.is_published ? styles.publishedBadge : styles.draftBadge}`}>
+                {course.is_published ? 'Publicerad' : 'Avpublicerad'}
+              </span>
+            </td>
+            <td className={styles.tableCell}>
+              {formatPrice(course.price)}
+            </td>
+            <td className={styles.tableCell}>
+              {formatParticipants(course.current_participants, course.max_participants)}
+            </td>
+            <td className={styles.tableCell}>
+              <div className={styles.actionButtonsContainer}>
+                {onEdit && (
+                  <ActionButton
+                    variant="edit"
+                    onClick={() => onEdit(course)}
+                  />
+                )}
+                {onPublish && variant !== 'past' && (
+                  <ActionButton
+                    variant={course.is_published ? "unpublish" : "publish"}
+                    onClick={() => onPublish(course)}
+                  />
+                )}
+                {onDelete && (
+                  <ActionButton
+                    variant="delete"
+                    onClick={() => {
+                      setCourseToDelete(course);
+                      setDeleteDialogOpen(true);
+                    }}
+                  />
+                )}
+              </div>
+            </td>
+          </tr>
+        ))}
+      </StandardTable>
+      
+      {/* Add Delete Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        isOpen={deleteDialogOpen}
+        courseTitle={courseToDelete?.title || ''}
+        onConfirm={() => {
+          if (courseToDelete && onDelete) {
+            onDelete(courseToDelete.id);
+          }
+          setDeleteDialogOpen(false);
+          setCourseToDelete(null);
+        }}
+        onCancel={() => {
+          setDeleteDialogOpen(false);
+          setCourseToDelete(null);
+        }}
+      />
+    </>
   );
 };
 
