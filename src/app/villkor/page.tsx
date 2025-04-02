@@ -1,14 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Metadata } from 'next';
 import Link from 'next/link';
 import styles from '@/styles/Legal.module.css';
-
-export const metadata: Metadata = {
-  title: 'Bokningsvillkor | Studio Clay',
-  description: 'Våra allmänna bokningsvillkor beskriver de regler och riktlinjer som gäller för bokning av kurser och tjänster hos Studio Clay.',
-};
 
 export default function TermsPage() {
   return (
