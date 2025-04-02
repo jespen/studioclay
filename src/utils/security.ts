@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
@@ -28,16 +27,10 @@ export async function validateSwishRequest(headers: Headers, body: string): Prom
       return true;
     }
 
-    // Verifiera signaturen mot Swish publika nyckel
-    const publicKey = process.env.SWISH_CALLBACK_PUBLIC_KEY;
-    if (!publicKey) {
-      console.error('Missing Swish callback public key');
-      return false;
-    }
-
-    const verifier = crypto.createVerify('SHA256');
-    verifier.update(body);
-    return verifier.verify(publicKey, signature, 'base64');
+    // For production, we'll need to implement signature verification without using Node's crypto
+    // This could be done using Web Crypto API or a browser-compatible crypto library
+    console.warn('Production signature verification not implemented');
+    return false;
   } catch (error) {
     console.error('Error validating Swish request:', error);
     return false;
