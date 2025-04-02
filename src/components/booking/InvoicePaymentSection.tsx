@@ -101,7 +101,7 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
           
           if (giftCardDetails) {
             itemDetails = giftCardDetails;
-            console.log('Using gift card details from flowStorage:', itemDetails);
+            console.log('INVOICE-1: Using gift card details from flowStorage:', itemDetails);
           } else {
             // Fallback to general item details
             const generalItemDetails = await import('@/utils/flowStorage').then(module => 
@@ -110,13 +110,13 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
             
             if (generalItemDetails) {
               itemDetails = generalItemDetails;
-              console.log('Using item details from flowStorage:', itemDetails);
+              console.log('INVOICE-2: Using item details from flowStorage:', itemDetails);
             } else {
               // Last resort: try legacy localStorage directly
               const storedItemDetails = localStorage.getItem('itemDetails');
               if (storedItemDetails) {
                 itemDetails = JSON.parse(storedItemDetails);
-                console.log('Using item details from direct localStorage:', itemDetails);
+                console.log('INVOICE-3: Using item details from direct localStorage:', itemDetails);
               }
             }
           }
@@ -160,7 +160,66 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
       setStatus('success');
       setShowDialog(false);
       
+      // If this is a gift card purchase and we have a giftCardId in the response,
+      // update the gift card details in flowStorage with the new ID
+      if (isGiftCard && (data.giftCardId || data.id)) {
+        const cardId = data.giftCardId || data.id;
+        console.log('INVOICE-4: Gift card created with ID:', cardId);
+        
+        try {
+          // Import the storage helper functions
+          const { setGiftCardDetails, getGiftCardDetails, setItemDetails, getItemDetails } = await import('@/utils/flowStorage');
+          
+          // Update gift card details
+          const currentGiftCardDetails = getGiftCardDetails();
+          if (currentGiftCardDetails) {
+            // Add the ID to the existing details
+            const updatedGiftCardDetails = {
+              ...currentGiftCardDetails,
+              id: cardId,
+              code: data.giftCardCode // Save code if available
+            };
+            
+            console.log('INVOICE-5: Updating gift card details with ID:', updatedGiftCardDetails);
+            setGiftCardDetails(updatedGiftCardDetails);
+          }
+          
+          // ALSO update itemDetails since that's what GiftCardConfirmation might be using
+          const currentItemDetails = getItemDetails();
+          if (currentItemDetails) {
+            const updatedItemDetails = {
+              ...currentItemDetails,
+              id: cardId,
+              code: data.giftCardCode
+            };
+            console.log('INVOICE-6: Updating item details with ID:', updatedItemDetails);
+            setItemDetails(updatedItemDetails);
+          }
+          
+          // Ensure localStorage has the values (as a fallback)
+          try {
+            localStorage.setItem('giftCardId', cardId);
+            console.log('INVOICE-7: Set direct localStorage giftCardId:', cardId);
+            if (data.giftCardCode) {
+              localStorage.setItem('giftCardCode', data.giftCardCode);
+              console.log('INVOICE-8: Set direct localStorage giftCardCode:', data.giftCardCode);
+            }
+          } catch (e) {
+            console.error('INVOICE-ERROR-1: Error setting localStorage values:', e);
+          }
+        } catch (e) {
+          console.error('INVOICE-ERROR-2: Error updating gift card details with ID:', e);
+        }
+      }
+      
       // Return the reference with the proper status
+      console.log('INVOICE-9: Payment success handler called with data:', {
+        reference: data.invoiceNumber || data.bookingReference,
+        status: 'CREATED',
+        payment_method: 'invoice'
+      });
+      console.log('INVOICE-10: Saving payment info with status:', 'CREATED');
+
       onPaymentComplete({
         reference: data.invoiceNumber || data.bookingReference,
         status: 'CREATED',

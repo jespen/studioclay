@@ -4,6 +4,7 @@ import { sendServerInvoiceEmail } from '@/utils/serverEmail';
 import { UserInfo, PaymentDetails } from '@/types/booking';
 import { generateInvoicePDF } from '@/utils/invoicePDF';
 import { generateBookingReference } from '@/utils/booking';
+import { generateGiftCardPDF, GiftCardData } from '@/utils/giftCardPDF';
 
 // Create a Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -271,6 +272,88 @@ export async function POST(request: Request) {
       
       console.log('Gift card created successfully:', giftCardResult);
       
+      // Automatiskt generera presentkorts-PDF
+      console.log('Automatically generating gift card PDF');
+      try {
+        // Förbered data för PDF-generering
+        const pdfGiftCardData: GiftCardData = {
+          code: giftCardResult.code,
+          amount: giftCardResult.amount,
+          recipientName: giftCardResult.recipient_name,
+          recipientEmail: giftCardResult.recipient_email,
+          message: giftCardResult.message,
+          senderName: giftCardResult.sender_name,
+          senderEmail: giftCardResult.sender_email,
+          senderPhone: giftCardResult.sender_phone,
+          createdAt: giftCardResult.created_at,
+          expiresAt: giftCardResult.expires_at
+        };
+        
+        // Generera PDF
+        console.log('Generating gift card PDF document...');
+        const giftCardPdfBlob = await generateGiftCardPDF(pdfGiftCardData);
+        const giftCardPdfBuffer = Buffer.from(await giftCardPdfBlob.arrayBuffer());
+        
+        // Spara PDF i Supabase storage (giftcards bucket)
+        const bucketName = 'giftcards';
+        
+        // Generera statiskt filnamn baserat på presentkortskoden
+        const giftCardFileName = `gift-card-${giftCardResult.code}.pdf`;
+        
+        // Kontrollera om giftcards bucket finns
+        const { data: buckets, error: bucketError } = await supabase
+          .storage
+          .listBuckets();
+          
+        if (bucketError) {
+          console.error('Error listing buckets for gift card PDF:', bucketError);
+          // Continue execution - PDF storage is not critical for payment process
+        } else {
+          const bucketExists = buckets.some(bucket => bucket.name === bucketName);
+          
+          if (!bucketExists) {
+            try {
+              const { error: createError } = await supabase
+                .storage
+                .createBucket(bucketName, {
+                  public: true,
+                  fileSizeLimit: 5242880, // 5MB
+                });
+                
+              if (createError) {
+                console.error(`Error creating ${bucketName} bucket:`, createError);
+                // Continue execution
+              }
+            } catch (createError) {
+              console.error('Unexpected error creating bucket:', createError);
+              // Continue execution
+            }
+          }
+          
+          // Spara PDF i storage
+          const { error: uploadError } = await supabase
+            .storage
+            .from(bucketName)
+            .upload(giftCardFileName, giftCardPdfBuffer, {
+              contentType: 'application/pdf',
+              upsert: true
+            });
+            
+          if (uploadError) {
+            console.error('Error saving gift card PDF to storage:', uploadError);
+            // Continue execution - PDF storage is not critical
+          } else {
+            console.log('Gift card PDF saved successfully to storage');
+            
+            // Uppdatera presentkortet med PDF URL (om det finns en kolumn för detta senare)
+            // Här skulle eventuell uppdatering av gift_cards med pdf_url ske
+          }
+        }
+      } catch (pdfError) {
+        console.error('Error generating gift card PDF:', pdfError);
+        // Continue execution - PDF generation is not critical for payment process
+      }
+      
       // Generate invoice PDF for gift card
       console.log('Generating invoice PDF for gift card');
       const invoiceData = {
@@ -336,6 +419,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         giftCardId: giftCardResult.id,
+        giftCardCode: giftCardResult.code,
         invoiceNumber,
         bookingReference,
         emailSent: emailResult.success,

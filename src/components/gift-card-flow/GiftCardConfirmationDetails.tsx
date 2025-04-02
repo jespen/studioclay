@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Box, 
   Typography, 
   Grid,
-  Paper 
+  Paper,
+  Button,
+  Alert 
 } from '@mui/material';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import EmailIcon from '@mui/icons-material/Email';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
 interface GiftCardConfirmationDetailsProps {
   giftCardDetails: any;
@@ -46,6 +49,10 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
   giftCardDetails, 
   userInfo 
 }) => {
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
   // Get or generate gift card number
   const giftCardNumber = giftCardDetails?.code || giftCardDetails?.card_number || generateGiftCardNumber();
   const purchaseDate = giftCardDetails?.created_at 
@@ -63,16 +70,126 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
     ? giftCardDetails.amount
     : Number(giftCardDetails?.amount) || 0;
 
-  console.log('GiftCardConfirmationDetails rendering with:', {
+  console.log('DETAILS-1: GiftCardConfirmationDetails rendering with:', {
     giftCardNumber,
     amount,
     originalAmount: giftCardDetails?.amount,
     recipient_name: giftCardDetails?.recipient_name || giftCardDetails?.recipientName,
-    recipient_email: giftCardDetails?.recipient_email || giftCardDetails?.recipientEmail
+    recipient_email: giftCardDetails?.recipient_email || giftCardDetails?.recipientEmail,
+    id: giftCardDetails?.id
   });
+
+  // Function to generate PDF
+  const handleGeneratePdf = async () => {
+    try {
+      setGeneratingPdf(true);
+      setError(null);
+      console.log('DETAILS-3: Starting PDF generation for gift card ID:', giftCardDetails?.id);
+      
+      if (!giftCardDetails?.id) {
+        console.error('DETAILS-ERROR-1: Missing gift card ID');
+        setError('Det gick inte att generera presentkortet: Saknar ID');
+        setGeneratingPdf(false);
+        return;
+      }
+      
+      // First check if the PDF might already exist in storage
+      const bucketName = 'giftcards';
+      const fileName = `gift-card-${giftCardNumber}.pdf`;
+      const potentialPdfUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucketName}/${fileName}`;
+      
+      console.log('DETAILS-4: Checking if PDF already exists at URL:', potentialPdfUrl);
+      
+      try {
+        // Try to do a HEAD request to check if the file exists
+        const checkResponse = await fetch(potentialPdfUrl, { method: 'HEAD' });
+        
+        if (checkResponse.ok) {
+          // File exists, use it directly
+          console.log('DETAILS-5: PDF already exists, using existing file');
+          setPdfUrl(potentialPdfUrl);
+          
+          // Open PDF in new tab
+          window.open(potentialPdfUrl, '_blank');
+          setGeneratingPdf(false);
+          return;
+        } else {
+          console.log('DETAILS-6: PDF does not exist yet or is not accessible, will generate');
+        }
+      } catch (checkError) {
+        console.log('DETAILS-7: Error checking for existing PDF:', checkError);
+        // Continue with generating a new PDF
+      }
+      
+      // Make the API call to generate the PDF
+      console.log('DETAILS-8: Calling API to generate PDF');
+      const response = await fetch('/api/gift-card/generate-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: giftCardDetails.id }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('DETAILS-ERROR-2: API error:', errorData);
+        setError(`Det gick inte att generera presentkortet: ${errorData.error || response.statusText}`);
+        setGeneratingPdf(false);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('DETAILS-9: API response:', data);
+      
+      if (!data.success) {
+        console.error('DETAILS-ERROR-3: API returned error:', data.error);
+        setError(`Det gick inte att generera presentkortet: ${data.error || 'Okänt fel'}`);
+        setGeneratingPdf(false);
+        return;
+      }
+      
+      // Save PDF URL for future use
+      setPdfUrl(data.pdfUrl);
+      console.log('DETAILS-10: PDF URL saved:', data.pdfUrl);
+      
+      // Create a blob from the base64 PDF data
+      const pdfBlob = new Blob(
+        [Uint8Array.from(atob(data.pdf), c => c.charCodeAt(0))],
+        { type: 'application/pdf' }
+      );
+      
+      // Create object URL for the blob
+      const pdfObjectUrl = URL.createObjectURL(pdfBlob);
+      console.log('DETAILS-11: PDF object URL created');
+      
+      // Open the PDF in a new tab
+      window.open(pdfObjectUrl, '_blank');
+      console.log('DETAILS-12: PDF opened in new tab');
+      
+      // Clean up object URL after a delay to ensure it's loaded
+      setTimeout(() => {
+        URL.revokeObjectURL(pdfObjectUrl);
+        console.log('DETAILS-13: PDF object URL revoked');
+      }, 5000);
+      
+      console.log('DETAILS-14: PDF generation completed successfully');
+    } catch (err) {
+      console.error('DETAILS-ERROR-4: Unhandled error:', err);
+      setError(`Det gick inte att generera presentkortet: ${err instanceof Error ? err.message : 'Okänt fel'}`);
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
 
   return (
     <>
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+      
       {/* Gift Card Details */}
       <Box 
         sx={{ 
@@ -111,6 +228,34 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
           <Typography variant="body2">
             Presentkortet har skickats till {giftCardDetails?.recipient_email || giftCardDetails?.recipientEmail || 'mottagaren'} och kan användas för att boka 
             kurser, workshops eller köpa produkter på vår hemsida.
+          </Typography>
+        </Box>
+        
+        {/* PDF Download Button */}
+        {giftCardDetails?.id && (
+          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+            <Button
+              variant="outlined"
+              startIcon={<FileDownloadIcon />}
+              onClick={handleGeneratePdf}
+              disabled={generatingPdf}
+              sx={{ 
+                borderColor: 'var(--primary)', 
+                color: 'var(--primary)',
+                '&:hover': {
+                  borderColor: 'var(--primary-dark)',
+                  backgroundColor: 'rgba(84, 114, 100, 0.05)'
+                }
+              }}
+            >
+              {generatingPdf ? 'Genererar PDF...' : 'Visa och ladda ner presentkort'}
+            </Button>
+          </Box>
+        )}
+        {/* Debug info */}
+        <Box sx={{ mt: 1, textAlign: 'center' }}>
+          <Typography variant="caption" color="text.secondary">
+            {giftCardDetails?.id ? 'Presentkorts-ID: ' + giftCardDetails.id : 'Inget presentkorts-ID hittat'}
           </Typography>
         </Box>
       </Box>

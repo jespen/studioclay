@@ -4,6 +4,7 @@ import { SwishCallbackData, PaymentStatus, PAYMENT_STATUS } from '@/services/swi
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { generateGiftCardPDF, GiftCardData } from '@/utils/giftCardPDF';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -241,6 +242,97 @@ export async function POST(request: Request) {
             payment.metadata?.item_details
           );
           console.log('Gift card created successfully:', result);
+          
+          // Automatiskt generera presentkorts-PDF
+          console.log('Automatically generating gift card PDF');
+          try {
+            // Förbereda data för PDF-generering
+            const pdfGiftCardData: GiftCardData = {
+              code: result.code,
+              amount: result.amount,
+              recipientName: result.recipient_name,
+              recipientEmail: result.recipient_email,
+              message: result.message,
+              senderName: result.sender_name,
+              senderEmail: result.sender_email,
+              senderPhone: result.sender_phone,
+              createdAt: result.created_at,
+              expiresAt: result.expires_at
+            };
+            
+            // Generera PDF
+            console.log('Generating gift card PDF document...');
+            const giftCardPdfBlob = await generateGiftCardPDF(pdfGiftCardData);
+            const giftCardPdfBuffer = Buffer.from(await giftCardPdfBlob.arrayBuffer());
+            
+            // Spara PDF i Supabase storage (giftcards bucket)
+            const bucketName = 'giftcards';
+            
+            // Generera statiskt filnamn baserat på presentkortskoden
+            const giftCardFileName = `gift-card-${result.code}.pdf`;
+            
+            // Kontrollera om giftcards bucket finns
+            const { data: buckets, error: bucketError } = await supabase
+              .storage
+              .listBuckets();
+              
+            if (bucketError) {
+              console.error('Error listing buckets for gift card PDF:', bucketError);
+              // Continue execution - PDF storage is not critical for payment process
+            } else {
+              const bucketExists = buckets.some(bucket => bucket.name === bucketName);
+              
+              if (!bucketExists) {
+                try {
+                  const { error: createError } = await supabase
+                    .storage
+                    .createBucket(bucketName, {
+                      public: true,
+                      fileSizeLimit: 5242880, // 5MB
+                    });
+                    
+                  if (createError) {
+                    console.error(`Error creating ${bucketName} bucket:`, createError);
+                    // Continue execution
+                  }
+                } catch (createError) {
+                  console.error('Unexpected error creating bucket:', createError);
+                  // Continue execution
+                }
+              }
+              
+              // Spara PDF i storage
+              const { error: uploadError } = await supabase
+                .storage
+                .from(bucketName)
+                .upload(giftCardFileName, giftCardPdfBuffer, {
+                  contentType: 'application/pdf',
+                  upsert: true
+                });
+                
+              if (uploadError) {
+                console.error('Error saving gift card PDF to storage:', uploadError);
+                // Continue execution - PDF storage is not critical
+              } else {
+                console.log('Gift card PDF saved successfully to storage');
+                
+                // Uppdatera presentkortet med is_printed = true
+                const { error: updateError } = await supabase
+                  .from('gift_cards')
+                  .update({
+                    is_printed: true
+                  })
+                  .eq('id', result.id);
+                  
+                if (updateError) {
+                  console.error('Error updating gift card is_printed status:', updateError);
+                }
+              }
+            }
+          } catch (pdfError) {
+            console.error('Error generating gift card PDF:', pdfError);
+            // Continue execution - PDF generation is not critical for payment process
+          }
         } else {
           console.log('Creating booking from successful Swish payment');
           result = await createBooking(
