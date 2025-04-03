@@ -277,12 +277,12 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext, onBack 
               <EventIcon sx={{ color: 'var(--primary)' }} />
             </ListItemIcon>
             <ListItemText 
-              primary="Datum" 
+              primary="Startdatum" 
               secondary={formatDate(courseDetail.start_date)} 
             />
           </ListItem>
           
-          <ListItem disableGutters>
+          {/* <ListItem disableGutters>
             <ListItemIcon>
               <AccessTimeIcon sx={{ color: 'var(--primary)' }} />
             </ListItemIcon>
@@ -290,7 +290,7 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext, onBack 
               primary="Längd" 
               secondary={formatDuration(courseDetail.duration_minutes)} 
             />
-          </ListItem>
+          </ListItem> */}
           
           <ListItem disableGutters>
             <ListItemIcon>
@@ -298,7 +298,7 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext, onBack 
             </ListItemIcon>
             <ListItemText 
               primary="Plats" 
-              secondary={courseDetail.location || 'Ingen plats angiven'} 
+              secondary={courseDetail.location || 'Studio Clay, Norrtullsgatan 65'} 
             />
           </ListItem>
           
