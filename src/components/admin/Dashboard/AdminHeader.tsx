@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { supabaseClient as supabase } from '@/lib/supabase';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -14,6 +14,7 @@ interface AdminHeaderProps {
 
 export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userEmail, showBackButton }) => {
   const router = useRouter();
+  const pathname = usePathname();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
@@ -49,6 +50,15 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
     }
   };
 
+  const isActiveRoute = (href: string) => {
+    // Special case for dashboard home
+    if (href === '/admin/dashboard') {
+      return pathname === '/admin/dashboard';
+    }
+    // For other routes, do exact matching
+    return pathname === href;
+  };
+
   return (
     <header className={styles.header}>
       <div className={styles.headerContent}>
@@ -63,27 +73,45 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
           )}
           
           <div className={styles.navButtonsRow}>
-            <Link href="/admin/dashboard" className={styles.navButton}>
+            <Link 
+              href="/admin/dashboard" 
+              className={`${styles.navButton} ${isActiveRoute('/admin/dashboard') ? styles.activeNavButton : ''}`}
+            >
               Kurser
             </Link>
         
-            <Link href="/admin/dashboard/gift-cards" className={styles.navButton}>
+            <Link 
+              href="/admin/dashboard/gift-cards" 
+              className={`${styles.navButton} ${isActiveRoute('/admin/dashboard/gift-cards') ? styles.activeNavButton : ''}`}
+            >
               Presentkort
             </Link>
             
-            <Link href="/admin/dashboard/shop" className={styles.navButton}>
+            <Link 
+              href="/admin/dashboard/shop" 
+              className={`${styles.navButton} ${isActiveRoute('/admin/dashboard/shop') ? styles.activeNavButton : ''}`}
+            >
               Webshop
             </Link>
             
-            <Link href="/admin/dashboard/orders" className={styles.navButton}>
+            <Link 
+              href="/admin/dashboard/orders" 
+              className={`${styles.navButton} ${isActiveRoute('/admin/dashboard/orders') ? styles.activeNavButton : ''}`}
+            >
               Shop beställningar
             </Link>
             
-            <Link href="/admin/templates" className={styles.navButton}>
+            <Link 
+              href="/admin/templates" 
+              className={`${styles.navButton} ${isActiveRoute('/admin/templates') ? styles.activeNavButton : ''}`}
+            >
               Kursmallar
             </Link>
             
-            <Link href="/admin/dashboard/developer" className={styles.navButton}>
+            <Link 
+              href="/admin/dashboard/developer" 
+              className={`${styles.navButton} ${isActiveRoute('/admin/dashboard/developer') ? styles.activeNavButton : ''}`}
+            >
               Developer
             </Link>
             

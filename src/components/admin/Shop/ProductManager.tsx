@@ -127,7 +127,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
     try {
       const isNew = !product.id;
       const url = isNew ? '/api/products' : `/api/products/${product.id}`;
-      const method = isNew ? 'POST' : 'PUT';
+      const method = isNew ? 'POST' : 'PATCH';
       
       const response = await fetch(url, {
         method,

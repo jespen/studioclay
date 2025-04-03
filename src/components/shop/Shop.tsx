@@ -4,11 +4,14 @@ import React, { useState, useEffect } from 'react';
 import ProductCard from './ProductCard';
 import { Product } from './types';
 
+const PRODUCTS_PER_PAGE = 8; // Antal produkter som visas initialt
+
 // Produkterna hämtas nu från API:et istället för att vara hårdkodade här
 const Shop = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [displayedProducts, setDisplayedProducts] = useState(PRODUCTS_PER_PAGE);
 
   // Fetch products from API
   useEffect(() => {
@@ -41,6 +44,10 @@ const Shop = () => {
     fetchProducts();
   }, []);
 
+  const handleShowMore = () => {
+    setDisplayedProducts(prevCount => prevCount + PRODUCTS_PER_PAGE);
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto py-16 px-4 text-center">
@@ -57,6 +64,8 @@ const Shop = () => {
     );
   }
 
+  const hasMoreProducts = products.length > displayedProducts;
+
   return (
     <div className="container mx-auto py-16 px-4 md:px-6">
       <div className="mb-12 text-center">
@@ -67,16 +76,21 @@ const Shop = () => {
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-10">
-        {products.map((product) => (
+        {products.slice(0, displayedProducts).map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
       </div>
       
-      <div className="mt-12 text-center">
-        <button className="btn btn-outline px-6 py-3 uppercase tracking-wider">
-          Visa alla produkter
-        </button>
-      </div>
+      {hasMoreProducts && (
+        <div className="mt-12 text-center">
+          <button 
+            onClick={handleShowMore}
+            className="btn btn-outline px-6 py-3 uppercase tracking-wider"
+          >
+            Visa fler produkter
+          </button>
+        </div>
+      )}
     </div>
   );
 };

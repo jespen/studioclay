@@ -90,6 +90,16 @@
   background-color: rgba(255, 255, 255, 0.1);
 }
 
+.activeNavButton {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: white;
+  font-weight: 600;
+}
+
+.activeNavButton:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
 .addButton {
   background-color: #547264;
   color: white;
