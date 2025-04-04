@@ -47,7 +47,7 @@ const Services = () => {
     <section id="services" className={styles.section}>
       <div className={styles.container}>
         <div className={styles.titleSection}>
-          <h2 className={styles.title}>Övriga Kurser</h2>
+          <h2 className={styles.title}>Specialkurser</h2>
           <p className={styles.description}>
             Vi erbjuder kreativa keramikupplevelser för både privatpersoner och företag.
           </p>

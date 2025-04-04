@@ -18,6 +18,7 @@ import {
   getPreviousStepUrl, 
   getStepUrl 
 } from '@/utils/flowNavigation';
+import { getCachedData } from '@/utils/performanceOptimizer';
 
 export interface FlowStateData {
   flowType: FlowType;
@@ -139,8 +140,9 @@ const FlowStepWrapper: React.FC<FlowStepWrapperProps> = ({
           }
         }
         
-        // Fetch all data
-        const itemDetails = getItemDetails();
+        // Try to get cached data first
+        const cachedItemDetails = getCachedData(`/api/items/${itemId}`);
+        const itemDetails = cachedItemDetails || getItemDetails();
         const userInfo = getUserInfo();
         const paymentInfo = getPaymentInfo();
         
