@@ -4,6 +4,10 @@
   margin: 2rem 0;
 }
 
+.dark .banner {
+  background-color: #ffffff;
+}
+
 .container {
   max-width: 600px;
   margin: 0 auto;

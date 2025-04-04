@@ -67,7 +67,7 @@ const Shop = () => {
   const hasMoreProducts = products.length > displayedProducts;
 
   return (
-    <div className="container mx-auto py-16 px-4 md:px-6">
+    <div className="container mx-auto py-16 px-4 md:px-6 bg-white">
       <div className="mb-12 text-center">
         <h2 className="text-3xl md:text-4xl font-serif mb-2">Shop</h2>
         <p className="text-base md:text-lg text-gray-600 max-w-2xl mx-auto">
