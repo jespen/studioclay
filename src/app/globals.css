@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom Fonts */
+@font-face {
+  font-family: 'Dream Avenue';
+  src: url('/fonts/dream-avenue.woff2') format('woff2'),
+       url('/fonts/dream-avenue.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Eyesore Script';
+  src: url('/fonts/eyesore-script.woff2') format('woff2'),
+       url('/fonts/eyesore-script.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --foreground: #333333;
   --background: #ffffff;

@@ -84,7 +84,10 @@ const Navbar = () => {
               height={40}
               className={styles.logoImage}
             />
-            <span className={styles.logoText}>Studio Clay</span>
+            <span className={styles.logoText}>
+              <span>Studio</span>
+              <span>CLAY</span>
+            </span>
           </a>
 
           {/* Desktop Navigation */}

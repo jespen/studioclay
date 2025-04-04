@@ -71,7 +71,10 @@ const Hero = ({
             >
               {/* <div className={styles.logo}>
                 <div className={styles.logoCircle}>
-                  <span className={styles.logoText}>Studio Clay</span>
+                  <span className={styles.logoText}>
+                    <span>Studio</span>
+                    <span>Clay</span>
+                  </span>
                 </div>
               </div> */}
             </div>

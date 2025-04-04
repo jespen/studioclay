@@ -147,6 +147,18 @@
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--accent);
+  display: flex;
+  gap: 0.25rem;
+}
+
+.logoText span:first-child {
+  font-family: 'Eyesore Script', cursive;
+  font-weight: normal;
+}
+
+.logoText span:last-child {
+  font-family: 'Dream Avenue', sans-serif;
+  font-weight: normal;
 }
 
 .decorElement1 {
