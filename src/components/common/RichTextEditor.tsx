@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 
 // Import Quill styles
-import 'react-quill-new/dist/quill.snow.css';
+import 'react-quill-new/dist/quill.snow.css?inline'
 
 // Dynamically import ReactQuill with SSR disabled
 const ReactQuill = dynamic(() => import('react-quill-new'), {

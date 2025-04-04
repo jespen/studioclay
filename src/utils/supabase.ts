@@ -4,31 +4,42 @@ import { createClient } from '@supabase/supabase-js';
 // Add error checking for environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('Missing Supabase environment variables in utils/supabase.ts');
 }
 
-// Add graceful error handling for the client
-let supabase;
-
-try {
-  supabase = createBrowserClient(
+// Create browser client for client-side usage
+export const createBrowserSupabaseClient = () => {
+  return createBrowserClient(
     supabaseUrl || '', 
     supabaseKey || ''
   );
-  console.log('Supabase client initialized successfully');
-} catch (error) {
-  console.error('Error initializing Supabase client:', error);
-  // Create a fallback mock client with no-op methods for graceful degradation
-  supabase = {
-    auth: {
-      getSession: async () => ({ data: { session: null }, error: null }),
-      signInWithPassword: async () => ({ data: null, error: { message: 'Supabase client initialization failed' } }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    }
-  };
-}
+};
 
-export { supabase };
-export type Session = Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']; 
+// Create admin client for server-side usage
+export const createServerSupabaseClient = () => {
+  if (!serviceRoleKey) {
+    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
+  }
+  
+  return createClient(supabaseUrl || '', serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+};
+
+// Create a singleton instance for browser usage
+let browserInstance: ReturnType<typeof createBrowserSupabaseClient>;
+
+export const getBrowserSupabaseInstance = () => {
+  if (!browserInstance) {
+    browserInstance = createBrowserSupabaseClient();
+  }
+  return browserInstance;
+};
+
+export type Session = Awaited<ReturnType<typeof getBrowserSupabaseInstance>['auth']['getSession']>['data']['session']; 

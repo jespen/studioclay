@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminDashboard from '../../../components/admin/Dashboard/AdminDashboard';
-import { supabaseClient as supabase } from '../../../lib/supabase';
+import { getBrowserSupabaseInstance } from '../../../utils/supabase';
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -16,6 +16,7 @@ export default function DashboardPage() {
   const [isLocalAuth, setIsLocalAuth] = useState(false);
   const [session, setSession] = useState<any>(null);
   const router = useRouter();
+  const supabase = getBrowserSupabaseInstance();
 
   // Memoize the verification function to prevent unnecessary renders
   const verifyConnection = useCallback(async () => {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabaseClient as supabase } from '../../lib/supabase';
+import { getBrowserSupabaseInstance } from '../../utils/supabase';
 import Image from 'next/image';
 import Link from 'next/link';
 import styles from './admin.module.css';
@@ -24,6 +24,7 @@ export default function AdminLogin() {
   const [connectionVerified, setConnectionVerified] = useState(false);
   const [isLocalAuth, setIsLocalAuth] = useState(false);
   const router = useRouter();
+  const supabase = getBrowserSupabaseInstance();
 
   // Verify connection to Supabase at startup
   useEffect(() => {

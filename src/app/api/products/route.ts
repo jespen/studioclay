@@ -1,15 +1,14 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/utils/supabase';
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Cache duration in seconds
+const CACHE_DURATION = 60; // 1 minute
 
 // Get products from Supabase
 export async function GET(request: NextRequest) {
   try {
+    const supabase = createServerSupabaseClient();
+    
     // Get query parameters
     const url = new URL(request.url);
     const inStock = url.searchParams.get('inStock');
@@ -58,9 +57,15 @@ export async function GET(request: NextRequest) {
       published: item.published
     }));
     
-    return NextResponse.json({ products });
+    // Create response with caching headers
+    return new NextResponse(JSON.stringify({ products }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': `public, s-maxage=${CACHE_DURATION}, stale-while-revalidate=${CACHE_DURATION * 2}`,
+      },
+    });
   } catch (error) {
-    console.error('Unhandled error in GET products:', error);
+    console.error('Error in GET /api/products:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -68,6 +73,7 @@ export async function GET(request: NextRequest) {
 // Create or update a product in Supabase
 export async function POST(request: NextRequest) {
   try {
+    const supabase = createServerSupabaseClient();
     const productData = await request.json();
     
     // Validate required fields
@@ -123,7 +129,7 @@ export async function POST(request: NextRequest) {
           published: data.published
         }
       });
-    } 
+    }
     
     // Otherwise, insert new product
     const { data, error } = await supabase
