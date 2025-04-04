@@ -34,7 +34,20 @@
 }
 
 .highlightText {
-  color: var(--primary);
+  color: var(--accent);
+  display: inline-flex;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.highlightText span:first-child {
+  font-family: 'Eyesore Script', cursive;
+  font-weight: normal;
+}
+
+.highlightText span:last-child {
+  font-family: 'Dream Avenue', sans-serif;
+  font-weight: normal;
 }
 
 .description {
@@ -42,6 +55,7 @@
   color: #6B7280;
   margin-bottom: 2rem;
   max-width: 36rem;
+  white-space: pre-line;
 }
 
 .dark .description {

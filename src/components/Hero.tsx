@@ -12,7 +12,7 @@ interface HeroProps {
 const Hero = ({
   title = 'Unik drejstudio för kreativa själar, upplev skapandets magi!',
   highlightedText = 'Studio Clay -',
-  description = 'En dedikerad keramikstudio som erbjuder kurser, workshops och studiotid för både privatpersoner och företag. Upplev konsten av lera i en kreativ och stödjande miljö.'
+  description = 'En dedikerad keramikstudio som erbjuder kurser, workshops och studiotid för både privatpersoner och företag.\nUpplev konsten av lera i en kreativ och stödjande miljö.'
 }: HeroProps) => {
   return (
     <section id="home" className={styles.hero}>
@@ -20,7 +20,10 @@ const Hero = ({
         <div className={styles.contentGrid}>
           <div className={styles.textContent}>
             <h1 className={styles.heading}>
-              <span className={styles.highlightText}>{highlightedText}</span> {title}
+              <span className={styles.highlightText}>
+                <span>Studio </span>
+                <span>CLAY</span>
+              </span> {title}
             </h1>
             <p className={styles.description}>{description}</p>
             <div className={styles.buttonContainer}>
