@@ -173,19 +173,59 @@ export async function GET(request: Request) {
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const hasSupabaseConfig = Boolean(supabaseUrl && supabaseKey);
 
-    // Verifiera certifikatfiler
-    const certPath = process.env.SWISH_TEST_CERT_PATH || '';
-    const resolvedCertPath = path.resolve(process.cwd(), certPath);
-    const certExists = fs.existsSync(resolvedCertPath);
+    // Verifiera certifikatfiler - test
+    const isTestMode = process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true';
+    const testCertPath = process.env.SWISH_TEST_CERT_PATH || '';
+    const resolvedTestCertPath = path.resolve(process.cwd(), testCertPath);
+    const testCertExists = fs.existsSync(resolvedTestCertPath);
+    
+    // Verifiera certifikatfiler - produktion
+    const prodCertPath = process.env.SWISH_PROD_CERT_PATH || '';
+    const resolvedProdCertPath = path.resolve(process.cwd(), prodCertPath);
+    const prodCertExists = fs.existsSync(resolvedProdCertPath);
+    
+    // Verifiera bundle-certifikat
+    const bundlePath = 'certs/swish/prod/swish_bundle.pem';
+    const resolvedBundlePath = path.resolve(process.cwd(), bundlePath);
+    const bundleExists = fs.existsSync(resolvedBundlePath);
+    
+    const certInfo = {
+      test_cert_path: testCertPath,
+      test_cert_exists: testCertExists,
+      prod_cert_path: prodCertPath,
+      prod_cert_exists: prodCertExists,
+      bundle_path: bundlePath,
+      bundle_exists: bundleExists
+    };
+    
+    // Testa hämtning av tjänst och konfiguration
+    let swishServiceInfo = {};
+    try {
+      const swishService = SwishService.getInstance();
+      swishServiceInfo = {
+        payeeAlias: swishService.getPayeeAlias(),
+        service_initialized: true
+      };
+    } catch (error) {
+      swishServiceInfo = {
+        service_initialized: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
 
     return NextResponse.json({ 
       status: 'ok', 
       message: 'Swish payment endpoint is working',
       timestamp: new Date().toISOString(),
       env: {
-        test_mode: process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true',
+        test_mode: isTestMode,
         base_url: process.env.NEXT_PUBLIC_BASE_URL,
-        cert_exists: certExists,
+        swish_test_api_url: process.env.SWISH_TEST_API_URL,
+        swish_prod_api_url: process.env.SWISH_PROD_API_URL,
+        test_payee_alias: process.env.SWISH_TEST_PAYEE_ALIAS,
+        prod_payee_alias: process.env.SWISH_PROD_PAYEE_ALIAS,
+        certs: certInfo,
+        swish_service: swishServiceInfo,
         has_supabase_config: hasSupabaseConfig
       }
     });

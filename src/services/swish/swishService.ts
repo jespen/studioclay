@@ -98,17 +98,79 @@ export class SwishService {
     try {
       const url = this.config.getEndpointUrl('createPayment');
 
+      logDebug('Swish config info:', {
+        isTestMode: this.config.isTest,
+        apiUrl: this.config.apiUrl,
+        payeeAlias: this.config.payeeAlias
+      });
+
       logDebug('Certificate paths:', {
         certPath: path.resolve(process.cwd(), this.config.certPath),
         keyPath: path.resolve(process.cwd(), this.config.keyPath),
         caPath: path.resolve(process.cwd(), this.config.caPath)
       });
 
+      // Verify that certificate files exist
+      const certExists = fs.existsSync(path.resolve(process.cwd(), this.config.certPath));
+      const keyExists = fs.existsSync(path.resolve(process.cwd(), this.config.keyPath));
+      const caExists = fs.existsSync(path.resolve(process.cwd(), this.config.caPath));
+      
+      logDebug('Certificate files existence check:', {
+        certExists,
+        keyExists,
+        caExists
+      });
+
+      if (!certExists || !keyExists || !caExists) {
+        const missingFiles = [];
+        if (!certExists) missingFiles.push('certificate');
+        if (!keyExists) missingFiles.push('key');
+        if (!caExists) missingFiles.push('CA certificate');
+        
+        throw new SwishCertificateError(`Missing ${missingFiles.join(', ')} file(s)`);
+      }
+
+      try {
+        // Read certificate files to verify they're readable
+        const certContent = fs.readFileSync(path.resolve(process.cwd(), this.config.certPath), 'utf8');
+        const keyContent = fs.readFileSync(path.resolve(process.cwd(), this.config.keyPath), 'utf8');
+        const caContent = fs.readFileSync(path.resolve(process.cwd(), this.config.caPath), 'utf8');
+        
+        logDebug('Certificate files read successfully', {
+          certLength: certContent.length,
+          keyLength: keyContent.length,
+          caLength: caContent.length,
+          certStartsWith: certContent.substring(0, 50),
+          keyStartsWith: keyContent.substring(0, 50),
+          caStartsWith: caContent.substring(0, 50)
+        });
+      } catch (readError: any) {
+        logError('Error reading certificate files', readError);
+        throw new SwishCertificateError(`Error reading certificate files: ${readError.message}`);
+      }
+
+      // Create HTTPS agent with certificates
       const agent = new https.Agent({
         cert: fs.readFileSync(path.resolve(process.cwd(), this.config.certPath)),
         key: fs.readFileSync(path.resolve(process.cwd(), this.config.keyPath)),
         ca: fs.readFileSync(path.resolve(process.cwd(), this.config.caPath)),
         minVersion: 'TLSv1.2'
+      });
+
+      // Redact sensitive information for logging
+      const logData = { ...data };
+      if (logData.payerAlias) {
+        logData.payerAlias = logData.payerAlias.substring(0, 4) + '****' + logData.payerAlias.slice(-2);
+      }
+      
+      logDebug('Sending request to Swish API:', {
+        url,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        data: logData
       });
 
       const response = await fetch(url, {
@@ -121,12 +183,19 @@ export class SwishService {
         body: JSON.stringify(data)
       });
 
+      logDebug('Swish API response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers)
+      });
+
       if (response.status === 201) {
         const location = response.headers.get('location');
         if (!location) {
           throw new SwishApiError('No Location header in response');
         }
         const reference = location.split('/').pop();
+        logDebug('Successfully created payment request:', { reference, location });
         return { success: true, data: { reference } };
       }
 
@@ -134,8 +203,10 @@ export class SwishService {
       let errorData;
       try {
         errorData = JSON.parse(responseText);
+        logDebug('Parsed Swish error response:', errorData);
       } catch {
         errorData = responseText;
+        logDebug('Unparsed Swish error response:', responseText);
       }
 
       logError('Swish API error response:', {
@@ -163,9 +234,32 @@ export class SwishService {
    */
   public async createPayment(data: SwishRequestData): Promise<SwishApiResponse> {
     try {
-      logDebug('Creating Swish payment with data:', data);
+      logDebug('Creating Swish payment with data:', {
+        ...data,
+        payerAlias: data.payerAlias ? `${data.payerAlias.substring(0, 4)}****${data.payerAlias.slice(-2)}` : undefined
+      });
+
+      // Verify the data format before sending
+      logDebug('Payment request validation check:', {
+        hasPayeePaymentReference: !!data.payeePaymentReference,
+        payeePaymentReferenceLength: data.payeePaymentReference?.length,
+        hasCallbackUrl: !!data.callbackUrl,
+        callbackUrl: data.callbackUrl,
+        hasPayeeAlias: !!data.payeeAlias,
+        payeeAlias: data.payeeAlias,
+        hasAmount: !!data.amount,
+        amount: data.amount,
+        hasCurrency: !!data.currency,
+        currency: data.currency,
+        hasMessage: !!data.message,
+        messageLength: data.message?.length,
+        hasPayerAlias: !!data.payerAlias,
+        payerAliasFormat: data.payerAlias?.startsWith('46')
+      });
 
       const result = await this.makeSwishRequest(data);
+
+      logDebug('Swish payment result:', result);
 
       return {
         success: true,

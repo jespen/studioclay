@@ -165,6 +165,8 @@ export class SwishConfig {
    * @returns {string} The complete URL for the endpoint
    */
   public getEndpointUrl(endpoint: keyof typeof SWISH_ENDPOINTS): string {
-    return `${this.apiUrl}${SWISH_ENDPOINTS[endpoint]}`;
+    const url = `${this.apiUrl}${SWISH_ENDPOINTS[endpoint]}`;
+    console.log(`Swish API URL: ${url} (isTestMode: ${this.isTestMode})`);
+    return url;
   }
 } 
