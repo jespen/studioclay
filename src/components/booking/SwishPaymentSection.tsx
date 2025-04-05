@@ -42,7 +42,11 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
   onValidationError,
   disabled = false,
 }, ref) => {
-  const [phoneNumber, setPhoneNumber] = useState(userInfo.phone || '');
+  // Initialize phone number from userInfo, ensuring it starts with '0' if needed
+  const initialPhoneNumber = userInfo.phone || '';
+  const [phoneNumber, setPhoneNumber] = useState(
+    initialPhoneNumber.startsWith('0') ? initialPhoneNumber : `0${initialPhoneNumber}`
+  );
   const [error, setError] = useState<string>();
   const [paymentReference, setPaymentReference] = useState<string>('');
 
@@ -79,9 +83,11 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
   };
 
   const handlePhoneNumberChange = (value: string) => {
-    setPhoneNumber(value);
+    // Ensure phone number starts with '0'
+    const formattedValue = value.startsWith('0') ? value : `0${value}`;
+    setPhoneNumber(formattedValue);
     if (error) {
-      validatePhoneNumber(value);
+      validatePhoneNumber(formattedValue);
     }
   };
 
@@ -95,17 +101,8 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     setShowPaymentDialog(true);
 
     try {
-      // Check if this is a gift card or product payment
-      const isGiftCard = courseId === 'gift-card';
-      
-      // For gift cards, get the item details from flowStorage
-      let itemDetails: GiftCardDetails | null = null;
-      if (isGiftCard) {
-        itemDetails = getGiftCardDetails() as GiftCardDetails;
-      }
-      
-      // Check if this is an art product from the shop
-      const isArtProduct = getFlowType() === 'art_purchase';
+      // Clean phone number by removing spaces and dashes
+      const cleanPhoneNumber = phoneNumber.replace(/[- ]/g, '');
       
       const response = await fetch('/api/payments/swish/create', {
         method: 'POST',
@@ -114,48 +111,36 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           'Idempotency-Key': crypto.randomUUID()
         },
         body: JSON.stringify({
-          phone_number: phoneNumber,
+          phone_number: cleanPhoneNumber,
           payment_method: 'swish',
-          product_type: isGiftCard ? 'gift_card' : isArtProduct ? 'art_product' : 'course',
-          product_id: isGiftCard ? '00000000-0000-0000-0000-000000000001' : courseId,
+          product_type: getFlowType() || 'course',
+          product_id: courseId,
           amount: amount,
           quantity: parseInt(userInfo.numberOfParticipants || '1'),
           user_info: {
             ...userInfo,
+            phone: cleanPhoneNumber, // Update phone in userInfo as well
             numberOfParticipants: userInfo.numberOfParticipants || '1'
-          },
-          itemDetails: itemDetails ? {
-            type: itemDetails.type,
-            recipientName: itemDetails.recipientName,
-            recipientEmail: itemDetails.recipientEmail,
-            message: itemDetails.message
-          } : null
-        })
+          }
+        }),
       });
 
-      const result = await response.json();
-
-      if (!response.ok || !result.success || !result.data?.reference) {
-        const error = 'Det gick inte att skapa betalningen. Försök igen senare.';
-        setError(error);
-        onValidationError?.(error);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Payment creation failed:', errorData);
         setPaymentStatus(PaymentStatus.ERROR);
+        setError(errorData.message || 'Ett fel uppstod vid skapande av betalning');
         return false;
       }
 
-      const paymentRef = result.data.reference;
-      setPaymentReference(paymentRef);
-      // Store payment reference in flowStorage rather than directly in localStorage
-      setPaymentReference(paymentRef);
-      console.log('Swish payment created with reference:', paymentRef);
-      
+      const data = await response.json();
+      setPaymentReference(data.paymentReference);
       return true;
+      
     } catch (error) {
-      console.error('Error creating Swish payment:', error);
-      const errorMessage = 'Det gick inte att skapa betalningen. Försök igen senare.';
-      setError(errorMessage);
-      onValidationError?.(errorMessage);
+      console.error('Payment creation error:', error);
       setPaymentStatus(PaymentStatus.ERROR);
+      setError('Ett fel uppstod vid skapande av betalning');
       return false;
     }
   };
