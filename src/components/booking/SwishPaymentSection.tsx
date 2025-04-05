@@ -6,6 +6,13 @@ import SwishPaymentDialog from './SwishPaymentDialog';
 import { useSwishPaymentStatus } from '@/hooks/useSwishPaymentStatus';
 import { getGiftCardDetails, getFlowType, setPaymentReference } from '@/utils/flowStorage';
 
+interface GiftCardDetails {
+  type: string;
+  recipientName: string;
+  recipientEmail: string;
+  message: string;
+}
+
 export interface SwishPaymentSectionRef {
   handleCreatePayment: () => Promise<boolean>;
 }
@@ -86,9 +93,9 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       const isGiftCard = courseId === 'gift-card';
       
       // For gift cards, get the item details from flowStorage
-      let itemDetails = null;
+      let itemDetails: GiftCardDetails | null = null;
       if (isGiftCard) {
-        itemDetails = getGiftCardDetails();
+        itemDetails = getGiftCardDetails() as GiftCardDetails;
       }
       
       // Check if this is an art product from the shop
@@ -104,11 +111,16 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           phone_number: phoneNumber,
           payment_method: 'swish',
           product_type: isGiftCard ? 'gift_card' : isArtProduct ? 'art_product' : 'course',
-          product_id: courseId,
+          product_id: isGiftCard ? '00000000-0000-0000-0000-000000000001' : courseId,
           amount: amount,
           quantity: parseInt(userInfo.numberOfParticipants || '1'),
           user_info: userInfo,
-          itemDetails: itemDetails
+          itemDetails: itemDetails ? {
+            type: itemDetails.type,
+            recipientName: itemDetails.recipientName,
+            recipientEmail: itemDetails.recipientEmail,
+            message: itemDetails.message
+          } : null
         })
       });
 
