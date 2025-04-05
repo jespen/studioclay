@@ -468,4 +468,104 @@ export async function sendServerGiftCardEmail(params: {
       message: error instanceof Error ? error.message : 'Unknown error sending gift card email'
     };
   }
+}
+
+/**
+ * Send a product order confirmation email from the server
+ */
+export async function sendServerProductOrderConfirmationEmail(params: {
+  userInfo: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    address?: string;
+    postalCode?: string;
+    city?: string;
+  };
+  paymentDetails: {
+    method: string;
+    status: string;
+    reference?: string;
+    invoiceNumber?: string;
+    amount: number;
+  };
+  productDetails: {
+    id: string;
+    title: string;
+    description?: string;
+    price: number;
+    quantity: number;
+    image?: string;
+  };
+  orderReference: string;
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    // Build email HTML using the modular template system
+    const htmlContent = buildConfirmationEmail({
+      productType: 'product',
+      userInfo: params.userInfo,
+      paymentDetails: {
+        method: params.paymentDetails.method || '',
+        status: params.paymentDetails.status || '',
+        reference: params.paymentDetails.reference,
+        invoiceNumber: params.paymentDetails.invoiceNumber,
+        amount: params.productDetails.price * params.productDetails.quantity
+      },
+      itemDetails: {
+        id: params.productDetails.id,
+        title: params.productDetails.title,
+        description: params.productDetails.description,
+        price: params.productDetails.price,
+        quantity: params.productDetails.quantity
+      },
+      reference: params.orderReference
+    });
+    
+    // Create reusable transporter
+    const transporter = await createTransporter();
+    
+    if (!transporter) {
+      console.log('No transporter available, simulating email send');
+      return {
+        success: false,
+        message: 'Email transporter not available'
+      };
+    }
+    
+    // For Office 365, use a simplified from address that exactly matches the authenticated user
+    const authenticatedEmail = process.env.EMAIL_USER;
+    
+    // Create email options
+    const mailOptions = {
+      from: authenticatedEmail,
+      to: params.userInfo.email,
+      subject: `Orderbekräftelse - ${params.productDetails.title}`,
+      html: htmlContent,
+      bcc: process.env.BCC_EMAIL || undefined
+    };
+    
+    // Send email
+    console.log('Sending product order confirmation email to:', params.userInfo.email);
+    const info = await transporter.sendMail(mailOptions);
+    
+    console.log('Product order confirmation email sent successfully:', info.messageId);
+    
+    // Check if this is a test email from Ethereal
+    if (info.messageId && info.messageId.includes('ethereal')) {
+      console.log('Test email URL:', nodemailer.getTestMessageUrl(info));
+    }
+    
+    return {
+      success: true,
+      message: 'Product order confirmation email sent successfully'
+    };
+  } catch (error) {
+    console.error('Error sending product order confirmation email:', error);
+    logSMTPError(error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error sending product order confirmation email'
+    };
+  }
 } 
