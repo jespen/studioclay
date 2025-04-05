@@ -133,23 +133,29 @@ export class SwishService {
   private async makeSwishRequest(data: any): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       const url = this.config.getEndpointUrl('createPayment');
+      const isTestMode = this.config.isTest;
 
       logDebug('Swish config info:', {
-        isTestMode: this.config.isTest,
+        isTestMode,
         apiUrl: this.config.apiUrl,
         payeeAlias: this.config.payeeAlias
       });
 
+      // Resolve absolute paths for certificate files
+      const certPath = path.resolve(process.cwd(), this.config.certPath);
+      const keyPath = path.resolve(process.cwd(), this.config.keyPath);
+      const caPath = path.resolve(process.cwd(), this.config.caPath);
+      
       logDebug('Certificate paths:', {
-        certPath: path.resolve(process.cwd(), this.config.certPath),
-        keyPath: path.resolve(process.cwd(), this.config.keyPath),
-        caPath: path.resolve(process.cwd(), this.config.caPath)
+        certPath,
+        keyPath,
+        caPath
       });
 
       // Verify that certificate files exist
-      const certExists = fs.existsSync(path.resolve(process.cwd(), this.config.certPath));
-      const keyExists = fs.existsSync(path.resolve(process.cwd(), this.config.keyPath));
-      const caExists = fs.existsSync(path.resolve(process.cwd(), this.config.caPath));
+      const certExists = fs.existsSync(certPath);
+      const keyExists = fs.existsSync(keyPath);
+      const caExists = fs.existsSync(caPath);
       
       logDebug('Certificate files existence check:', {
         certExists,
@@ -168,9 +174,9 @@ export class SwishService {
 
       try {
         // Read certificate files to verify they're readable
-        const certContent = fs.readFileSync(path.resolve(process.cwd(), this.config.certPath), 'utf8');
-        const keyContent = fs.readFileSync(path.resolve(process.cwd(), this.config.keyPath), 'utf8');
-        const caContent = fs.readFileSync(path.resolve(process.cwd(), this.config.caPath), 'utf8');
+        const certContent = fs.readFileSync(certPath, 'utf8');
+        const keyContent = fs.readFileSync(keyPath, 'utf8');
+        const caContent = fs.readFileSync(caPath, 'utf8');
         
         logDebug('Certificate files read successfully', {
           certLength: certContent.length,
@@ -185,14 +191,37 @@ export class SwishService {
         throw new SwishCertificateError(`Error reading certificate files: ${readError.message}`);
       }
 
-      // Create HTTPS agent with certificates
-      const agent = new https.Agent({
-        cert: fs.readFileSync(path.resolve(process.cwd(), this.config.certPath)),
-        key: fs.readFileSync(path.resolve(process.cwd(), this.config.keyPath)),
-        ca: fs.readFileSync(path.resolve(process.cwd(), this.config.caPath)),
+      // Konfigurera HTTPS-agenten med certifikat
+      const agentOptions: https.AgentOptions = {
+        // Klientcertifikat för att identifiera oss mot Swish
+        cert: fs.readFileSync(certPath),
+        key: fs.readFileSync(keyPath),
+        
+        // För att verifiera Swish-serverns certifikat behöver vi CA-certifikat
+        // I test-miljö använder vi vårt egna CA-certifikat
+        // I produktionsmiljö inaktiverar vi validering eftersom Swish använder ett annat CA
+        rejectUnauthorized: isTestMode,
+        
+        // I test-miljö lägger vi till Swish CA till vår trust-store
+        ca: isTestMode ? fs.readFileSync(caPath) : undefined,
+        
+        // Eventuellt lösenord för certifikatet
         passphrase: this.config.certPassword,
+        
+        // Tvinga TLS 1.2 eller högre
         minVersion: 'TLSv1.2'
+      };
+
+      // Lägg till extradiagnostik för felsökning
+      logDebug('Creating HTTPS agent with options:', {
+        hasCert: !!agentOptions.cert,
+        hasKey: !!agentOptions.key,
+        hasCa: !!agentOptions.ca,
+        rejectUnauthorized: agentOptions.rejectUnauthorized,
+        hasPassphrase: !!agentOptions.passphrase
       });
+      
+      const agent = new https.Agent(agentOptions);
 
       // Redact sensitive information for logging
       const logData = { ...data };

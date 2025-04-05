@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import https from 'https';
 import { logDebug, logError } from '@/lib/logging';
 
 /**
@@ -40,10 +41,29 @@ export function setupCertificate() {
       };
     }
     
+    // Skapa även fil för Root CA (Swish servervalidering)
+    // Använd default Node.js CA-bundle som grund och lägg till Swish CA
+    let rootCaPath = '';
+    try {
+      if (process.env.SWISH_ROOT_CA_BASE64) {
+        rootCaPath = path.join(tempDir, 'root_ca.pem');
+        const rootCaBuffer = Buffer.from(process.env.SWISH_ROOT_CA_BASE64, 'base64');
+        fs.writeFileSync(rootCaPath, rootCaBuffer);
+        logDebug('Created separate Root CA file for Swish server validation');
+      }
+    } catch (caError) {
+      logError('Error creating Root CA file:', caError);
+    }
+    
     // Uppdatera miljövariabler för att peka på tempfilen
     process.env.SWISH_PROD_CERT_PATH = bundlePath;
     process.env.SWISH_PROD_KEY_PATH = bundlePath;
     process.env.SWISH_PROD_CA_PATH = bundlePath;
+    
+    // Sätt även Root CA miljövariabel om det behövs
+    if (rootCaPath && fs.existsSync(rootCaPath)) {
+      process.env.SWISH_ROOT_CA_PATH = rootCaPath;
+    }
     
     const fileStats = fs.statSync(bundlePath);
     
@@ -51,8 +71,15 @@ export function setupCertificate() {
       path: bundlePath,
       size: fileStats.size,
       mode: fileStats.mode.toString(8),
-      created: fileStats.birthtime
+      created: fileStats.birthtime,
+      rootCaPath: rootCaPath || 'Not created'
     });
+    
+    // Om vi har lösenord, spara det i en miljövariabel som SwishConfig kan använda
+    if (process.env.SWISH_BUNDLE_PASSWORD) {
+      process.env.SWISH_PROD_CERT_PASSWORD = process.env.SWISH_BUNDLE_PASSWORD;
+      logDebug('Using certificate password from SWISH_BUNDLE_PASSWORD');
+    }
     
     return { 
       success: true,
@@ -60,7 +87,8 @@ export function setupCertificate() {
       exists: true,
       size: fileStats.size,
       permissions: fileStats.mode.toString(8),
-      tempDir
+      tempDir,
+      rootCaPath: rootCaPath || undefined
     };
   } catch (error) {
     logError('Error setting up certificate:', error);
