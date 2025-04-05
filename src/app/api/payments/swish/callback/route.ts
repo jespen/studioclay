@@ -35,10 +35,14 @@ async function verifySwishSignature(request: Request): Promise<boolean> {
       throw new Error('Missing Swish CA certificate configuration');
     }
 
+    // Läs in certifikatet
     const cert = fs.readFileSync(path.resolve(process.cwd(), certPath));
+    
+    // Skapa en verifierare med SHA256
     const verifier = crypto.createVerify('SHA256');
     verifier.update(body);
     
+    // Verifiera signaturen med certifikatet
     return verifier.verify(cert, signature, 'base64');
   } catch (error) {
     console.error('Error verifying Swish signature:', error);

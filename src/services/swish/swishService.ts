@@ -190,6 +190,7 @@ export class SwishService {
         cert: fs.readFileSync(path.resolve(process.cwd(), this.config.certPath)),
         key: fs.readFileSync(path.resolve(process.cwd(), this.config.keyPath)),
         ca: fs.readFileSync(path.resolve(process.cwd(), this.config.caPath)),
+        passphrase: this.config.certPassword,
         minVersion: 'TLSv1.2'
       });
 

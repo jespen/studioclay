@@ -21,18 +21,62 @@ export async function GET(request: NextRequest) {
     const environment = {
       test_mode: process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true' ? 'Ja' : 'Nej (PRODUKTION)',
       base_url: process.env.NEXT_PUBLIC_BASE_URL,
-      node_env: process.env.NODE_ENV
+      node_env: process.env.NODE_ENV,
+      prod_certs: {
+        cert_path: process.env.SWISH_PROD_CERT_PATH,
+        cert_exists: process.env.SWISH_PROD_CERT_PATH ? 
+          fs.existsSync(path.resolve(process.cwd(), process.env.SWISH_PROD_CERT_PATH)) : false,
+        key_path: process.env.SWISH_PROD_KEY_PATH,
+        key_exists: process.env.SWISH_PROD_KEY_PATH ? 
+          fs.existsSync(path.resolve(process.cwd(), process.env.SWISH_PROD_KEY_PATH)) : false,
+        ca_path: process.env.SWISH_PROD_CA_PATH,
+        ca_exists: process.env.SWISH_PROD_CA_PATH ? 
+          fs.existsSync(path.resolve(process.cwd(), process.env.SWISH_PROD_CA_PATH)) : false
+      }
     };
     
     // Initiera Swish-tjänsten
-    const swishService = SwishService.getInstance();
-    
-    // Kontrollera om tjänsten initierades korrekt
-    if (!swishService) {
+    let swishService;
+    try {
+      swishService = SwishService.getInstance();
+      if (!swishService) {
+        throw new Error('SwishService.getInstance() returned null');
+      }
+    } catch (error) {
+      logError('Failed to initialize SwishService:', error);
+      
+      // Försök läsa och visa ytterligare information om certifikat
+      let certDetails = {};
+      try {
+        if (process.env.SWISH_PROD_CERT_PATH && fs.existsSync(path.resolve(process.cwd(), process.env.SWISH_PROD_CERT_PATH))) {
+          const certStats = fs.statSync(path.resolve(process.cwd(), process.env.SWISH_PROD_CERT_PATH));
+          certDetails = {
+            ...certDetails,
+            cert_size: certStats.size,
+            cert_permissions: certStats.mode.toString(8),
+            cert_last_modified: certStats.mtime
+          };
+        }
+        
+        if (process.env.SWISH_PROD_KEY_PATH && fs.existsSync(path.resolve(process.cwd(), process.env.SWISH_PROD_KEY_PATH))) {
+          const keyStats = fs.statSync(path.resolve(process.cwd(), process.env.SWISH_PROD_KEY_PATH));
+          certDetails = {
+            ...certDetails,
+            key_size: keyStats.size,
+            key_permissions: keyStats.mode.toString(8),
+            key_last_modified: keyStats.mtime
+          };
+        }
+      } catch (statError) {
+        logError('Error getting certificate stats:', statError);
+      }
+      
       return NextResponse.json({
         success: false,
-        error: 'Failed to initialize Swish service',
-        environment
+        error: error instanceof Error ? error.message : 'Failed to initialize Swish service',
+        error_details: error instanceof Error ? error.stack : undefined,
+        environment,
+        cert_details: certDetails
       }, { status: 500 });
     }
     
@@ -102,6 +146,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
+      error_details: error instanceof Error ? error.stack : undefined,
       environment: {
         test_mode: process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true' ? 'Ja' : 'Nej (PRODUKTION)',
         base_url: process.env.NEXT_PUBLIC_BASE_URL,

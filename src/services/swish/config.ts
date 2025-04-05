@@ -28,13 +28,13 @@ const SwishEnvSchema = z.object({
     { message: "BASE_URL must start with 'https://' in production mode" }
   ),
   /** Swish number for the merchant in production environment */
-  SWISH_PROD_PAYEE_ALIAS: z.string().optional(),
+  SWISH_PROD_PAYEE_ALIAS: z.string(),
   /** Path to the Swish certificate file in production environment */
-  SWISH_PROD_CERT_PATH: z.string().optional(),
+  SWISH_PROD_CERT_PATH: z.string(),
   /** Path to the Swish private key file in production environment */
-  SWISH_PROD_KEY_PATH: z.string().optional(),
+  SWISH_PROD_KEY_PATH: z.string(),
   /** Path to the Swish CA certificate file in production environment */
-  SWISH_PROD_CA_PATH: z.string().optional(),
+  SWISH_PROD_CA_PATH: z.string(),
 });
 
 /**
@@ -134,7 +134,7 @@ export class SwishConfig {
   public get certPath(): string {
     return this.isTestMode 
       ? this.env.SWISH_TEST_CERT_PATH 
-      : this.env.SWISH_PROD_CERT_PATH || this.env.SWISH_TEST_CERT_PATH;
+      : this.env.SWISH_PROD_CERT_PATH;
   }
 
   /**
@@ -145,7 +145,7 @@ export class SwishConfig {
   public get keyPath(): string {
     return this.isTestMode 
       ? this.env.SWISH_TEST_KEY_PATH 
-      : this.env.SWISH_PROD_KEY_PATH || this.env.SWISH_TEST_KEY_PATH;
+      : this.env.SWISH_PROD_KEY_PATH;
   }
 
   /**
@@ -156,7 +156,18 @@ export class SwishConfig {
   public get caPath(): string {
     return this.isTestMode 
       ? this.env.SWISH_TEST_CA_PATH 
-      : this.env.SWISH_PROD_CA_PATH || this.env.SWISH_TEST_CA_PATH;
+      : this.env.SWISH_PROD_CA_PATH;
+  }
+
+  /**
+   * Gets the certificate password if available.
+   * 
+   * @returns {string|undefined} The certificate password or undefined if not set
+   */
+  public get certPassword(): string | undefined {
+    return this.isTestMode 
+      ? process.env.SWISH_TEST_CERT_PASSWORD 
+      : process.env.SWISH_PROD_CERT_PASSWORD;
   }
 
   /**
