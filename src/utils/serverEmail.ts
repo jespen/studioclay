@@ -5,7 +5,7 @@ import { buildConfirmationEmail } from '@/utils/emailBuilder';
 // Email configuration for server-side sending
 const emailConfig = {
   // SMTP settings (for actual deployment, store these in .env variables)
-  host: process.env.EMAIL_SMTP_HOST || 'smtpout.secureserver.net',
+  host: process.env.EMAIL_SMTP_HOST || 'smtp.office365.com',
   port: parseInt(process.env.EMAIL_SMTP_PORT || '587'),
   secure: process.env.EMAIL_SMTP_SECURE === 'true', // true for 465, false for other ports
   auth: {
@@ -39,6 +39,16 @@ function logSMTPError(error: any) {
 
 // Create a reusable transporter
 const createTransporter = async () => {
+  // Log environment variables (without sensitive data)
+  console.log('📧 Email Configuration:');
+  console.log(`📧 SMTP Host: ${process.env.EMAIL_SMTP_HOST || 'smtp.office365.com'}`);
+  console.log(`📧 SMTP Port: ${process.env.EMAIL_SMTP_PORT || '587'}`);
+  console.log(`📧 SMTP Secure: ${process.env.EMAIL_SMTP_SECURE || 'false'}`);
+  console.log(`📧 Email User: ${process.env.EMAIL_USER || 'eva@studioclay.se'}`);
+  console.log(`📧 Email Pass: ${process.env.EMAIL_PASS ? '********' : 'Not set'}`);
+  console.log(`📧 BCC Email: ${process.env.BCC_EMAIL || 'Not set'}`);
+  console.log(`📧 Node Environment: ${process.env.NODE_ENV || 'Not set'}`);
+
   // Skip Ethereal if disabled or in production
   if (process.env.DISABLE_ETHEREAL === 'true' || process.env.NODE_ENV === 'production') {
     console.log('📧 Using Office 365 SMTP server for email delivery');
@@ -59,43 +69,9 @@ const createTransporter = async () => {
       return null;
     }
     
-    // Special handling for Office 365
-    if (host.includes('office365') || host.includes('outlook')) {
-      console.log('📧 Using Office 365 specific configuration');
-      try {
-        const transporter = nodemailer.createTransport({
-          host: host,
-          port: port,
-          secure: false, // TLS requires secure:false for Office 365
-          auth: {
-            user: user,
-            pass: pass,
-          },
-          tls: {
-            // Microsoft recommends TLS 1.2
-            minVersion: 'TLSv1.2',
-            // Trust any certificate since Office 365 uses valid certs
-            rejectUnauthorized: true
-          },
-          debug: true // Enable debug output for troubleshooting
-        });
-        
-        // Verify connection configuration
-        await transporter.verify();
-        console.log('📧 Office 365 SMTP server connection verified successfully');
-        return transporter;
-      } catch (error) {
-        console.error('📧 Error verifying Office 365 SMTP connection:', error);
-        logSMTPError(error);
-        throw error;
-      }
-    }
-    
-    // Regular SMTP configuration for other providers
-    console.log('📧 Creating SMTP transport with plain password (secure)');
-    
     try {
       // Create standard transport using standard options
+      console.log('📧 Creating SMTP transport with TLS');
       const transport = nodemailer.createTransport({
         host: host,
         port: port,
@@ -104,10 +80,17 @@ const createTransporter = async () => {
           user: user,
           pass: pass
         },
+        tls: {
+          // Microsoft recommends TLS 1.2
+          minVersion: 'TLSv1.2',
+          // Trust any certificate since Office 365 uses valid certs
+          rejectUnauthorized: true
+        },
         debug: true
       });
       
       // Verify connection configuration
+      console.log('📧 Verifying SMTP connection...');
       await transport.verify();
       console.log('📧 SMTP server connection verified successfully');
       
@@ -131,6 +114,7 @@ const createTransporter = async () => {
           debug: true
         });
         
+        console.log('📧 Verifying SSL connection...');
         await sslTransport.verify();
         console.log('📧 SMTP SSL connection verified successfully');
         
