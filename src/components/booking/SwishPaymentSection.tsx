@@ -32,6 +32,8 @@ interface SwishPaymentSectionProps {
   disabled?: boolean;
 }
 
+// Reset version - 2024-04-05
+// Reverted to stable version with Office 365 email configuration
 const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSectionProps>(({
   userInfo,
   courseId,
