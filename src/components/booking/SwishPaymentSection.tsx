@@ -101,8 +101,12 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     setShowPaymentDialog(true);
 
     try {
-      // Clean phone number by removing spaces and dashes
+      // Clean phone number by removing spaces and dashes, then format for Swish
       const cleanPhoneNumber = phoneNumber.replace(/[- ]/g, '');
+      // Convert from 07XXXXXXXX to 467XXXXXXXX format
+      const swishPhoneNumber = cleanPhoneNumber.startsWith('0') 
+        ? `46${cleanPhoneNumber.substring(1)}` 
+        : cleanPhoneNumber;
       
       // Map flow type to product type
       const flowType = getFlowType();
@@ -131,7 +135,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           'Idempotency-Key': crypto.randomUUID()
         },
         body: JSON.stringify({
-          phone_number: cleanPhoneNumber,
+          phone_number: swishPhoneNumber,
           payment_method: 'swish',
           product_type: productType,
           product_id: productId,
@@ -139,7 +143,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           quantity: parseInt(userInfo.numberOfParticipants || '1'),
           user_info: {
             ...userInfo,
-            phone: cleanPhoneNumber, // Update phone in userInfo as well
+            phone: cleanPhoneNumber, // Keep original format in userInfo
             numberOfParticipants: userInfo.numberOfParticipants || '1'
           }
         }),
