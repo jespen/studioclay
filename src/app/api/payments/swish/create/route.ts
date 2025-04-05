@@ -426,7 +426,16 @@ export async function POST(request: Request) {
 
       // Ensure callback URL uses HTTPS
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-      const callbackUrl = baseUrl.replace('http://', 'https://') + '/api/payments/swish/callback';
+      
+      // Skapa en korrekt callback-URL, se till att den använder studioclay.se (utan www)
+      // och att den använder HTTPS eftersom Swish kräver det
+      let callbackUrl = baseUrl.replace('http://', 'https://');
+      
+      // Ta bort eventuellt www-prefix från URL:en då Swish-certifikatet kan vara konfigurerat för domänen utan www
+      callbackUrl = callbackUrl.replace('www.studioclay.se', 'studioclay.se');
+      
+      // Lägg till sökvägen till callback-endpointen
+      callbackUrl = callbackUrl + '/api/payments/swish/callback';
       
       logDebug('Using callback URL:', callbackUrl);
 
