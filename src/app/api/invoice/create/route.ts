@@ -272,6 +272,9 @@ export async function POST(request: Request) {
       
       console.log('Gift card created successfully:', giftCardResult);
       
+      // Deklarera giftCardPdfBuffer utanför try-catch
+      let giftCardPdfBuffer: Buffer | undefined = undefined;
+      
       // Automatiskt generera presentkorts-PDF
       console.log('Automatically generating gift card PDF');
       try {
@@ -292,7 +295,7 @@ export async function POST(request: Request) {
         // Generera PDF
         console.log('Generating gift card PDF document...');
         const giftCardPdfBlob = await generateGiftCardPDF(pdfGiftCardData);
-        const giftCardPdfBuffer = Buffer.from(await giftCardPdfBlob.arrayBuffer());
+        giftCardPdfBuffer = Buffer.from(await giftCardPdfBlob.arrayBuffer());
         
         // Spara PDF i Supabase storage (giftcards bucket)
         const bucketName = 'giftcards';
@@ -411,7 +414,10 @@ export async function POST(request: Request) {
           price: giftCardData.amount
         },
         invoiceNumber,
-        pdfBuffer
+        pdfBuffer,
+        isGiftCard: true,
+        giftCardCode: giftCardResult.code,
+        giftCardPdfBuffer: giftCardPdfBuffer
       });
       
       console.log('Gift card invoice email sending result:', emailResult);

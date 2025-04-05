@@ -200,11 +200,23 @@ export async function sendServerInvoiceEmail(params: {
   };
   invoiceNumber: string;
   pdfBuffer?: Buffer; // PDF as a buffer
+  isGiftCard?: boolean; // Flag to indicate if this is a gift card purchase
+  giftCardCode?: string; // Optional gift card code if this is a gift card
+  giftCardPdfBuffer?: Buffer; // Optional gift card PDF buffer to attach
 }): Promise<{ success: boolean; message: string }> {
   try {
+    // Check if this is a gift card purchase
+    const productType = params.isGiftCard ? 'gift_card' : 'course';
+    const title = params.isGiftCard ? 'Presentkort' : params.courseDetails.title;
+    
+    // Customize subject line based on product type
+    const subjectLine = params.isGiftCard
+      ? `Bekräftelse på ditt presentkortsköp - Studio Clay`
+      : `Bokningsbekräftelse - ${title}`;
+    
     // Build email HTML using the modular template system
     const htmlContent = buildConfirmationEmail({
-      productType: 'course',
+      productType: productType,
       userInfo: params.userInfo,
       paymentDetails: {
         method: 'invoice',
@@ -214,11 +226,12 @@ export async function sendServerInvoiceEmail(params: {
       },
       itemDetails: {
         id: params.courseDetails.id,
-        title: params.courseDetails.title,
+        title: title,
         description: params.courseDetails.description,
         price: params.courseDetails.price,
         start_date: params.courseDetails.start_date,
-        location: params.courseDetails.location
+        location: params.courseDetails.location,
+        code: params.giftCardCode // Add gift card code if available
       },
       reference: params.invoiceNumber
     });
@@ -237,20 +250,35 @@ export async function sendServerInvoiceEmail(params: {
     // For Office 365, use a simplified from address that exactly matches the authenticated user
     const authenticatedEmail = process.env.EMAIL_USER;
     
+    // Create email attachments array
+    const attachments = [];
+    
+    // Add invoice PDF if available
+    if (params.pdfBuffer) {
+      attachments.push({
+        filename: `Faktura-${params.invoiceNumber}.pdf`,
+        content: params.pdfBuffer,
+        contentType: 'application/pdf'
+      });
+    }
+    
+    // Add gift card PDF if this is a gift card purchase and we have the PDF
+    if (params.isGiftCard && params.giftCardPdfBuffer && params.giftCardCode) {
+      attachments.push({
+        filename: `Presentkort-${params.giftCardCode}.pdf`,
+        content: params.giftCardPdfBuffer,
+        contentType: 'application/pdf'
+      });
+    }
+    
     // Create email options
     const mailOptions = {
       from: authenticatedEmail,
       to: params.userInfo.email,
-      subject: `Bokningsbekräftelse - ${params.courseDetails.title}`,
+      subject: subjectLine,
       html: htmlContent,
       bcc: process.env.BCC_EMAIL || undefined,
-      attachments: params.pdfBuffer ? [
-        {
-          filename: `Faktura-${params.invoiceNumber}.pdf`,
-          content: params.pdfBuffer,
-          contentType: 'application/pdf'
-        }
-      ] : undefined
+      attachments: attachments.length > 0 ? attachments : undefined
     };
     
     // Send email
