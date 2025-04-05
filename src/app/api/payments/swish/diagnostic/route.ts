@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { logDebug, logError } from '@/lib/logging';
 import { SwishService } from '@/services/swish/swishService';
 import { SwishConfig } from '@/services/swish/config';
+import { setupCertificate } from '../cert-helper';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -40,6 +41,21 @@ interface TestResults {
  */
 export async function GET(request: NextRequest) {
   try {
+    // Set up certificates in production mode
+    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_SWISH_TEST_MODE !== 'true') {
+      logDebug('Setting up Swish certificates from environment variables in diagnostic endpoint');
+      const certSetupResult = setupCertificate();
+      
+      if (!certSetupResult.success) {
+        logError('Failed to set up Swish certificates in diagnostic endpoint:', certSetupResult);
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to set up Swish certificates',
+          details: certSetupResult
+        }, { status: 500 });
+      }
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const phone = searchParams.get('phone');
     const type = searchParams.get('type') || 'all';
