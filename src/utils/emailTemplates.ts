@@ -36,7 +36,7 @@ export const generateConfirmationMessage = (productType: 'course' | 'gift_card' 
     case 'gift_card':
       return '<p>Tack för din beställning av presentkort, i mailet hittar du presentkortet.</p>';
     case 'product':
-      return '<p>Tack för din beställning hos Studio Clay!</p>';
+      return '<p>Tack för ditt köp hos Studio Clay! Vi kontaktar dig när din produkt är redo att hämtas.</p>';
     default:
       return '<p>Tack för ditt köp hos Studio Clay!</p>';
   }
@@ -84,10 +84,18 @@ export const generateProductDetails = (productData: {
   quantity: number;
   totalPrice: number;
 }): string => {
+  // Format dagens datum i svensk format
+  const purchaseDate = new Date().toLocaleDateString('sv-SE', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  
   return `
     <p><strong>Produkt:</strong> ${productData.title}</p>
+    <p><strong>Inköpsdatum:</strong> ${purchaseDate}</p>
+    <p><strong>Upphämtningsplats:</strong> Studio Clay, Norrtullsgatan 65</p>
     <p><strong>Antal:</strong> ${productData.quantity}</p>
-    <p><strong>Pris per styck:</strong> ${productData.price.toFixed(2)} kr</p>
     <p><strong>Totalt pris:</strong> ${productData.totalPrice.toFixed(2)} kr</p>
   `;
 };

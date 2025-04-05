@@ -65,12 +65,48 @@ export class SwishService {
   }
 
   /**
-   * Gets the current payee alias (Swish number).
+   * Gets the payee alias (Swish number).
    * 
    * @returns {string} The merchant's Swish number
    */
   public getPayeeAlias(): string {
     return this.config.payeeAlias;
+  }
+
+  /**
+   * Gets the path to the Swish certificate file.
+   * 
+   * @returns {string} Path to the certificate file
+   */
+  public getCertPath(): string {
+    return this.config.certPath;
+  }
+
+  /**
+   * Gets the path to the Swish private key file.
+   * 
+   * @returns {string} Path to the private key file
+   */
+  public getKeyPath(): string {
+    return this.config.keyPath;
+  }
+
+  /**
+   * Gets the path to the Swish CA certificate file.
+   * 
+   * @returns {string} Path to the CA certificate file
+   */
+  public getCaPath(): string {
+    return this.config.caPath;
+  }
+
+  /**
+   * Checks if the current environment is test mode.
+   * 
+   * @returns {boolean} True if in test mode, false otherwise
+   */
+  public isTestMode(): boolean {
+    return this.config.isTest;
   }
 
   /**

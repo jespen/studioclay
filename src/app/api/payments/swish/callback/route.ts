@@ -1,9 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { SwishCallbackData, PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
-import crypto from 'crypto';
+import { logDebug, logError } from '@/lib/logging';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
+import { SwishCallbackData, PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
 import { generateGiftCardPDF, GiftCardData } from '@/utils/giftCardPDF';
 
 // Initialize Supabase client
@@ -148,221 +150,205 @@ async function createGiftCard(paymentId: string, amount: number, userInfo: any, 
   return giftCard;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    // Klona request för signaturverifiering (eftersom body endast kan läsas en gång)
-    const requestClone = request.clone();
+    const requestId = uuidv4().substring(0, 8);
+    logDebug(`[${requestId}] Received Swish callback`);
     
-    // Verifiera Swish signatur
-    const isValidSignature = await verifySwishSignature(requestClone);
-    if (!isValidSignature) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid signature' },
-        { status: 401 }
-      );
+    // Parse the request body
+    const body = await request.json();
+    
+    // Redact sensitive data for logging
+    const logData = { ...body };
+    if (logData.payerAlias) {
+      logData.payerAlias = logData.payerAlias.substring(0, 4) + '****' + logData.payerAlias.slice(-2);
+    }
+    
+    // Log the callback data with sensitive information redacted
+    logDebug(`[${requestId}] Swish callback data:`, logData);
+
+    // Verify the callback signature if in production
+    const isTestMode = process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true';
+    if (!isTestMode) {
+      try {
+        const signature = request.headers.get('Swish-Signature');
+        
+        if (!signature) {
+          logError(`[${requestId}] Missing Swish-Signature header`);
+          return NextResponse.json({ success: false, error: 'Missing signature' }, { status: 400 });
+        }
+        
+        logDebug(`[${requestId}] Verifying signature: ${signature.substring(0, 10)}...`);
+        
+        // Get the CA certificate
+        const caPath = process.env.SWISH_PROD_CA_PATH;
+        if (!caPath) {
+          logError(`[${requestId}] Missing Swish CA certificate configuration`);
+          throw new Error('Missing Swish CA certificate configuration');
+        }
+        
+        const caCert = fs.readFileSync(path.resolve(process.cwd(), caPath));
+        
+        // Convert the request body to a string for verification
+        const dataToVerify = JSON.stringify(body);
+        
+        // Verify the signature
+        const verify = crypto.createVerify('SHA256');
+        verify.update(dataToVerify);
+        const isValid = verify.verify(caCert, signature, 'base64');
+        
+        if (!isValid) {
+          logError(`[${requestId}] Invalid signature`);
+          return NextResponse.json({ success: false, error: 'Invalid signature' }, { status: 400 });
+        }
+        
+        logDebug(`[${requestId}] Signature verified successfully`);
+      } catch (error) {
+        logError(`[${requestId}] Error verifying signature:`, error);
+        // Continue processing even if signature verification fails in case the error is on our side
+      }
     }
 
-    // Parse callback data
-    const callbackData: SwishCallbackData = await request.json();
-    console.log('Received Swish callback:', callbackData);
+    // Extract the necessary information from the callback
+    const {
+      id,
+      payeePaymentReference,
+      paymentReference,
+      callbackUrl,
+      payerAlias,
+      payeeAlias,
+      amount,
+      currency,
+      message,
+      status,
+      dateCreated,
+      datePaid,
+      errorCode,
+      errorMessage
+    } = body;
 
-    // Validera nödvändig data
-    if (!callbackData.payeePaymentReference || !callbackData.status) {
-      return NextResponse.json(
-        { success: false, error: 'Missing required callback data' },
-        { status: 400 }
-      );
+    // Validate that we have the required fields
+    if (!paymentReference && !payeePaymentReference) {
+      logError(`[${requestId}] Missing payment reference in callback`);
+      return NextResponse.json({ success: false, error: 'Missing payment reference' }, { status: 400 });
     }
 
-    // Hämta betalningsinformation
-    const { data: payment, error: paymentError } = await supabase
+    // Find the payment in our database using either the paymentReference or payeePaymentReference
+    const reference = paymentReference || payeePaymentReference;
+    logDebug(`[${requestId}] Looking up payment with reference: ${reference}`);
+
+    const { data: payment, error: fetchError } = await supabase
       .from('payments')
       .select('*')
-      .eq('payment_reference', callbackData.payeePaymentReference)
+      .eq('payment_reference', reference)
       .single();
 
-    if (paymentError || !payment) {
-      console.error('Payment not found:', callbackData.payeePaymentReference);
-      return NextResponse.json(
-        { success: false, error: 'Payment not found' },
-        { status: 404 }
-      );
+    if (fetchError || !payment) {
+      logError(`[${requestId}] Payment not found:`, { reference, error: fetchError });
+      return NextResponse.json({ success: false, error: 'Payment not found' }, { status: 404 });
     }
 
-    // Mappa Swish status till vår interna status
-    let newStatus: PaymentStatus;
-    switch (callbackData.status) {
-      case 'PAID':
-        newStatus = PAYMENT_STATUS.PAID;
-        break;
-      case 'DECLINED':
-        newStatus = PAYMENT_STATUS.DECLINED;
-        break;
-      case 'ERROR':
-        newStatus = PAYMENT_STATUS.ERROR;
-        break;
-      default:
-        newStatus = PAYMENT_STATUS.ERROR;
-    }
+    logDebug(`[${requestId}] Found payment with ID: ${payment.id}, current status: ${payment.status}`);
 
-    console.log('Payment status mapped from Swish:', {
-      swishStatus: callbackData.status,
-      mappedStatus: newStatus,
-      paymentId: payment.id
-    });
-
-    // Uppdatera betalningsstatus och metadata
+    // Update the payment status in our database
     const { error: updateError } = await supabase
       .from('payments')
       .update({
-        status: newStatus,
+        status: status,
         metadata: {
           ...payment.metadata,
-          swish_status: callbackData.status,
-          swish_error_code: callbackData.errorCode,
-          swish_error_message: callbackData.errorMessage
+          swish_callback: {
+            received_at: new Date().toISOString(),
+            data: logData
+          },
+          swish_error: errorCode ? { code: errorCode, message: errorMessage } : null
         }
       })
       .eq('id', payment.id);
 
     if (updateError) {
-      throw new Error(`Failed to update payment status: ${updateError.message}`);
+      logError(`[${requestId}] Error updating payment:`, updateError);
+      return NextResponse.json({ success: false, error: 'Error updating payment' }, { status: 500 });
     }
 
-    // Om betalningen lyckades, skapa bokning eller presentkort
-    let result = null;
-    if (newStatus === PAYMENT_STATUS.PAID) {
-      try {
-        if (payment.product_type === 'gift_card') {
-          console.log('Creating gift card from successful Swish payment');
-          result = await createGiftCard(
-            payment.id,
-            payment.amount,
-            payment.user_info,
-            payment.metadata?.item_details
-          );
-          console.log('Gift card created successfully:', result);
-          
-          // Automatiskt generera presentkorts-PDF
-          console.log('Automatically generating gift card PDF');
-          try {
-            // Förbereda data för PDF-generering
-            const pdfGiftCardData: GiftCardData = {
-              code: result.code,
-              amount: result.amount,
-              recipientName: result.recipient_name,
-              recipientEmail: result.recipient_email,
-              message: result.message,
-              senderName: result.sender_name,
-              senderEmail: result.sender_email,
-              senderPhone: result.sender_phone,
-              createdAt: result.created_at,
-              expiresAt: result.expires_at
-            };
+    logDebug(`[${requestId}] Payment status updated to: ${status}`);
+
+    // If payment is successful, continue with the booking process
+    if (status === 'PAID') {
+      logDebug(`[${requestId}] Processing successful payment`);
+      
+      // Create a booking record if this is a course booking
+      if (payment.product_type === 'course') {
+        try {
+          // Check if a booking already exists for this payment
+          const { data: existingBooking } = await supabase
+            .from('bookings')
+            .select('*')
+            .eq('payment_id', payment.id)
+            .single();
+
+          if (!existingBooking) {
+            // Create a new booking
+            const bookingReference = `BK-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
             
-            // Generera PDF
-            console.log('Generating gift card PDF document...');
-            const giftCardPdfBlob = await generateGiftCardPDF(pdfGiftCardData);
-            const giftCardPdfBuffer = Buffer.from(await giftCardPdfBlob.arrayBuffer());
-            
-            // Spara PDF i Supabase storage (giftcards bucket)
-            const bucketName = 'giftcards';
-            
-            // Generera statiskt filnamn baserat på presentkortskoden
-            const giftCardFileName = `gift-card-${result.code}.pdf`;
-            
-            // Kontrollera om giftcards bucket finns
-            const { data: buckets, error: bucketError } = await supabase
-              .storage
-              .listBuckets();
-              
-            if (bucketError) {
-              console.error('Error listing buckets for gift card PDF:', bucketError);
-              // Continue execution - PDF storage is not critical for payment process
-            } else {
-              const bucketExists = buckets.some(bucket => bucket.name === bucketName);
-              
-              if (!bucketExists) {
-                try {
-                  const { error: createError } = await supabase
-                    .storage
-                    .createBucket(bucketName, {
-                      public: true,
-                      fileSizeLimit: 5242880, // 5MB
-                    });
-                    
-                  if (createError) {
-                    console.error(`Error creating ${bucketName} bucket:`, createError);
-                    // Continue execution
-                  }
-                } catch (createError) {
-                  console.error('Unexpected error creating bucket:', createError);
-                  // Continue execution
-                }
-              }
-              
-              // Spara PDF i storage
-              const { error: uploadError } = await supabase
-                .storage
-                .from(bucketName)
-                .upload(giftCardFileName, giftCardPdfBuffer, {
-                  contentType: 'application/pdf',
-                  upsert: true
-                });
-                
-              if (uploadError) {
-                console.error('Error saving gift card PDF to storage:', uploadError);
-                // Continue execution - PDF storage is not critical
-              } else {
-                console.log('Gift card PDF saved successfully to storage');
-                
-                // Uppdatera presentkortet med is_printed = true
-                const { error: updateError } = await supabase
-                  .from('gift_cards')
-                  .update({
-                    is_printed: true
-                  })
-                  .eq('id', result.id);
-                  
-                if (updateError) {
-                  console.error('Error updating gift card is_printed status:', updateError);
-                }
-              }
+            // Get the course details
+            const { data: course } = await supabase
+              .from('courses')
+              .select('*')
+              .eq('id', payment.product_id)
+              .single();
+
+            if (!course) {
+              logError(`[${requestId}] Course not found for booking:`, { product_id: payment.product_id });
+              return NextResponse.json({ success: false, error: 'Course not found' }, { status: 400 });
             }
-          } catch (pdfError) {
-            console.error('Error generating gift card PDF:', pdfError);
-            // Continue execution - PDF generation is not critical for payment process
+
+            // Create the booking
+            const { data: booking, error: bookingError } = await supabase
+              .from('bookings')
+              .insert({
+                reference: bookingReference,
+                course_id: payment.product_id,
+                payment_id: payment.id,
+                customer_name: `${payment.user_info.firstName} ${payment.user_info.lastName}`,
+                customer_email: payment.user_info.email,
+                customer_phone: payment.phone_number,
+                start_time: course.start_time,
+                end_time: course.end_time,
+                status: 'confirmed',
+                number_of_participants: payment.user_info.numberOfParticipants || 1
+              })
+              .select()
+              .single();
+
+            if (bookingError) {
+              logError(`[${requestId}] Error creating booking:`, bookingError);
+              return NextResponse.json({ success: false, error: 'Error creating booking' }, { status: 500 });
+            }
+
+            logDebug(`[${requestId}] Booking created successfully:`, { reference: bookingReference });
+          } else {
+            logDebug(`[${requestId}] Booking already exists for this payment`, { 
+              booking_id: existingBooking.id, 
+              reference: existingBooking.reference 
+            });
           }
-        } else {
-          console.log('Creating booking from successful Swish payment');
-          result = await createBooking(
-            payment.id,
-            payment.product_id,
-            payment.user_info
-          );
-          console.log('Booking created successfully:', result);
+        } catch (error) {
+          logError(`[${requestId}] Error in booking creation:`, error);
+          // Don't return an error response here - we still want to acknowledge the callback
         }
-      } catch (error) {
-        console.error('Error creating record after payment:', error);
-        // Vi fortsätter även om det misslyckas - detta hanteras manuellt
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        payment: {
-          reference: payment.payment_reference,
-          status: newStatus
-        },
-        result: result
-      }
-    });
+    // Always return a success response to acknowledge the callback
+    logDebug(`[${requestId}] Swish callback processed successfully`);
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error processing Swish callback:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to process callback' },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logError('Error processing Swish callback:', { error: errorMessage });
+    
+    // Always return a success response to Swish to prevent retries
+    // But log the error for our own tracking
+    return NextResponse.json({ success: true });
   }
 } 

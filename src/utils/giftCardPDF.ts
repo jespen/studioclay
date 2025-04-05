@@ -56,26 +56,28 @@ export async function generateGiftCardPDF(giftCardData: GiftCardData): Promise<B
   const primaryColor = [66, 133, 119]; // RGB for Studio Clay green
   const accentColor = [200, 162, 110]; // Studio Clay accent color
   
-  // Add company logo and header
+  // Add company logo and header - centered
   doc.setFontSize(28);
   doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.setFont('helvetica', 'bold');
-  doc.text('STUDIO CLAY', margin, margin);
+  
+  // Using the same style for STUDIO CLAY but with space and centered
+  doc.setFont('helvetica', 'normal');
+  doc.text('STUDIO CLAY', pageWidth / 2, margin + 10, { align: 'center' });
   
   // Add presentkort title
   doc.setFontSize(32);
   doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
-  doc.text('PRESENTKORT', pageWidth / 2, margin + 15, { align: 'center' });
+  doc.text('PRESENTKORT', pageWidth / 2, margin + 25, { align: 'center' });
   
-  // Add gift card code
+  // Add gift card code - less space
   doc.setFontSize(16);
   doc.setTextColor(50, 50, 50);
-  doc.text(`Kod: ${giftCardData.code}`, pageWidth / 2, margin + 25, { align: 'center' });
+  doc.text(`Kod: ${giftCardData.code}`, pageWidth / 2, margin + 32, { align: 'center' });
   
-  // Add gift card amount (make it stand out)
+  // Add gift card amount (make it stand out) - moved up slightly
   doc.setFontSize(42);
   doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.text(`${giftCardData.amount} kr`, pageWidth / 2, pageHeight / 2 - 10, { align: 'center' });
+  doc.text(`${giftCardData.amount} kr`, pageWidth / 2, pageHeight / 2 - 20, { align: 'center' });
   
   // Add validity information
   doc.setFontSize(12);
@@ -85,66 +87,60 @@ export async function generateGiftCardPDF(giftCardData: GiftCardData): Promise<B
   const createdDate = new Date(giftCardData.createdAt);
   const expiresDate = new Date(giftCardData.expiresAt);
   
-  doc.text(`Giltigt från: ${formatDate(createdDate)}`, pageWidth / 2, pageHeight / 2 + 5, { align: 'center' });
-  doc.text(`Giltigt till: ${formatDate(expiresDate)}`, pageWidth / 2, pageHeight / 2 + 15, { align: 'center' });
+  doc.text(`Giltigt från: ${formatDate(createdDate)}`, pageWidth / 2, pageHeight / 2 - 5, { align: 'center' });
+  doc.text(`Giltigt till: ${formatDate(expiresDate)}`, pageWidth / 2, pageHeight / 2 + 5, { align: 'center' });
   
-  // Add recipient information
+  // 1. Add recipient information - centered
   if (giftCardData.recipientName) {
     doc.setFontSize(14);
     doc.setTextColor(50, 50, 50);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Till: ${giftCardData.recipientName}`, margin, pageHeight / 2 + 35);
-    
-    if (giftCardData.recipientEmail) {
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`E-post: ${giftCardData.recipientEmail}`, margin, pageHeight / 2 + 45);
-    }
+    doc.text(`Till: ${giftCardData.recipientName}`, pageWidth / 2, pageHeight / 2 + 25, { align: 'center' });
   }
   
-  // Add sender information
-  doc.setFontSize(12);
-  doc.setTextColor(80, 80, 80);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Från: ${giftCardData.senderName}`, margin, pageHeight / 2 + 60);
-  
-  // Add personal message if available
+  // 2. Add personal message if available - right after recipient name
   if (giftCardData.message) {
     // Create a box for the message
     doc.setFillColor(245, 245, 245);
-    const messageBoxY = pageHeight / 2 + 70;
-    doc.roundedRect(margin, messageBoxY, contentWidth, 40, 3, 3, 'F');
+    const messageBoxY = pageHeight / 2 + 35;
+    doc.roundedRect(margin + 20, messageBoxY, contentWidth - 40, 40, 3, 3, 'F');
     
     doc.setFontSize(12);
     doc.setTextColor(80, 80, 80);
     doc.setFont('helvetica', 'italic');
     
     // Wrap the message text to fit within the box
-    const splitMessage = doc.splitTextToSize(giftCardData.message, contentWidth - 20);
-    doc.text(splitMessage, margin + 10, messageBoxY + 15);
+    const splitMessage = doc.splitTextToSize(giftCardData.message, contentWidth - 60);
+    doc.text(splitMessage, pageWidth / 2, messageBoxY + 15, { align: 'center' });
   }
   
-  // Add instructions
+  // 3. Add sender information - centered
   doc.setFontSize(11);
+  doc.setTextColor(80, 80, 80);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Från: ${giftCardData.senderName}`, pageWidth / 2, pageHeight / 2 + 85, { align: 'center' });
+  
+  // Add instructions - moved down so the message is clearly visible
+  doc.setFontSize(9);
   doc.setTextColor(80, 80, 80);
   doc.setFont('helvetica', 'normal');
   doc.text([
     'Detta presentkort kan användas som betalning för kurser och produkter hos Studio Clay.',
     'För att lösa in presentkortet, ange koden vid betalning på vår hemsida eller i butiken.'
-  ], pageWidth / 2, pageHeight - margin - 25, { align: 'center' });
+  ], pageWidth / 2, pageHeight - 35, { align: 'center' });
   
-  // Add footer with contact information
-  doc.setFontSize(10);
+  // Add footer with contact information - moved down to just above the border
+  doc.setFontSize(9);
   doc.setTextColor(100, 100, 100);
   doc.text([
     `${COMPANY_INFO.name} | ${COMPANY_INFO.address}, ${COMPANY_INFO.postalCode} ${COMPANY_INFO.city}`,
     `Tel: ${COMPANY_INFO.phone} | E-post: ${COMPANY_INFO.email} | ${COMPANY_INFO.website}`
-  ], pageWidth / 2, pageHeight - margin - 5, { align: 'center' });
+  ], pageWidth / 2, pageHeight - 15, { align: 'center' });
   
-  // Add decorative elements (a simple border around the page)
+  // Add decorative elements (border moved closer to the edge)
   doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
   doc.setLineWidth(1);
-  doc.rect(margin - 5, margin - 5, pageWidth - 2 * (margin - 5), pageHeight - 2 * (margin - 5));
+  doc.rect(10, 10, pageWidth - 20, pageHeight - 20); // Reduced margin for border
   
   // Return the PDF as a blob
   return doc.output('blob');

@@ -100,7 +100,7 @@ export function buildConfirmationEmail(params: {
       totalPrice: (params.itemDetails.quantity || 1) * params.itemDetails.price
     });
     
-    parts.push(generateSection('Produktdetaljer', productDetails));
+    parts.push(generateSection('Orderdetaljer', productDetails));
   } 
   else if (params.productType === 'gift_card') {
     // Format purchase date

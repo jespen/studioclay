@@ -203,16 +203,30 @@ export async function sendServerInvoiceEmail(params: {
   isGiftCard?: boolean; // Flag to indicate if this is a gift card purchase
   giftCardCode?: string; // Optional gift card code if this is a gift card
   giftCardPdfBuffer?: Buffer; // Optional gift card PDF buffer to attach
+  isProduct?: boolean; // Flag to indicate if this is a product purchase
 }): Promise<{ success: boolean; message: string }> {
   try {
-    // Check if this is a gift card purchase
-    const productType = params.isGiftCard ? 'gift_card' : 'course';
-    const title = params.isGiftCard ? 'Presentkort' : params.courseDetails.title;
+    // Check what type of product this is
+    let productType: 'course' | 'gift_card' | 'product' = 'course';
+    let title = params.courseDetails.title;
+    
+    if (params.isGiftCard) {
+      productType = 'gift_card';
+      title = 'Presentkort';
+    } else if (params.isProduct) {
+      productType = 'product';
+      title = params.courseDetails.title;
+    }
     
     // Customize subject line based on product type
-    const subjectLine = params.isGiftCard
-      ? `Bekräftelse på ditt presentkortsköp - Studio Clay`
-      : `Bokningsbekräftelse - ${title}`;
+    let subjectLine;
+    if (params.isGiftCard) {
+      subjectLine = `Bekräftelse på ditt presentkortsköp - Studio Clay`;
+    } else if (params.isProduct) {
+      subjectLine = `Orderbekräftelse - Studio Clay`;
+    } else {
+      subjectLine = `Bokningsbekräftelse - ${title}`;
+    }
     
     // Build email HTML using the modular template system
     const htmlContent = buildConfirmationEmail({
@@ -569,7 +583,7 @@ export async function sendServerProductOrderConfirmationEmail(params: {
     const mailOptions = {
       from: authenticatedEmail,
       to: params.userInfo.email,
-      subject: `Orderbekräftelse - ${params.productDetails.title}`,
+      subject: `Orderbekräftelse - Studio Clay`,
       html: htmlContent,
       bcc: process.env.BCC_EMAIL || undefined
     };

@@ -129,7 +129,8 @@ export async function POST(request: Request) {
           price: productData.price
         },
         invoiceNumber,
-        pdfBuffer
+        pdfBuffer,
+        isProduct: true
       });
 
       console.log('Art product invoice email sending result:', emailResult);

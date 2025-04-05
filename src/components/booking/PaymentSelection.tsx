@@ -49,6 +49,9 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import PeopleIcon from '@mui/icons-material/People';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
+import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import InventoryIcon from '@mui/icons-material/Inventory';
 
 import { GenericStep, FlowType } from '../common/BookingStepper';
 import GenericFlowContainer from '../common/GenericFlowContainer';
@@ -484,7 +487,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
           Sammanfattning
         </Typography>
         
-        {courseDetail && flowType !== FlowType.GIFT_CARD && (
+        {courseDetail && flowType !== FlowType.GIFT_CARD && flowType !== FlowType.ART_PURCHASE && (
           <Card variant="outlined" sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
@@ -553,6 +556,109 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                   </Typography>
                 </Box>
               )}
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Shop Product Summary */}
+        {flowType === FlowType.ART_PURCHASE && flowData?.itemDetails && (
+          <Card variant="outlined" sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <ShoppingBagIcon sx={{ mr: 1, color: 'var(--primary)' }} />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  {flowData.itemDetails.title}
+                </Typography>
+              </Box>
+
+              {/* Add product image if available */}
+              {flowData.itemDetails.image && (
+                <Box sx={{ width: '100%', height: 150, position: 'relative', mb: 2, borderRadius: 1, overflow: 'hidden' }}>
+                  <img 
+                    src={flowData.itemDetails.image} 
+                    alt={flowData.itemDetails.title} 
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover' 
+                    }} 
+                  />
+                </Box>
+              )}
+
+              {/* Price information with discount if applicable */}
+              <Box sx={{ display: 'flex', alignItems: 'baseline', mb: 1 }}>
+                <Typography variant="body2" sx={{ mr: 1 }}>Pris:</Typography>
+                {flowData.itemDetails.originalPrice ? (
+                  <>
+                    <Typography 
+                      variant="body2" 
+                      component="span" 
+                      sx={{ 
+                        textDecoration: 'line-through', 
+                        color: 'text.secondary',
+                        mr: 1
+                      }}
+                    >
+                      {flowData.itemDetails.originalPrice} kr
+                    </Typography>
+                    <Typography 
+                      variant="body1" 
+                      component="span" 
+                      sx={{ fontWeight: 'bold', color: 'var(--primary)' }}
+                    >
+                      {flowData.itemDetails.price} kr
+                    </Typography>
+                  </>
+                ) : (
+                  <Typography 
+                    variant="body1" 
+                    component="span" 
+                    sx={{ fontWeight: 'bold' }}
+                  >
+                    {flowData.itemDetails.price} kr
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Description if available */}
+              {flowData.itemDetails.description && (
+                <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
+                  {flowData.itemDetails.description.length > 100 
+                    ? `${flowData.itemDetails.description.slice(0, 100)}...` 
+                    : flowData.itemDetails.description}
+                </Typography>
+              )}
+              
+              {/* Product category if available */}
+              {flowData.itemDetails.category && (
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  Kategori: {flowData.itemDetails.category}
+                </Typography>
+              )}
+
+              {/* Stock information */}
+              {flowData.itemDetails.stockQuantity !== undefined && (
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <InventoryIcon sx={{ fontSize: 16, mr: 0.5, color: 'text.secondary' }} />
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {flowData.itemDetails.stockQuantity} i lager
+                  </Typography>
+                </Box>
+              )}
+              
+              {/* Pickup information */}
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(84, 114, 100, 0.05)', borderRadius: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                  <LocationOnIcon sx={{ fontSize: 18, mr: 0.5, color: 'var(--primary)' }} />
+                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                    Upphämtning
+                  </Typography>
+                </Box>
+                <Typography variant="body2">
+                  Produkten hämtas på Studio Clay, Norrtullsgatan 65, Stockholm
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
         )}
