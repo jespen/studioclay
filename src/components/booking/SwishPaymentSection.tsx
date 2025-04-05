@@ -60,6 +60,15 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     paymentReference,
     courseId,
     onSuccess: () => onPaymentComplete(true),
+    onError: () => onPaymentComplete(false),
+    onDeclined: () => {
+      onPaymentComplete(false);
+      setError('Betalningen avbröts. Du kan försöka igen eller välja en annan betalningsmetod.');
+    },
+    onTimeout: () => {
+      onPaymentComplete(false);
+      setError('Betalningen tog för lång tid. Kontrollera Swish-appen eller försök igen.');
+    }
   });
 
   const validatePhoneNumber = (phone: string): boolean => {
@@ -209,6 +218,13 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     }
   };
 
+  const handleCloseDialog = () => {
+    handleClosePaymentDialog();
+    if (paymentStatus === PaymentStatus.DECLINED || paymentStatus === PaymentStatus.ERROR) {
+      setPaymentReference('');
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     handleCreatePayment
   }));
@@ -219,12 +235,12 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         phoneNumber={phoneNumber}
         onPhoneNumberChange={handlePhoneNumberChange}
         error={error}
-        disabled={disabled}
+        disabled={disabled || paymentStatus === PaymentStatus.CREATED}
       />
       
       <SwishPaymentDialog
         open={showPaymentDialog}
-        onClose={handleClosePaymentDialog}
+        onClose={handleCloseDialog}
         paymentStatus={paymentStatus}
       />
     </Box>
