@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { logDebug, logError } from '@/lib/logging';
+import { setupCertificate } from '../cert-helper';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -14,6 +15,16 @@ const supabase = createClient(
  */
 export async function GET(request: NextRequest) {
   try {
+    // Konfigurera certifikat i produktionsmiljö
+    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_SWISH_TEST_MODE !== 'true') {
+      logDebug('Setting up Swish certificates from environment variables in status endpoint');
+      const certSetupResult = setupCertificate();
+      
+      if (!certSetupResult.success) {
+        logError('Failed to set up Swish certificates in status endpoint:', certSetupResult);
+      }
+    }
+    
     const url = new URL(request.url);
     const reference = url.searchParams.get('reference');
     

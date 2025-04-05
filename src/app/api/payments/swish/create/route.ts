@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import fetch from 'node-fetch';
 import { SwishService } from '@/services/swish/swishService';
 import { SwishPaymentData } from '@/services/swish/types';
+import { setupCertificate } from '../cert-helper';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -242,6 +243,21 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    // Konfigurera certifikat i produktionsmiljö om vi använder Swish i produktionsläge
+    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_SWISH_TEST_MODE !== 'true') {
+      logDebug('Setting up Swish certificates from environment variables in create endpoint');
+      const certSetupResult = setupCertificate();
+      
+      if (!certSetupResult.success) {
+        logError('Failed to set up Swish certificates in create endpoint:', certSetupResult);
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to set up Swish certificates',
+          details: 'Configuration error'
+        }, { status: 500 });
+      }
+    }
+    
     const body = await request.json();
     
     // Log the received request body for debugging

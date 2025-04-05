@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { SwishCallbackData, PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
 import { generateGiftCardPDF, GiftCardData } from '@/utils/giftCardPDF';
+import { setupCertificate } from '../cert-helper';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -156,6 +157,16 @@ async function createGiftCard(paymentId: string, amount: number, userInfo: any, 
 
 export async function POST(request: NextRequest) {
   try {
+    // Konfigurera certifikat i produktionsmiljö
+    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_SWISH_TEST_MODE !== 'true') {
+      logDebug('Setting up Swish certificates from environment variables in callback endpoint');
+      const certSetupResult = setupCertificate();
+      
+      if (!certSetupResult.success) {
+        logError('Failed to set up Swish certificates in callback endpoint:', certSetupResult);
+      }
+    }
+    
     const requestId = uuidv4().substring(0, 8);
     logDebug(`[${requestId}] Received Swish callback`);
     

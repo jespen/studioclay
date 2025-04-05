@@ -3,6 +3,7 @@ import { SwishService } from '@/services/swish/swishService';
 import { logDebug, logError } from '@/lib/logging';
 import fs from 'fs';
 import path from 'path';
+import { setupCertificate } from '../cert-helper';
 
 /**
  * Testendpoint för att testa hela Swish-BankID flödet
@@ -10,6 +11,22 @@ import path from 'path';
  */
 export async function GET(request: NextRequest) {
   try {
+    // Konfigurera certifikat i produktionsmiljö om vi använder Swish i produktionsläge
+    let certSetupResult = null;
+    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_SWISH_TEST_MODE !== 'true') {
+      logDebug('Setting up Swish certificates from environment variables');
+      certSetupResult = setupCertificate();
+      logDebug('Certificate setup result:', certSetupResult);
+      
+      if (!certSetupResult.success) {
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to set up Swish certificates',
+          details: certSetupResult
+        }, { status: 500 });
+      }
+    }
+
     const url = new URL(request.url);
     const phoneNumber = url.searchParams.get('phone') || '0707616231';
     const amount = url.searchParams.get('amount') || '1';
@@ -32,7 +49,8 @@ export async function GET(request: NextRequest) {
         ca_path: process.env.SWISH_PROD_CA_PATH,
         ca_exists: process.env.SWISH_PROD_CA_PATH ? 
           fs.existsSync(path.resolve(process.cwd(), process.env.SWISH_PROD_CA_PATH)) : false
-      }
+      },
+      cert_setup: certSetupResult
     };
     
     // Initiera Swish-tjänsten
