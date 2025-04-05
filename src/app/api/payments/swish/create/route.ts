@@ -369,60 +369,32 @@ export async function POST(request: Request) {
         }
       }
 
-      // Check if this is a gift card or shop purchase
-      if (product_type === 'gift_card' || product_type === 'art_product') {
-        // Create a more generic payment record for non-course products
-        const { data: paymentData, error: paymentError } = await supabase
-          .from('payments')
-          .insert({
-            payment_method: 'swish',
-            amount: amount,
-            currency: 'SEK',
-            payment_reference: paymentReference,
-            product_type: product_type,
-            product_id: product_id,
-            status: 'CREATED',
-            user_info: user_info,
-            phone_number: phone_number,
-            metadata: metadata
-          })
-          .select()
-          .single();
+      // Check if this is a gift card, course, or shop purchase
+      // Use consistent code for all product types
+      const { data: paymentData, error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          payment_method: 'swish',
+          amount: amount,
+          currency: 'SEK',
+          payment_reference: paymentReference,
+          product_type: product_type,
+          product_id: product_id,
+          status: 'CREATED',
+          user_info: user_info,
+          phone_number: phone_number,
+          metadata: metadata
+        })
+        .select()
+        .single();
 
-        if (paymentError) {
-          logError('Failed to create payment record in database', paymentError);
-          throw new Error(`Failed to create payment record: ${paymentError.message}`);
-        }
-        
-        payment = paymentData;
-        logDebug('Payment record created successfully', payment);
-      } else {
-        // Normal course booking flow
-        const { data: paymentData, error: paymentError } = await supabase
-          .from('payments')
-          .insert({
-            payment_method: 'swish',
-            amount: amount,
-            currency: 'SEK',
-            payment_reference: paymentReference,
-            product_type: product_type,
-            product_id: product_id, // This is a valid UUID for courses
-            status: 'CREATED',
-            user_info: user_info,
-            phone_number: phone_number,
-            metadata: metadata
-          })
-          .select()
-          .single();
-
-        if (paymentError) {
-          logError('Failed to create payment record in database', paymentError);
-          throw new Error(`Failed to create payment record: ${paymentError.message}`);
-        }
-        
-        payment = paymentData;
-        logDebug('Payment record created successfully', payment);
+      if (paymentError) {
+        logError('Failed to create payment record in database', paymentError);
+        throw new Error(`Failed to create payment record: ${paymentError.message}`);
       }
+      
+      payment = paymentData;
+      logDebug('Payment record created successfully', payment);
 
       // Ensure callback URL uses HTTPS
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
