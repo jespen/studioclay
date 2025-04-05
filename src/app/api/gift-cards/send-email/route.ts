@@ -19,8 +19,17 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log(`📧 API: Sending gift card ${giftCardData.code} email to ${giftCardData.recipient_email}`);
-    console.log(`📧 API: Gift card amount: ${giftCardData.amount}, Sender: ${senderInfo?.name || 'Unknown'}`);
+    // Validate sender info (required for confirmation email)
+    if (!senderInfo || !senderInfo.email) {
+      console.error('📧 API: Missing sender info for gift card email');
+      return NextResponse.json(
+        { error: 'Missing sender information' },
+        { status: 400 }
+      );
+    }
+    
+    console.log(`📧 API: Sending gift card ${giftCardData.code} confirmation to ${senderInfo.email}`);
+    console.log(`📧 API: Gift card amount: ${giftCardData.amount}, Recipient: ${giftCardData.recipient_name || 'Unknown'}`);
     console.log(`📧 API: PDF buffer provided: ${pdfBuffer ? 'Yes' : 'No'}, length: ${pdfBuffer?.length || 0}`);
     
     // Convert Array back to Buffer if provided
@@ -46,7 +55,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log(`📧 API: Gift card email sent successfully to ${giftCardData.recipient_email}`);
+    console.log(`📧 API: Gift card confirmation email sent successfully to ${senderInfo.email}`);
     
     // Update gift card status in database
     if (giftCardData.id) {
@@ -67,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json({
-      message: 'Gift card email sent successfully',
+      message: 'Gift card confirmation email sent successfully',
       status: 'success'
     });
   } catch (error) {

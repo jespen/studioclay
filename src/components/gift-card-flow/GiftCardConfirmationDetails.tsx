@@ -299,11 +299,10 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
           Vad händer nu?
         </Typography>
         <Typography variant="body1" paragraph>
-          Mottagaren har fått ett mail med presentkortet och instruktioner för hur det används.
-          De kan använda presentkortet direkt och lösa in det mot valfri kurs eller produkt på vår hemsida.
+         Du kommer nu få ett bekräftelsemail tillsammans med själva presentkortet. Presentkortet kan användas direkt och lösa in det mot valfri kurs eller produkt på vår hemsida.
         </Typography>
         <Typography variant="body1">
-          Om du eller mottagaren har några frågor, kontakta oss gärna på eva@studioclay.se.
+          Om du eller mottagaren av presentkortet har några frågor, kontakta eva@studioclay.se.
         </Typography>
       </Box>
     </>

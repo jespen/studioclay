@@ -34,7 +34,7 @@ export const generateConfirmationMessage = (productType: 'course' | 'gift_card' 
     case 'course':
       return '<p>Tack för din bokning hos Studio Clay! Din plats är nu reserverad.</p>';
     case 'gift_card':
-      return '<p>Tack för ditt köp av presentkort hos Studio Clay!</p>';
+      return '<p>Tack för din beställning av presentkort, i mailet hittar du presentkortet.</p>';
     case 'product':
       return '<p>Tack för din beställning hos Studio Clay!</p>';
     default:
@@ -99,13 +99,14 @@ export const generateGiftCardDetails = (giftCardData: {
   code: string;
   amount: number;
   recipient?: string;
-  expirationDate: string;
+  purchaseDate: string;
 }): string => {
   return `
-    <p><strong>Presentkortsvärde:</strong> ${giftCardData.amount.toFixed(2)} kr</p>
+    <p><strong>Typ:</strong> Presentkort</p>
+    <p><strong>Inköpsdatum:</strong> ${giftCardData.purchaseDate}</p>
+    <p><strong>Pris:</strong> ${giftCardData.amount.toFixed(2)} kr</p>
     <p><strong>Presentkortskod:</strong> ${giftCardData.code}</p>
-    ${giftCardData.recipient ? `<p><strong>Mottagare:</strong> ${giftCardData.recipient}</p>` : ''}
-    <p><strong>Giltigt till:</strong> ${giftCardData.expirationDate}</p>
+    ${giftCardData.recipient ? `<p><strong>Till:</strong> ${giftCardData.recipient}</p>` : ''}
   `;
 };
 

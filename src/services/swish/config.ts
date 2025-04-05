@@ -17,6 +17,14 @@ const SwishEnvSchema = z.object({
   SWISH_TEST_CA_PATH: z.string(),
   /** Base URL for the application (used for callback URLs) */
   NEXT_PUBLIC_BASE_URL: z.string().url(),
+  /** Swish number for the merchant in production environment */
+  SWISH_PROD_PAYEE_ALIAS: z.string().optional(),
+  /** Path to the Swish certificate file in production environment */
+  SWISH_PROD_CERT_PATH: z.string().optional(),
+  /** Path to the Swish private key file in production environment */
+  SWISH_PROD_KEY_PATH: z.string().optional(),
+  /** Path to the Swish CA certificate file in production environment */
+  SWISH_PROD_CA_PATH: z.string().optional(),
 });
 
 /**
@@ -103,7 +111,9 @@ export class SwishConfig {
    * @returns {string} The merchant's Swish number
    */
   public get payeeAlias(): string {
-    return this.env.SWISH_TEST_PAYEE_ALIAS;
+    return this.isTestMode 
+      ? this.env.SWISH_TEST_PAYEE_ALIAS 
+      : this.env.SWISH_PROD_PAYEE_ALIAS || this.env.SWISH_TEST_PAYEE_ALIAS;
   }
 
   /**
@@ -112,7 +122,9 @@ export class SwishConfig {
    * @returns {string} Path to the certificate file
    */
   public get certPath(): string {
-    return this.env.SWISH_TEST_CERT_PATH;
+    return this.isTestMode 
+      ? this.env.SWISH_TEST_CERT_PATH 
+      : this.env.SWISH_PROD_CERT_PATH || this.env.SWISH_TEST_CERT_PATH;
   }
 
   /**
@@ -121,7 +133,9 @@ export class SwishConfig {
    * @returns {string} Path to the private key file
    */
   public get keyPath(): string {
-    return this.env.SWISH_TEST_KEY_PATH;
+    return this.isTestMode 
+      ? this.env.SWISH_TEST_KEY_PATH 
+      : this.env.SWISH_PROD_KEY_PATH || this.env.SWISH_TEST_KEY_PATH;
   }
 
   /**
@@ -130,7 +144,9 @@ export class SwishConfig {
    * @returns {string} Path to the CA certificate file
    */
   public get caPath(): string {
-    return this.env.SWISH_TEST_CA_PATH;
+    return this.isTestMode 
+      ? this.env.SWISH_TEST_CA_PATH 
+      : this.env.SWISH_PROD_CA_PATH || this.env.SWISH_TEST_CA_PATH;
   }
 
   /**

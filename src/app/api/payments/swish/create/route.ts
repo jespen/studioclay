@@ -67,11 +67,18 @@ async function checkIdempotency(idempotencyKey: string) {
 async function makeSwishRequest(data: any): Promise<{ success: boolean, data?: any, error?: string }> {
   try {
     const isTestMode = process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true';
+    
+    // Get base URL from environment, with fallbacks
     const baseUrl = isTestMode 
-      ? 'https://mss.cpc.getswish.net'
-      : 'https://cpc.getswish.net';
-    const endpoint = '/swish-cpcapi/api/v1/paymentrequests';
-    const url = `${baseUrl}${endpoint}`;
+      ? (process.env.SWISH_TEST_API_URL || 'https://mss.cpc.getswish.net/swish-cpcapi/api/v1')
+      : (process.env.SWISH_PROD_API_URL || 'https://cpc.getswish.net/swish-cpcapi/api/v1');
+    
+    // Use full URL if provided, otherwise construct it
+    const url = baseUrl.includes('/paymentrequests') ? baseUrl : `${baseUrl}/paymentrequests`;
+
+    // Log the full URL being used
+    logDebug('Using Swish API URL:', url);
+    logDebug('isTestMode:', isTestMode);
 
     // Load certificates
     const certPath = isTestMode ? process.env.SWISH_TEST_CERT_PATH! : process.env.SWISH_PROD_CERT_PATH!;
@@ -79,19 +86,33 @@ async function makeSwishRequest(data: any): Promise<{ success: boolean, data?: a
     const caPath = isTestMode ? process.env.SWISH_TEST_CA_PATH! : process.env.SWISH_PROD_CA_PATH!;
 
     // Log certificate paths and check if they exist
+    const resolvedCertPath = path.resolve(process.cwd(), certPath);
+    const resolvedKeyPath = path.resolve(process.cwd(), keyPath);
+    const resolvedCaPath = path.resolve(process.cwd(), caPath);
+    
     logDebug('Certificate paths:', {
-      certPath: path.resolve(process.cwd(), certPath),
-      keyPath: path.resolve(process.cwd(), keyPath),
-      caPath: path.resolve(process.cwd(), caPath)
+      certPath: resolvedCertPath,
+      keyPath: resolvedKeyPath,
+      caPath: resolvedCaPath,
+      certExists: fs.existsSync(resolvedCertPath),
+      keyExists: fs.existsSync(resolvedKeyPath),
+      caExists: fs.existsSync(resolvedCaPath)
     });
 
     // Create HTTPS agent with certificates
     const agent = new https.Agent({
-      cert: fs.readFileSync(path.resolve(process.cwd(), certPath)),
-      key: fs.readFileSync(path.resolve(process.cwd(), keyPath)),
-      ca: fs.readFileSync(path.resolve(process.cwd(), caPath)),
+      cert: fs.readFileSync(resolvedCertPath),
+      key: fs.readFileSync(resolvedKeyPath),
+      ca: fs.readFileSync(resolvedCaPath),
       minVersion: 'TLSv1.2'
     });
+
+    // Log request data (with sensitive information redacted)
+    const logData = { ...data };
+    if (logData.payerAlias) {
+      logData.payerAlias = logData.payerAlias.substring(0, 4) + '****' + logData.payerAlias.slice(-2);
+    }
+    logDebug('Sending request to Swish:', { url, data: logData });
 
     // Make the request using node-fetch
     const response = await fetch(url, {
@@ -111,6 +132,7 @@ async function makeSwishRequest(data: any): Promise<{ success: boolean, data?: a
         throw new Error('No Location header in response');
       }
       const reference = location.split('/').pop();
+      logDebug('Successfully created payment request, reference:', reference);
       return { success: true, data: { reference } };
     }
 

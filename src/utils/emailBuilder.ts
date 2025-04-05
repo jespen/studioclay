@@ -103,25 +103,25 @@ export function buildConfirmationEmail(params: {
     parts.push(generateSection('Produktdetaljer', productDetails));
   } 
   else if (params.productType === 'gift_card') {
-    // Format expiration date
-    let expirationDate = 'Ej tidsbegränsat';
-    if (params.itemDetails.expires_at) {
-      try {
-        expirationDate = new Date(params.itemDetails.expires_at).toLocaleDateString('sv-SE', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
-      } catch (e) {
-        console.error('Error formatting expiration date:', e);
-      }
+    // Format purchase date
+    let purchaseDate = 'Idag';
+    const currentDate = new Date().toISOString();
+    
+    try {
+      purchaseDate = new Date(currentDate).toLocaleDateString('sv-SE', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (e) {
+      console.error('Error formatting purchase date:', e);
     }
     
     const giftCardDetails = generateGiftCardDetails({
       code: params.itemDetails.code || '',
       amount: params.itemDetails.price,
       recipient: params.itemDetails.recipient_name,
-      expirationDate: expirationDate
+      purchaseDate: purchaseDate
     });
     
     parts.push(generateSection('Presentkortsdetaljer', giftCardDetails));

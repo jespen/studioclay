@@ -367,6 +367,10 @@ export async function sendServerBookingConfirmationEmail(params: {
 
 /**
  * Send a gift card email with PDF attachment from the server
+ * 
+ * Changes:
+ * 1. Now sends the gift card email to the *sender/purchaser* (not recipient)
+ * 2. Always attaches the PDF to the confirmation email 
  */
 export async function sendServerGiftCardEmail(params: {
   giftCardData: {
@@ -388,9 +392,9 @@ export async function sendServerGiftCardEmail(params: {
     const htmlContent = buildConfirmationEmail({
       productType: 'gift_card',
       userInfo: {
-        firstName: params.giftCardData.recipient_name,
+        firstName: params.senderInfo.name,
         lastName: '',
-        email: params.giftCardData.recipient_email
+        email: params.senderInfo.email
       },
       paymentDetails: {
         method: 'gift_card',
@@ -424,14 +428,11 @@ export async function sendServerGiftCardEmail(params: {
     // For Office 365, use a simplified from address that exactly matches the authenticated user
     const authenticatedEmail = process.env.EMAIL_USER;
     
-    // Sender name for display
-    const senderName = params.senderInfo?.name || 'Studio Clay';
-    
-    // Create email options
+    // Create email options - now sending to the purchaser/sender
     const mailOptions = {
       from: authenticatedEmail,
-      to: params.giftCardData.recipient_email,
-      subject: `Presentkort från ${senderName} - Studio Clay`,
+      to: params.senderInfo.email, // CHANGED: Email now goes to purchaser
+      subject: `Ditt köpta presentkort - Studio Clay`,
       html: htmlContent,
       bcc: process.env.BCC_EMAIL || undefined,
       attachments: params.pdfBuffer ? [
@@ -444,10 +445,10 @@ export async function sendServerGiftCardEmail(params: {
     };
     
     // Send email
-    console.log('Sending gift card email to:', params.giftCardData.recipient_email);
+    console.log('Sending gift card confirmation email to purchaser:', params.senderInfo.email);
     const info = await transporter.sendMail(mailOptions);
     
-    console.log('Gift card email sent successfully:', info.messageId);
+    console.log('Gift card confirmation email sent successfully:', info.messageId);
     
     // Check if this is a test email from Ethereal
     if (info.messageId && info.messageId.includes('ethereal')) {
@@ -456,11 +457,11 @@ export async function sendServerGiftCardEmail(params: {
     
     return {
       success: true,
-      message: 'Gift card email sent successfully'
+      message: 'Gift card confirmation email sent successfully'
     };
     
   } catch (error) {
-    console.error('Error sending gift card email:', error);
+    console.error('Error sending gift card confirmation email:', error);
     logSMTPError(error);
     
     return {
