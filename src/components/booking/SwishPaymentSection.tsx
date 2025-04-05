@@ -90,6 +90,10 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       return false;
     }
 
+    // Show dialog immediately when payment starts
+    setPaymentStatus(PaymentStatus.CREATED);
+    setShowPaymentDialog(true);
+
     try {
       // Check if this is a gift card or product payment
       const isGiftCard = courseId === 'gift-card';
@@ -116,7 +120,10 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           product_id: isGiftCard ? '00000000-0000-0000-0000-000000000001' : courseId,
           amount: amount,
           quantity: parseInt(userInfo.numberOfParticipants || '1'),
-          user_info: userInfo,
+          user_info: {
+            ...userInfo,
+            numberOfParticipants: userInfo.numberOfParticipants || '1'
+          },
           itemDetails: itemDetails ? {
             type: itemDetails.type,
             recipientName: itemDetails.recipientName,
@@ -132,6 +139,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         const error = 'Det gick inte att skapa betalningen. Försök igen senare.';
         setError(error);
         onValidationError?.(error);
+        setPaymentStatus(PaymentStatus.ERROR);
         return false;
       }
 
@@ -141,14 +149,13 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       setPaymentReference(paymentRef);
       console.log('Swish payment created with reference:', paymentRef);
       
-      setPaymentStatus(PaymentStatus.CREATED);
-      setShowPaymentDialog(true);
       return true;
     } catch (error) {
       console.error('Error creating Swish payment:', error);
       const errorMessage = 'Det gick inte att skapa betalningen. Försök igen senare.';
       setError(errorMessage);
       onValidationError?.(errorMessage);
+      setPaymentStatus(PaymentStatus.ERROR);
       return false;
     }
   };
