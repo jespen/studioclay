@@ -28,17 +28,17 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
 }) => {
   const [processingTime, setProcessingTime] = useState(0);
   
-  // Timern för att visa väntetid
+  // Timer to show waiting time
   useEffect(() => {
     let timer: NodeJS.Timeout;
     
     if (open && paymentStatus === PAYMENT_STATUS.CREATED) {
-      // Starta timer för att visa hur länge betalningen har behandlats
+      // Start timer to show how long payment has been processing
       timer = setInterval(() => {
         setProcessingTime(prev => prev + 1);
-      }, 1000); // Uppdatera varje sekund
+      }, 1000); // Update every second
     } else {
-      // Återställ timer om dialogrutan stängs eller status ändras
+      // Reset timer if dialog closes or status changes
       setProcessingTime(0);
     }
     
@@ -47,7 +47,7 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
     };
   }, [open, paymentStatus]);
   
-  // Formatera tiden i minuter och sekunder
+  // Format time in minutes and seconds
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;

@@ -10,7 +10,7 @@ export const SwishRequestSchema = z.object({
   /** Must be "swish" for Swish payments */
   payment_method: z.literal('swish'),
   /** Type of product being purchased */
-  product_type: z.enum(['course', 'gift_card', 'art_product']),
+  product_type: z.enum(['course', 'gift_card', 'shop_item']),
   /** Unique identifier for the product */
   product_id: z.string(),
   /** Amount in SEK */
@@ -129,7 +129,7 @@ export class SwishError extends Error {
 export interface SwishPaymentData {
   phone_number: string;
   payment_method: "swish";
-  product_type: "course" | "gift_card" | "art_product";
+  product_type: "course" | "gift_card";
   product_id: string;
   amount: number;
   quantity: number;

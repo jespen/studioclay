@@ -277,17 +277,6 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
     );
   }
 
-  // Add debug info for status when rendering
-  console.log('Rendering payment status:', {
-    status: data?.paymentInfo?.status,
-    statusType: typeof data?.paymentInfo?.status,
-    statusValue: `"${data?.paymentInfo?.status}"`, // Show exact value with quotes
-    method: data?.paymentInfo?.payment_method,
-    isCreated: data?.paymentInfo?.status?.toUpperCase() === 'CREATED',
-    isPaid: data?.paymentInfo?.status?.toUpperCase() === 'PAID',
-    rawPaymentInfo: data?.paymentInfo,
-  });
-
   return (
     <>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -347,26 +336,11 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
                 <Typography variant="body2" color="text.secondary">Betalstatus:</Typography>
                 <Typography variant="body2">
                   {(() => {
-                    // Extra logging to debug the status
-                    const rawStatus = data.paymentInfo?.status;
-                    console.log('RAW PAYMENT STATUS:', JSON.stringify(rawStatus));
-                    
-                    // Get the payment status and handle null/undefined
-                    const status = String(rawStatus || '').trim().toUpperCase();
-                    console.log('NORMALIZED STATUS:', JSON.stringify(status));
-                    console.log('STATUS CHECKS:', {
-                      isPaid: status.includes('PAID'),
-                      isCompleted: status.includes('COMPLETE'),
-                      isCreated: status.includes('CREAT'),
-                    });
-                    
-                    // Use less strict matching for more flexibility
-                    if (status.includes('PAID') || status.includes('COMPLETE')) {
+                    const status = String(data.paymentInfo?.status || '').toUpperCase();
+                    if (status === 'PAID') {
                       return 'Genomförd';
-                    } else if (status.includes('CREAT') || status.includes('PENDING')) {
+                    } else if (status === 'CREATED') {
                       return 'Ej betald';
-                    } else if (status === '') {
-                      return 'Status saknas';
                     } else {
                       return 'Väntar på verifiering';
                     }

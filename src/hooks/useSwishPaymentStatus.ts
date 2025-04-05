@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
+import { useRouter } from 'next/navigation';
 import { getPaymentReference, setPaymentReference, setBookingReference, getFlowType } from '@/utils/flowStorage';
 import { FlowType } from '@/components/common/BookingStepper';
 
@@ -44,12 +44,11 @@ export const useSwishPaymentStatus = ({
     try {
       console.log(`[${sessionId}] Checking status for payment: ${reference}`);
       
-      // Lägg till cache busting parameter för att undvika caching
+      // Add cache busting parameter
       const cacheBuster = bypass_cache ? `&bypass_cache=true&_=${Date.now()}` : '';
       const response = await fetch(`/api/payments/status/${reference}${cacheBuster}`);
       const data = await response.json();
       
-      // Mer detaljerad loggning av svaret för debugging
       console.log(`[${sessionId}] Status check raw response:`, data);
       
       if (!data.success) {
@@ -57,7 +56,6 @@ export const useSwishPaymentStatus = ({
         return PAYMENT_STATUS.ERROR;
       }
       
-      // Logga mer specifik information om betalningen för att hjälpa debugging
       console.log(`[${sessionId}] Payment details from status check:`, {
         id: data.data?.payment?.id,
         status: data.data?.payment?.status,
@@ -109,14 +107,14 @@ export const useSwishPaymentStatus = ({
     }
   };
 
-  // Funktion för att välja rätt redirectsida baserat på produkttyp
+  // Function to choose correct redirect page based on product type
   const getRedirectPath = () => {
-    // Om en specifik redirectPath är angiven, använd den
+    // If a specific redirectPath is provided, use it
     if (redirectPath) {
       return redirectPath;
     }
 
-    // Annars, använd rätt redirectsida baserat på produkttyp
+    // Otherwise, use correct redirect page based on product type
     const flowType = getFlowType();
     console.log(`[${sessionId}] Current flow type:`, flowType);
 
@@ -130,7 +128,7 @@ export const useSwishPaymentStatus = ({
       case FlowType.COURSE_BOOKING:
       case 'course_booking':
       default:
-        // För kurser, använd kurs-ID för att bygga redirectlänken
+        // For courses, use course ID to build redirect link
         return courseId ? `/book-course/${courseId}/confirmation` : '/bekraftelse';
     }
   };
@@ -139,7 +137,7 @@ export const useSwishPaymentStatus = ({
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     let attempts = 0;
-    const maxAttempts = 15; // Minskat från 30 till 15 (= 30 sekunder med 2 sekunders intervall)
+    const maxAttempts = 15; // Reduced from 30 to 15 (= 30 seconds with 2 second interval)
     let redirectTimeout: NodeJS.Timeout;
     let hasCheckedWithSwish = false;
     let hasTriedBypassCache = false;
@@ -151,7 +149,7 @@ export const useSwishPaymentStatus = ({
       if (attempts >= maxAttempts) {
         console.log(`[${sessionId}] Status check reached max attempts (${maxAttempts}). Stopping polling.`);
         
-        // En extra direktkontroll mot Swish som sista åtgärd innan vi ger upp
+        // One final direct check with Swish as last resort
         try {
           console.log(`[${sessionId}] Making last-chance direct check with Swish`);
           
@@ -182,7 +180,7 @@ export const useSwishPaymentStatus = ({
           console.error(`[${sessionId}] Error in last-chance Swish status check:`, finalCheckError);
         }
         
-        // Visa ett meddelande till användaren om att betalningen fortfarande behandlas
+        // Show a message to the user that payment is still processing
         setPaymentStatus(prev => {
           if (prev === PAYMENT_STATUS.CREATED) {
             console.log(`[${sessionId}] Payment still in CREATED state after max attempts. Showing processing message.`);
@@ -207,18 +205,18 @@ export const useSwishPaymentStatus = ({
       console.log(`[${sessionId}] Payment status check attempt ${attempts}/${maxAttempts} for reference: ${currentReference}`);
       
       try {
-        // Efter 10 sekunder (attempt 5) med CREATED status, försök med bypass_cache
+        // After 10 seconds (attempt 5) with CREATED status, try with bypass_cache
         if (!hasTriedBypassCache && attempts === 5 && paymentStatus === PAYMENT_STATUS.CREATED) {
           console.log(`[${sessionId}] Trying with bypass_cache=true to get fresh data`);
           hasTriedBypassCache = true;
           const status = await checkPaymentStatus(currentReference, true);
           console.log(`[${sessionId}] Poll with bypass_cache received status:`, status);
           
-          // Kontrollera om status har ändrats
+          // Check if status has changed
           if (status !== paymentStatus) {
             console.log(`[${sessionId}] Updating payment status from`, paymentStatus, 'to', status);
             setPaymentStatus(status);
-            
+
             if (status === PAYMENT_STATUS.PAID) {
               console.log(`[${sessionId}] Payment is PAID after bypass_cache, clearing interval and preparing redirect`);
               clearInterval(intervalId);
@@ -239,13 +237,13 @@ export const useSwishPaymentStatus = ({
           }
         }
         
-        // Efter 16 sekunder (attempt 8) med CREATED-status, be servern att kontrollera med Swish direkt
+        // After 16 seconds (attempt 8) with CREATED status, ask server to check with Swish directly
         if (!hasCheckedWithSwish && attempts === 8 && paymentStatus === PAYMENT_STATUS.CREATED) {
           console.log(`[${sessionId}] Midway polling - requesting server to check with Swish directly`);
           hasCheckedWithSwish = true;
           
           try {
-            // Använd forceCheck=true för att tvinga en direktkontroll mot Swish
+            // Use forceCheck=true to force a direct check with Swish
             const forcedCheckResponse = await fetch(`/api/payments/status/${currentReference}?forceCheck=true&bypass_cache=true&_=${Date.now()}`);
             const forcedCheckData = await forcedCheckResponse.json();
             
@@ -275,15 +273,15 @@ export const useSwishPaymentStatus = ({
           }
         }
         
-        // Vanlig statuskontroll
+        // Regular status check
         const status = await checkPaymentStatus(currentReference);
         console.log(`[${sessionId}] Poll received status:`, status);
         
-        // Öka räknaren för consecutiveCreated om status är CREATED
+        // Increase counter for consecutiveCreated if status is CREATED
         if (status === PAYMENT_STATUS.CREATED) {
           consecutiveCreated++;
           
-          // Om vi har fått CREATED flera gånger i rad, prova med bypass_cache=true
+          // If we've gotten CREATED multiple times in a row, try with bypass_cache=true
           if (consecutiveCreated >= 3 && !hasTriedBypassCache) {
             console.log(`[${sessionId}] Got CREATED status ${consecutiveCreated} times in a row, trying bypass_cache`);
             hasTriedBypassCache = true;
@@ -311,12 +309,12 @@ export const useSwishPaymentStatus = ({
                 return;
               }
               
-              // Återställ räknaren
+              // Reset counter
               consecutiveCreated = 0;
             }
           }
         } else {
-          // Återställ räknaren om status inte är CREATED
+          // Reset counter if status is not CREATED
           consecutiveCreated = 0;
         }
         

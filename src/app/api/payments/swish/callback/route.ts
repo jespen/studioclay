@@ -419,7 +419,7 @@ export async function POST(request: NextRequest) {
       
       if (productType === 'course' && productId && userInfo) {
         try {
-          // Check if we already have a booking for this course and payment
+          // Check if we already have a booking for this payment to avoid duplicates
           const { data: existingBooking } = await supabase
             .from('bookings')
             .select('id, reference')
@@ -434,41 +434,10 @@ export async function POST(request: NextRequest) {
             const bookingReference = booking.reference;
             
             logDebug(`[${requestId}] Booking created with reference: ${bookingReference}`);
-          } else {
-            logDebug(`[${requestId}] Booking already exists for this payment`, { 
-              booking_id: existingBooking.id, 
-              reference: existingBooking.reference 
-            });
             
-            // Update the booking status to PAID if needed
-            const { error: updateError } = await supabase
-              .from('bookings')
-              .update({ payment_status: 'PAID' })
-              .eq('id', existingBooking.id);
-              
-            if (updateError) {
-              logError(`[${requestId}] Error updating booking status:`, updateError);
-            } else {
-              logDebug(`[${requestId}] Updated booking payment status to PAID`);
-            }
-          }
-          
-          // Regardless of whether the booking was just created or already existed,
-          // try to send the booking confirmation email
-          try {
-            logDebug(`[${requestId}] Sending booking confirmation email`);
-            
-            // Get the booking reference from database
-            const { data: bookingData, error: bookingFetchError } = await supabase
-              .from('bookings')
-              .select('reference')
-              .eq('payment_id', payment.id)
-              .single();
-              
-            if (bookingFetchError) {
-              logError(`[${requestId}] Error fetching booking for email:`, bookingFetchError);
-            } else {
-              const bookingReference = bookingData.reference;
+            // Try to send confirmation email
+            try {
+              logDebug(`[${requestId}] Sending booking confirmation email`);
               
               const { sendServerBookingConfirmationEmail } = await import('@/utils/serverEmail');
               
@@ -510,10 +479,15 @@ export async function POST(request: NextRequest) {
               });
               
               logDebug(`[${requestId}] Email sending result:`, emailResult);
+            } catch (emailError) {
+              logError(`[${requestId}] Error sending confirmation email:`, emailError);
+              // Don't fail the overall process if email sending fails
             }
-          } catch (emailError) {
-            logError(`[${requestId}] Error sending confirmation email:`, emailError);
-            // Don't fail the overall process if email sending fails
+          } else {
+            logDebug(`[${requestId}] Booking already exists for this payment`, { 
+              booking_id: existingBooking.id, 
+              reference: existingBooking.reference 
+            });
           }
         } catch (error) {
           logError(`[${requestId}] Error in booking creation:`, error);
@@ -538,108 +512,83 @@ export async function POST(request: NextRequest) {
             const giftCard = await createGiftCard(payment.id, payment.amount, userInfo, itemDetails);
             
             logDebug(`[${requestId}] Gift card created with code: ${giftCard.code}`);
-          } else {
-            logDebug(`[${requestId}] Gift card already exists:`, existingGiftCard);
             
-            // Update the gift card status to PAID if needed
-            const { error: updateError } = await supabase
-              .from('gift_cards')
-              .update({ 
-                payment_status: PAYMENT_STATUS.PAID,
-                is_paid: true
-              })
-              .eq('id', existingGiftCard.id);
-              
-            if (updateError) {
-              logError(`[${requestId}] Error updating gift card status:`, updateError);
-            } else {
-              logDebug(`[${requestId}] Updated gift card payment status to PAID`);
-            }
-          }
-          
-          // Regardless of whether the gift card was just created or already existed,
-          // try to send the gift card email
-          try {
-            // Get the full gift card details
-            const { data: giftCard, error: fetchError } = await supabase
-              .from('gift_cards')
-              .select('*')
-              .eq('payment_reference', payment.id)
-              .single();
-              
-            if (fetchError) {
-              logError(`[${requestId}] Error fetching gift card data for email:`, fetchError);
-            } else if (giftCard && giftCard.type === 'digital') {
-              logDebug(`[${requestId}] Preparing gift card email for:`, {
-                code: giftCard.code,
-                recipientEmail: giftCard.recipient_email,
-                senderEmail: giftCard.sender_email
-              });
-              
-              // Generate gift card PDF
-              const giftCardData: GiftCardData = {
-                code: giftCard.code,
-                amount: giftCard.amount,
-                recipientName: giftCard.recipient_name,
-                recipientEmail: giftCard.recipient_email || '',
-                senderName: giftCard.sender_name,
-                senderEmail: giftCard.sender_email,
-                message: giftCard.message || '',
-                createdAt: new Date().toISOString(),
-                expiresAt: giftCard.expires_at
-              };
-              
-              const pdfBuffer = await generateGiftCardPDF(giftCardData);
-              
-              // Store PDF in Supabase storage
-              const { data: storageData, error: storageError } = await supabase
-                .storage
-                .from('gift-cards')
-                .upload(`${giftCard.code}.pdf`, pdfBuffer, {
-                  contentType: 'application/pdf',
-                  upsert: true
-                });
+            // Generate gift card PDF if digital
+            if (giftCard.type === 'digital' && giftCard.recipient_email) {
+              try {
+                logDebug(`[${requestId}] Generating gift card PDF`);
                 
-              if (storageError) {
-                logError(`[${requestId}] Error storing gift card PDF:`, storageError);
-              } else {
-                logDebug(`[${requestId}] Gift card PDF stored:`, storageData);
+                const giftCardData: GiftCardData = {
+                  code: giftCard.code,
+                  amount: giftCard.amount,
+                  recipientName: giftCard.recipient_name,
+                  recipientEmail: giftCard.recipient_email,
+                  senderName: giftCard.sender_name,
+                  senderEmail: giftCard.sender_email,
+                  message: giftCard.message || '',
+                  createdAt: new Date().toISOString(),
+                  expiresAt: giftCard.expires_at
+                };
                 
-                // Send gift card email
-                const { sendServerGiftCardEmail } = await import('@/utils/serverEmail');
+                const pdfBuffer = await generateGiftCardPDF(giftCardData);
                 
-                // Convert Blob to Buffer for email attachment
-                const buffer = Buffer.from(await pdfBuffer.arrayBuffer());
-                
-                // Send email using the gift card data from database
-                const emailResult = await sendServerGiftCardEmail({
-                  giftCardData: {
-                    code: giftCard.code,
-                    amount: giftCard.amount,
-                    recipient_name: giftCard.recipient_name,
-                    recipient_email: giftCard.recipient_email || '',
-                    message: giftCard.message,
-                    expires_at: giftCard.expires_at
-                  },
-                  senderInfo: {
-                    name: giftCard.sender_name,
-                    email: giftCard.sender_email
-                  },
-                  pdfBuffer: buffer
-                });
-                
-                logDebug(`[${requestId}] Gift card email sending result:`, emailResult);
-                
-                // Mark as emailed
-                await supabase
-                  .from('gift_cards')
-                  .update({ is_emailed: true })
-                  .eq('id', giftCard.id);
+                // Store PDF in Supabase storage
+                const { data: storageData, error: storageError } = await supabase
+                  .storage
+                  .from('gift-cards')
+                  .upload(`${giftCard.code}.pdf`, pdfBuffer, {
+                    contentType: 'application/pdf',
+                    upsert: true
+                  });
+                  
+                if (storageError) {
+                  logError(`[${requestId}] Error storing gift card PDF:`, storageError);
+                } else {
+                  logDebug(`[${requestId}] Gift card PDF stored:`, storageData);
+                  
+                  // Try to send gift card email
+                  try {
+                    logDebug(`[${requestId}] Sending gift card email`);
+                    
+                    const { sendServerGiftCardEmail } = await import('@/utils/serverEmail');
+                    
+                    // Convert Blob to Buffer for email attachment
+                    const buffer = Buffer.from(await pdfBuffer.arrayBuffer());
+                    
+                    // Send email using the gift card data from database
+                    const emailResult = await sendServerGiftCardEmail({
+                      giftCardData: {
+                        code: giftCard.code,
+                        amount: giftCard.amount,
+                        recipient_name: giftCard.recipient_name,
+                        recipient_email: giftCard.recipient_email || '',
+                        message: giftCard.message,
+                        expires_at: giftCard.expires_at
+                      },
+                      senderInfo: {
+                        name: giftCard.sender_name,
+                        email: giftCard.sender_email
+                      },
+                      pdfBuffer: buffer
+                    });
+                    
+                    logDebug(`[${requestId}] Email sending result:`, emailResult);
+                    
+                    // Mark as emailed
+                    await supabase
+                      .from('gift_cards')
+                      .update({ is_emailed: true })
+                      .eq('id', giftCard.id);
+                  } catch (emailError) {
+                    logError(`[${requestId}] Error sending gift card email:`, emailError);
+                  }
+                }
+              } catch (pdfError) {
+                logError(`[${requestId}] Error generating gift card PDF:`, pdfError);
               }
             }
-          } catch (emailError) {
-            logError(`[${requestId}] Error sending gift card email:`, emailError);
-            // Continue - email is not critical for payment processing
+          } else {
+            logDebug(`[${requestId}] Gift card already exists:`, existingGiftCard);
           }
         } catch (giftCardError) {
           logError(`[${requestId}] Error processing gift card:`, giftCardError);
@@ -716,6 +665,39 @@ export async function POST(request: NextRequest) {
                   } else {
                     logDebug(`[${requestId}] Updated product ${productId} stock to ${newQuantity}`);
                   }
+                  
+                  // Send confirmation email
+                  try {
+                    const { sendServerProductOrderConfirmationEmail } = await import('@/utils/serverEmail');
+                    
+                    const emailResult = await sendServerProductOrderConfirmationEmail({
+                      userInfo: {
+                        firstName: userInfo.firstName,
+                        lastName: userInfo.lastName,
+                        email: userInfo.email,
+                        phone: userInfo.phone || payment.phone_number
+                      },
+                      paymentDetails: {
+                        method: 'swish',
+                        status: 'PAID',
+                        reference: reference,
+                        amount: payment.amount
+                      },
+                      productDetails: {
+                        id: productId,
+                        title: productData.title,
+                        description: productData.description,
+                        price: payment.amount,
+                        quantity: 1,
+                        image: productData.image
+                      },
+                      orderReference: reference
+                    });
+                    
+                    logDebug(`[${requestId}] Product order email result:`, emailResult);
+                  } catch (emailError) {
+                    logError(`[${requestId}] Error sending product order email:`, emailError);
+                  }
                 }
               } catch (stockError) {
                 logError(`[${requestId}] Error updating product stock:`, stockError);
@@ -736,52 +718,6 @@ export async function POST(request: NextRequest) {
             } else {
               logDebug(`[${requestId}] Updated art order payment status to ${status}`);
             }
-          }
-          
-          // Regardless if the order was just created or already existed,
-          // attempt to send a confirmation email
-          try {
-            // Fetch the product data (needed for the email)
-            const { data: productData, error: productFetchError } = await supabase
-              .from('products')
-              .select('title, price, description, image')
-              .eq('id', productId)
-              .single();
-            
-            if (productFetchError) {
-              logError(`[${requestId}] Error fetching product data for email:`, productFetchError);
-            } else if (productData) {
-              const { sendServerProductOrderConfirmationEmail } = await import('@/utils/serverEmail');
-              
-              const emailResult = await sendServerProductOrderConfirmationEmail({
-                userInfo: {
-                  firstName: userInfo.firstName,
-                  lastName: userInfo.lastName,
-                  email: userInfo.email,
-                  phone: userInfo.phone || payment.phone_number
-                },
-                paymentDetails: {
-                  method: 'swish',
-                  status: 'PAID',
-                  reference: reference,
-                  amount: payment.amount
-                },
-                productDetails: {
-                  id: productId,
-                  title: productData.title,
-                  description: productData.description,
-                  price: payment.amount,
-                  quantity: 1,
-                  image: productData.image
-                },
-                orderReference: reference
-              });
-              
-              logDebug(`[${requestId}] Product order email result:`, emailResult);
-            }
-          } catch (emailError) {
-            logError(`[${requestId}] Error sending product order email:`, emailError);
-            // Continue - email is not critical for payment processing
           }
         } catch (artProductError) {
           logError(`[${requestId}] Error processing art product:`, artProductError);
