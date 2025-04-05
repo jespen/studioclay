@@ -7,7 +7,6 @@ import {
   Button,
   Box,
   Typography,
-  CircularProgress,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -27,6 +26,7 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
   paymentStatus,
 }) => {
   const [processingTime, setProcessingTime] = useState(0);
+  const [showError, setShowError] = useState(false);
   
   // Timer to show waiting time
   useEffect(() => {
@@ -46,6 +46,23 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
       if (timer) clearInterval(timer);
     };
   }, [open, paymentStatus]);
+
+  // Only show error state after a delay to avoid flickering
+  useEffect(() => {
+    let errorTimer: NodeJS.Timeout;
+    
+    if (paymentStatus === PAYMENT_STATUS.ERROR) {
+      errorTimer = setTimeout(() => {
+        setShowError(true);
+      }, 3000); // Show error only if it persists for 3 seconds
+    } else {
+      setShowError(false);
+    }
+    
+    return () => {
+      if (errorTimer) clearTimeout(errorTimer);
+    };
+  }, [paymentStatus]);
   
   // Format time in minutes and seconds
   const formatTime = (seconds: number) => {
@@ -77,15 +94,13 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
             <p className="text-center text-sm text-gray-500">
               Lämna inte sidan. Statusen uppdateras automatiskt när betalningen är klar.
               <br />
-              Det kan ta upp till en minut innan bekräftelsen från Swish kommer fram.
-              <br />
               <span className="font-semibold">Behandlar: {formatTime(processingTime)}</span>
             </p>
             
             {processingTime > 30 && (
               <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-md">
                 <p className="text-center text-sm">
-                  <strong>Systemet kontrollerar direkt med Swish för att bekräfta betalningen.</strong>
+                  <strong>Väntar på bekräftelse från Swish.</strong>
                   <br />
                   Om du redan har godkänt betalningen i Swish-appen, vänta medan vi bekräftar transaktionen.
                 </p>
@@ -130,7 +145,7 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
           </Box>
         )}
 
-        {paymentStatus === PAYMENT_STATUS.ERROR && (
+        {(paymentStatus === PAYMENT_STATUS.ERROR && showError) && (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
             <ErrorIcon color="error" sx={{ fontSize: 48, mb: 2 }} />
             <Typography variant="body1" gutterBottom>
@@ -143,7 +158,7 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
         )}
       </DialogContent>
       <DialogActions>
-        {(paymentStatus === PAYMENT_STATUS.DECLINED || paymentStatus === PAYMENT_STATUS.ERROR) && (
+        {((paymentStatus === PAYMENT_STATUS.DECLINED || paymentStatus === PAYMENT_STATUS.ERROR) && showError) && (
           <Button onClick={onClose}>Stäng</Button>
         )}
       </DialogActions>
