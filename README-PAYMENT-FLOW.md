@@ -52,19 +52,25 @@ The payment system is designed as a generic solution that works across multiple 
   - Provides unified interface
 
 ### Swish Flow
-1. `SwishPaymentSection.tsx`
-   - Coordinates Swish payment flow
-   - Manages payment status
-   - Handles callbacks and redirects
-
-2. `SwishPaymentForm.tsx`
-   - Phone number input and validation
-   - Swish-specific form logic
-
-3. `SwishPaymentDialog.tsx`
-   - Shows payment status
-   - Provides user instructions
-   - Handles success/error states
+1. User selects Swish
+2. Enters phone number (SwishPaymentForm)
+3. System validates phone number format
+4. SwishPaymentSection creates payment:
+   - Generates unique reference
+   - Sends request to Swish API
+   - Stores payment details in database
+5. SwishPaymentDialog opens and shows status:
+   - Displays clear instructions
+   - Shows real-time status updates
+   - Handles various payment states
+6. Status polling begins:
+   - Checks every 2 seconds
+   - Maximum 60 seconds duration
+   - Direct Swish check after 20 seconds
+7. Payment completion:
+   - Success: Redirects to confirmation
+   - Declined: Shows cancellation message
+   - Error: Displays user-friendly error
 
 ### Invoice Flow
 1. `InvoicePaymentSection.tsx`
@@ -100,9 +106,23 @@ The payment system is designed as a generic solution that works across multiple 
 ### Swish Payment Flow
 1. User selects Swish
 2. Enters phone number (SwishPaymentForm)
-3. Section creates payment (SwishPaymentService)
-4. Dialog shows status
-5. Redirects on completion
+3. System validates phone number format
+4. SwishPaymentSection creates payment:
+   - Generates unique reference
+   - Sends request to Swish API
+   - Stores payment details in database
+5. SwishPaymentDialog opens and shows status:
+   - Displays clear instructions
+   - Shows real-time status updates
+   - Handles various payment states
+6. Status polling begins:
+   - Checks every 2 seconds
+   - Maximum 60 seconds duration
+   - Direct Swish check after 20 seconds
+7. Payment completion:
+   - Success: Redirects to confirmation
+   - Declined: Shows cancellation message
+   - Error: Displays user-friendly error
 
 ### Invoice Payment Flow
 1. User selects Invoice
@@ -241,21 +261,46 @@ Response: {
 }
 ```
 
-## Environment Variables
+## Environment Variables and Certificates
+
+### Production Environment
 ```bash
-# Swish Configuration
-NEXT_PUBLIC_SWISH_TEST_MODE=true|false
-SWISH_TEST_API_URL=https://mss.cpc.getswish.net/swish-cpcapi/api/v1
-SWISH_TEST_PAYEE_ALIAS=1234679304
-SWISH_TEST_CERT_PATH=certs/swish/test/Swish_Merchant_TestCertificate_1234679304.pem
-SWISH_TEST_KEY_PATH=certs/swish/test/Swish_Merchant_TestCertificate_1234679304.key
-SWISH_TEST_CA_PATH=certs/swish/test/Swish_TLS_RootCA.pem
+# Swish Production Configuration
+NEXT_PUBLIC_SWISH_PROD_MODE=true
+SWISH_PROD_API_URL=https://cpc.getswish.net/swish-cpcapi/api/v1
+SWISH_PROD_PAYEE_ALIAS=1234567890
+SWISH_PROD_CERT_PATH=certs/swish/prod/Swish_Merchant_Certificate.pem
+SWISH_PROD_KEY_PATH=certs/swish/prod/Swish_Merchant_Certificate.key
+SWISH_PROD_CA_PATH=certs/swish/prod/Swish_TLS_RootCA.pem
+```
 
-# Invoice Configuration
-NEXT_PUBLIC_INVOICE_PDF_STORAGE_PATH=invoices
-NEXT_PUBLIC_INVOICE_NUMBER_PREFIX=SC
+### Certificate Setup
+1. **Production Certificates**
+   - Located in `/certs/swish/prod/`
+   - Required files:
+     - Merchant Certificate (`.pem`)
+     - Private Key (`.key`)
+     - Root CA Certificate (`.pem`)
+   - File permissions: 600
+   - Directory permissions: 700
 
+2. **Certificate Management**
+   - Keep certificates in secure location
+   - Monitor expiration dates
+   - Maintain backup copies
+   - Regular permission checks
 
+3. **Security Notes**
+   - Never commit certificates to version control
+   - Use environment variables for paths
+   - Restrict access to certificate files
+   - Regular security audits
+
+### Testing Notes
+- Test environment (MSS) currently not operational
+- Use production environment with 1 kr payments for testing
+- Monitor all test transactions in admin interface
+- Document all test cases and results
 
 ## Database Schema
 ```sql
