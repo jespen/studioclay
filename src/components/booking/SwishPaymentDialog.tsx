@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -26,6 +26,34 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
   onClose,
   paymentStatus,
 }) => {
+  const [processingTime, setProcessingTime] = useState(0);
+  
+  // Timern för att visa väntetid
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
+    if (open && paymentStatus === PAYMENT_STATUS.CREATED) {
+      // Starta timer för att visa hur länge betalningen har behandlats
+      timer = setInterval(() => {
+        setProcessingTime(prev => prev + 1);
+      }, 1000); // Uppdatera varje sekund
+    } else {
+      // Återställ timer om dialogrutan stängs eller status ändras
+      setProcessingTime(0);
+    }
+    
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [open, paymentStatus]);
+  
+  // Formatera tiden i minuter och sekunder
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+  
   return (
     <Dialog 
       open={open} 
@@ -44,13 +72,37 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
             <p className="text-center mb-4">
               Din betalning behandlas för närvarande. 
               <br />
-              Se till att godkänna betalningen i Swish-appen!
+              <strong>Se till att godkänna betalningen i Swish-appen!</strong>
             </p>
             <p className="text-center text-sm text-gray-500">
               Lämna inte sidan. Statusen uppdateras automatiskt när betalningen är klar.
               <br />
               Det kan ta upp till en minut innan bekräftelsen från Swish kommer fram.
+              <br />
+              <span className="font-semibold">Behandlar: {formatTime(processingTime)}</span>
             </p>
+            
+            {processingTime > 30 && (
+              <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-md">
+                <p className="text-center text-sm">
+                  <strong>Systemet kontrollerar direkt med Swish för att bekräfta betalningen.</strong>
+                  <br />
+                  Om du redan har godkänt betalningen i Swish-appen, vänta medan vi bekräftar transaktionen.
+                </p>
+              </div>
+            )}
+            
+            {processingTime > 60 && (
+              <div className="mt-4 p-3 bg-yellow-50 text-yellow-700 rounded-md">
+                <p className="text-center text-sm">
+                  <strong>Betalningen tar längre tid än normalt.</strong>
+                  <br />
+                  Om du har godkänt betalningen i Swish-appen, vänta lite till.
+                  <br />
+                  I vissa fall kan bekräftelser från Swish ta extra tid.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
