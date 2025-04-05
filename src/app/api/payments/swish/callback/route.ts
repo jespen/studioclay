@@ -164,6 +164,22 @@ export async function POST(request: NextRequest) {
   logDebug(`[${requestId}] Timestamp: ${new Date().toISOString()}`);
   logDebug(`[${requestId}] URL: ${request.url}`);
   
+  // Logga viktiga headers och information om requesten för felsökning
+  const sourceIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+  const userAgent = request.headers.get('user-agent') || 'unknown';
+  
+  // Skapa en array av alla headers för loggning
+  const headers: Record<string, string> = {};
+  request.headers.forEach((value, key) => {
+    // Undvik att logga känsliga headers som Authorization eller Cookie
+    if (!['authorization', 'cookie'].includes(key.toLowerCase())) {
+      headers[key] = value;
+    }
+  });
+  
+  logDebug(`[${requestId}] Request source: IP=${sourceIp}, User-Agent=${userAgent}`);
+  logDebug(`[${requestId}] Request headers:`, headers);
+  
   try {
     // Konfigurera certifikat i produktionsmiljö
     if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_SWISH_TEST_MODE !== 'true') {
@@ -189,11 +205,25 @@ export async function POST(request: NextRequest) {
       body = await request.json();
     } catch (parseError) {
       logError(`[${requestId}] Failed to parse request body:`, parseError);
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Invalid JSON body',
-        details: parseError instanceof Error ? parseError.message : 'Unknown error'
-      }, { status: 400 });
+      
+      // Försök med den klara texten om JSON-parsing misslyckades
+      try {
+        if (bodyText && bodyText.trim()) {
+          logDebug(`[${requestId}] Attempting to parse body as JSON despite initial parse error`);
+          body = JSON.parse(bodyText);
+          logDebug(`[${requestId}] Successfully parsed body as JSON on second attempt`);
+        }
+      } catch (secondParseError) {
+        logError(`[${requestId}] Also failed second JSON parse attempt:`, secondParseError);
+      }
+      
+      if (!body) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Invalid JSON body',
+          details: parseError instanceof Error ? parseError.message : 'Unknown error'
+        }, { status: 400 });
+      }
     }
     
     // Redact sensitive data for logging
@@ -411,12 +441,41 @@ export async function POST(request: NextRequest) {
               
               const { sendServerBookingConfirmationEmail } = await import('@/utils/serverEmail');
               
+              // Fetch course details
+              const { data: courseData, error: courseError } = await supabase
+                .from('course_instances')
+                .select('*')
+                .eq('id', productId)
+                .single();
+                
+              if (courseError) {
+                logError(`[${requestId}] Error fetching course details for email:`, courseError);
+                throw new Error('Failed to fetch course details for email');
+              }
+              
               const emailResult = await sendServerBookingConfirmationEmail({
-                email: userInfo.email,
-                firstName: userInfo.firstName,
-                lastName: userInfo.lastName,
-                bookingReference: bookingReference,
-                courseId: productId
+                userInfo: {
+                  firstName: userInfo.firstName,
+                  lastName: userInfo.lastName,
+                  email: userInfo.email,
+                  phone: userInfo.phone,
+                  numberOfParticipants: userInfo.numberOfParticipants || "1",
+                  specialRequirements: userInfo.specialRequirements || ""
+                },
+                paymentDetails: {
+                  method: 'swish',
+                  status: 'PAID',
+                  paymentReference: reference
+                },
+                courseDetails: {
+                  id: productId,
+                  title: courseData.title,
+                  description: courseData.description,
+                  start_date: courseData.start_date,
+                  location: courseData.location,
+                  price: courseData.price
+                },
+                bookingReference: bookingReference
               });
               
               logDebug(`[${requestId}] Email sending result:`, emailResult);
@@ -462,10 +521,13 @@ export async function POST(request: NextRequest) {
                 const giftCardData: GiftCardData = {
                   code: giftCard.code,
                   amount: giftCard.amount,
-                  expiresAt: giftCard.expires_at,
                   recipientName: giftCard.recipient_name,
+                  recipientEmail: giftCard.recipient_email,
                   senderName: giftCard.sender_name,
-                  message: giftCard.message || ''
+                  senderEmail: giftCard.sender_email,
+                  message: giftCard.message || '',
+                  createdAt: new Date().toISOString(),
+                  expiresAt: giftCard.expires_at
                 };
                 
                 const pdfBuffer = await generateGiftCardPDF(giftCardData);
@@ -484,21 +546,33 @@ export async function POST(request: NextRequest) {
                 } else {
                   logDebug(`[${requestId}] Gift card PDF stored:`, storageData);
                   
-                  // Try to send email with gift card
+                  // Try to send gift card email
                   try {
+                    logDebug(`[${requestId}] Sending gift card email`);
+                    
                     const { sendServerGiftCardEmail } = await import('@/utils/serverEmail');
                     
+                    // Convert Blob to Buffer for email attachment
+                    const buffer = Buffer.from(await pdfBuffer.arrayBuffer());
+                    
+                    // Send email using the gift card data from database
                     const emailResult = await sendServerGiftCardEmail({
-                      recipientEmail: giftCard.recipient_email!,
-                      recipientName: giftCard.recipient_name,
-                      senderName: giftCard.sender_name,
-                      amount: giftCard.amount,
-                      code: giftCard.code,
-                      message: giftCard.message || '',
-                      giftCardUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/api/gift-cards/${giftCard.code}/download`
+                      giftCardData: {
+                        code: giftCard.code,
+                        amount: giftCard.amount,
+                        recipient_name: giftCard.recipient_name,
+                        recipient_email: giftCard.recipient_email || '',
+                        message: giftCard.message,
+                        expires_at: giftCard.expires_at
+                      },
+                      senderInfo: {
+                        name: giftCard.sender_name,
+                        email: giftCard.sender_email
+                      },
+                      pdfBuffer: buffer
                     });
                     
-                    logDebug(`[${requestId}] Gift card email result:`, emailResult);
+                    logDebug(`[${requestId}] Email sending result:`, emailResult);
                     
                     // Mark as emailed
                     await supabase
@@ -664,4 +738,37 @@ export async function POST(request: NextRequest) {
     // But log the error for our own tracking
     return NextResponse.json({ success: true });
   }
+}
+
+// Enkel ping-endpoint för att enkelt kontrollera om callback-endpointen är nåbar
+export async function GET(request: NextRequest) {
+  const requestId = uuidv4().substring(0, 8);
+  
+  logDebug(`[${requestId}] Swish callback ping received`);
+  
+  // Logga viktiga headers och information för felsökning
+  const sourceIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+  const userAgent = request.headers.get('user-agent') || 'unknown';
+  
+  // Skapa en array av alla headers för loggning
+  const headers: Record<string, string> = {};
+  request.headers.forEach((value, key) => {
+    // Undvik att logga känsliga headers som Authorization eller Cookie
+    if (!['authorization', 'cookie'].includes(key.toLowerCase())) {
+      headers[key] = value;
+    }
+  });
+  
+  logDebug(`[${requestId}] Ping request source: IP=${sourceIp}, User-Agent=${userAgent}`);
+  
+  return NextResponse.json({
+    success: true,
+    message: 'Swish callback endpoint is reachable',
+    timestamp: new Date().toISOString(),
+    requestId: requestId,
+    source: {
+      ip: sourceIp,
+      userAgent: userAgent
+    }
+  });
 } 

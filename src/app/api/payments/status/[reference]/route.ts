@@ -49,18 +49,28 @@ export async function GET(
       hasBooking: !!payment.bookings
     });
 
-    // Om betalningens status fortfarande är CREATED och det har gått längre tid än 1 minut,
+    // Om betalningens status fortfarande är CREATED och det har gått längre tid än 30 sekunder,
     // och vi har ett Swish-betalnings-ID, kan vi försöka fråga Swish direkt om status
     const paymentCreatedAt = new Date(payment.created_at);
     const now = new Date();
-    const minutesSinceCreation = (now.getTime() - paymentCreatedAt.getTime()) / (1000 * 60);
+    const secondsSinceCreation = (now.getTime() - paymentCreatedAt.getTime()) / 1000;
     const hasSwishPaymentId = payment.swish_payment_id && payment.swish_payment_id !== reference;
 
     let swishStatus = null;
     
-    if (payment.status === 'CREATED' && minutesSinceCreation > 1 && hasSwishPaymentId) {
+    // Kontrollera med Swish API direkt om:
+    // 1. Betalningen fortfarande har status CREATED
+    // 2. Det har gått minst 30 sekunder sedan betalningen skapades
+    // 3. Vi har ett Swish-betalnings-ID
+    // 4. Om queryparametern forceCheck=true ingår i URL:en
+    const forceCheck = request.nextUrl.searchParams.get('forceCheck') === 'true';
+    const shouldCheckWithSwish = 
+      (payment.status === 'CREATED' && secondsSinceCreation > 30 && hasSwishPaymentId) || 
+      (forceCheck && hasSwishPaymentId);
+    
+    if (shouldCheckWithSwish) {
       try {
-        logDebug(`Payment is still in CREATED state after ${minutesSinceCreation.toFixed(1)} minutes. Checking with Swish API.`);
+        logDebug(`Payment is still in CREATED state after ${(secondsSinceCreation / 60).toFixed(1)} minutes. Checking with Swish API. ForceCheck: ${forceCheck}`);
         
         const swishService = SwishService.getInstance();
         const swishResponse = await swishService.getPaymentStatus(payment.swish_payment_id);

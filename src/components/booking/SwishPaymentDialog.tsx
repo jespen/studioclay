@@ -13,6 +13,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import ErrorIcon from '@mui/icons-material/Error';
 import { PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
+import { FaSpinner } from 'react-icons/fa';
 
 interface SwishPaymentDialogProps {
   open: boolean;
@@ -37,12 +38,20 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
       </DialogTitle>
       <DialogContent>
         {paymentStatus === PAYMENT_STATUS.CREATED && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
-            <CircularProgress sx={{ mb: 2 }} />
-            <Typography variant="body1" gutterBottom>
-              Öppna Swish-appen på din mobil för att slutföra betalningen
-            </Typography>
-          </Box>
+          <div className="flex flex-col items-center p-4">
+            <FaSpinner className="animate-spin text-primary text-2xl mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Betalning behandlas</h3>
+            <p className="text-center mb-4">
+              Din betalning behandlas för närvarande. 
+              <br />
+              Se till att godkänna betalningen i Swish-appen!
+            </p>
+            <p className="text-center text-sm text-gray-500">
+              Lämna inte sidan. Statusen uppdateras automatiskt när betalningen är klar.
+              <br />
+              Det kan ta upp till en minut innan bekräftelsen från Swish kommer fram.
+            </p>
+          </div>
         )}
 
         {paymentStatus === PAYMENT_STATUS.PAID && (

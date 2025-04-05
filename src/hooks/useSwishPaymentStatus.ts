@@ -122,15 +122,25 @@ export const useSwishPaymentStatus = ({
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     let attempts = 0;
-    const maxAttempts = 30; // Check for up to 1 minute (30 * 2 sec)
+    const maxAttempts = 15; // Minskat från 30 till 15 (= 30 sekunder med 2 sekunders intervall)
     let redirectTimeout: NodeJS.Timeout;
+    let hasCheckedWithSwish = false;
 
     const pollStatus = async () => {
       if (!showPaymentDialog) return;
       
       if (attempts >= maxAttempts) {
-        console.log('Status check timed out after max attempts');
-        setPaymentStatus(PAYMENT_STATUS.ERROR);
+        console.log('Status check reached max attempts. Stopping polling.');
+        
+        // Visa ett meddelande till användaren om att betalningen fortfarande behandlas
+        setPaymentStatus(prev => {
+          if (prev === PAYMENT_STATUS.CREATED) {
+            console.log('Payment still in CREATED state after max attempts. Showing processing message.');
+            return PAYMENT_STATUS.CREATED;
+          }
+          return prev;
+        });
+        
         clearInterval(intervalId);
         return;
       }
@@ -145,6 +155,42 @@ export const useSwishPaymentStatus = ({
 
       attempts++;
       console.log(`Payment status check attempt ${attempts}/${maxAttempts} for reference: ${currentReference}`);
+      
+      // Efter 15 sekunder (attempt 8) med CREATED-status, be servern att kontrollera med Swish direkt
+      if (attempts === 8 && paymentStatus === PAYMENT_STATUS.CREATED && !hasCheckedWithSwish) {
+        console.log('Midway polling - requesting server to check with Swish directly');
+        hasCheckedWithSwish = true;
+        
+        try {
+          // Använd forceCheck=true för att tvinga en direktkontroll mot Swish
+          const forcedCheckResponse = await fetch(`/api/payments/status/${currentReference}?forceCheck=true`);
+          const forcedCheckData = await forcedCheckResponse.json();
+          
+          console.log('Forced Swish status check response:', forcedCheckData);
+          
+          if (forcedCheckData.success && forcedCheckData.data?.payment?.status === PAYMENT_STATUS.PAID) {
+            console.log('Forced check returned PAID status. Updating and redirecting.');
+            setPaymentStatus(PAYMENT_STATUS.PAID);
+            
+            clearInterval(intervalId);
+            
+            redirectTimeout = setTimeout(() => {
+              console.log('Redirecting after successful payment (from forced check)');
+              if (onSuccess) {
+                onSuccess();
+              } else {
+                const redirectUrl = getRedirectPath();
+                console.log('Redirecting to:', redirectUrl);
+                router.push(redirectUrl);
+              }
+            }, 1500);
+            
+            return;
+          }
+        } catch (forcedCheckError) {
+          console.error('Error in forced Swish status check:', forcedCheckError);
+        }
+      }
       
       try {
         const status = await checkPaymentStatus(currentReference);

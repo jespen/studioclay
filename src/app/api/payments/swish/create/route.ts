@@ -427,17 +427,38 @@ export async function POST(request: Request) {
       // Ensure callback URL uses HTTPS
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
       
-      // Skapa en korrekt callback-URL, se till att den använder studioclay.se (utan www)
-      // och att den använder HTTPS eftersom Swish kräver det
-      let callbackUrl = baseUrl.replace('http://', 'https://');
+      // Förbättrad hantering av callback-URL
+      // 1. Se till att URL:en använder HTTPS (Swish-krav)
+      // 2. Acceptera både www.studioclay.se och studioclay.se
+      // 3. Skapa en robust callback-URL som fungerar i alla miljöer
+      let callbackUrl = baseUrl;
       
-      // Ta bort eventuellt www-prefix från URL:en då Swish-certifikatet kan vara konfigurerat för domänen utan www
-      callbackUrl = callbackUrl.replace('www.studioclay.se', 'studioclay.se');
+      // Säkerställ att vi har https
+      if (callbackUrl.startsWith('http:')) {
+        callbackUrl = callbackUrl.replace('http://', 'https://');
+        logDebug('Converted callback URL from HTTP to HTTPS:', callbackUrl);
+      }
       
-      // Lägg till sökvägen till callback-endpointen
-      callbackUrl = callbackUrl + '/api/payments/swish/callback';
+      // DNS-alias hantering: studioclay.se domänen är konfigurerad för Swish
+      // Certifikaten är konfigurerade för studioclay.se (utan www) i produktionsläge
+      // och localhost i utvecklingsläge
+      if (process.env.NODE_ENV === 'production') {
+        // I produktion, använd alltid studioclay.se utan www
+        if (callbackUrl.includes('www.studioclay.se')) {
+          callbackUrl = callbackUrl.replace('www.studioclay.se', 'studioclay.se');
+          logDebug('Using non-www domain for production Swish callback:', callbackUrl);
+        }
+      }
       
-      logDebug('Using callback URL:', callbackUrl);
+      // Lägg till sökvägen till callback-endpointen och se till att det inte finns dubbla slashar
+      const callbackPath = '/api/payments/swish/callback';
+      if (callbackUrl.endsWith('/')) {
+        callbackUrl = callbackUrl + callbackPath.substring(1);
+      } else {
+        callbackUrl = callbackUrl + callbackPath;
+      }
+      
+      logDebug('Final Swish callback URL:', callbackUrl);
 
       // Prepare Swish payment request data
       try {
