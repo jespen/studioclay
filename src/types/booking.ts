@@ -7,6 +7,9 @@ export interface UserInfo {
   phone: string;
   numberOfParticipants: string;
   specialRequirements?: string;
+  address?: string;
+  postalCode?: string;
+  city?: string;
 }
 
 export interface InvoiceDetails {
@@ -18,13 +21,12 @@ export interface InvoiceDetails {
 
 export interface PaymentDetails {
   method: string;
-  swishPhone?: string;
-  invoiceDetails?: InvoiceDetails;
+  status?: string;
   paymentReference?: string;
-  paymentStatus?: string;
+  swishNumber?: string;
   invoiceNumber?: string;
-  bookingReference?: string;
-  emailSent?: boolean;
+  paymentDate?: string;
+  amount?: number;
 }
 
 export interface Payment {

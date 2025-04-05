@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { UserInfo, PaymentDetails } from '@/types/booking';
+import { buildConfirmationEmail } from '@/utils/emailBuilder';
 
 // Email configuration for server-side sending
 const emailConfig = {
@@ -201,56 +202,26 @@ export async function sendServerInvoiceEmail(params: {
   pdfBuffer?: Buffer; // PDF as a buffer
 }): Promise<{ success: boolean; message: string }> {
   try {
-    // Calculate due date (10 days from now)
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + 10);
-    const formattedDueDate = dueDate.toLocaleDateString('sv-SE'); // Swedish format: YYYY-MM-DD
-    
-    // Course information
-    const courseDate = new Date(params.courseDetails.start_date).toLocaleDateString('sv-SE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    // Build email HTML using the modular template system
+    const htmlContent = buildConfirmationEmail({
+      productType: 'course',
+      userInfo: params.userInfo,
+      paymentDetails: {
+        method: 'invoice',
+        status: 'pending',
+        invoiceNumber: params.invoiceNumber,
+        amount: params.courseDetails.price * (parseInt(params.userInfo.numberOfParticipants) || 1)
+      },
+      itemDetails: {
+        id: params.courseDetails.id,
+        title: params.courseDetails.title,
+        description: params.courseDetails.description,
+        price: params.courseDetails.price,
+        start_date: params.courseDetails.start_date,
+        location: params.courseDetails.location
+      },
+      reference: params.invoiceNumber
     });
-    
-    // Total price calculation - fixed to ensure it's calculated properly
-    const numParticipants = parseInt(params.userInfo.numberOfParticipants) || 1;
-    const unitPrice = params.courseDetails.price || 0;
-    const totalPrice = numParticipants * unitPrice;
-    
-    // Create HTML email content
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
-        <h2 style="color: #547264;">Bekräftelse - Studio Clay</h2>
-        <p>Hej ${params.userInfo.firstName},</p>
-        <p>Tack för din bokning av kursen "${params.courseDetails.title}". Bifogat hittar du fakturan för din bokning.</p>
-        
-        <div style="background-color: #f7f7f7; border-radius: 8px; padding: 15px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #547264;">Kursdetaljer</h3>
-          <p><strong>Kurs:</strong> ${params.courseDetails.title}</p>
-          <p><strong>Datum:</strong> ${courseDate}</p>
-          ${params.courseDetails.location ? `<p><strong>Plats:</strong> ${params.courseDetails.location}</p>` : ''}
-          <p><strong>Antal deltagare:</strong> ${numParticipants}</p>
-          <p><strong>Pris per deltagare:</strong> ${unitPrice.toFixed(2)} kr</p>
-          <p><strong>Totalt pris:</strong> ${totalPrice.toFixed(2)} kr</p>
-        </div>
-
-        <div style="background-color: #f7f7f7; border-radius: 8px; padding: 15px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #547264;">Fakturainformation</h3>
-          <p><strong>Fakturanummer:</strong> ${params.invoiceNumber}</p>
-          <p><strong>Förfallodatum:</strong> ${formattedDueDate}</p>
-          <p><strong>Att betala:</strong> ${totalPrice.toFixed(2)} kr</p>
-        </div>
-        
-        <p>Vänligen betala fakturan inom 10 dagar till vårt bankgiro: 5938-4560.</p>
-        <p>Ange ditt namn (${params.userInfo.firstName} ${params.userInfo.lastName}) som referens vid betalning.</p>
-        
-        <p>Om du har några frågor, vänligen kontakta oss på <a href="mailto:eva@studioclay.se">eva@studioclay.se</a> eller ring 079-312 06 05.</p>
-        <p>Vänliga hälsningar,<br>Studio Clay</p>
-      </div>
-    `;
     
     // Create reusable transporter
     const transporter = await createTransporter();
@@ -270,7 +241,7 @@ export async function sendServerInvoiceEmail(params: {
     const mailOptions = {
       from: authenticatedEmail,
       to: params.userInfo.email,
-      subject: `Bekräftelse för ${params.courseDetails.title} - ${params.invoiceNumber}`,
+      subject: `Bokningsbekräftelse - ${params.courseDetails.title}`,
       html: htmlContent,
       bcc: process.env.BCC_EMAIL || undefined,
       attachments: params.pdfBuffer ? [
@@ -324,68 +295,27 @@ export async function sendServerBookingConfirmationEmail(params: {
   bookingReference: string;
 }): Promise<{ success: boolean; message: string }> {
   try {
-    // Format the course date
-    const courseDate = new Date(params.courseDetails.start_date).toLocaleDateString('sv-SE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    // Build email HTML using the modular template system
+    const htmlContent = buildConfirmationEmail({
+      productType: 'course',
+      userInfo: params.userInfo,
+      paymentDetails: {
+        method: params.paymentDetails.method || '',
+        status: params.paymentDetails.status || '',
+        reference: params.paymentDetails.paymentReference,
+        invoiceNumber: params.paymentDetails.invoiceNumber,
+        amount: params.courseDetails.price * (parseInt(params.userInfo.numberOfParticipants) || 1)
+      },
+      itemDetails: {
+        id: params.courseDetails.id,
+        title: params.courseDetails.title,
+        description: params.courseDetails.description,
+        price: params.courseDetails.price,
+        start_date: params.courseDetails.start_date,
+        location: params.courseDetails.location
+      },
+      reference: params.bookingReference
     });
-    
-    // Calculate total price - fixed to ensure it's calculated properly
-    const numParticipants = parseInt(params.userInfo.numberOfParticipants) || 1;
-    const unitPrice = params.courseDetails.price || 0;
-    const totalPrice = numParticipants * unitPrice;
-    
-    // Create specific payment information based on payment method
-    let paymentMethodText = '';
-    let paymentDetailsText = '';
-    
-    if (params.paymentDetails.method === 'swish') {
-      paymentMethodText = 'Swish';
-      paymentDetailsText = params.paymentDetails.paymentReference 
-        ? `Betalning genomförd med Swish. Betalningsreferens: ${params.paymentDetails.paymentReference}`
-        : 'Betalning genomförd med Swish.';
-    } else if (params.paymentDetails.method === 'invoice') {
-      paymentMethodText = 'Faktura';
-      paymentDetailsText = params.paymentDetails.invoiceNumber 
-        ? `En faktura (${params.paymentDetails.invoiceNumber}) har skickats till din e-post och ska betalas inom 10 dagar.`
-        : 'En faktura har skickats till din e-post och ska betalas inom 10 dagar.';
-    } else {
-      paymentMethodText = params.paymentDetails.method || 'Okänd';
-      paymentDetailsText = 'Betalningsinformation har registrerats.';
-    }
-    
-    // Create HTML email content
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
-        <h2 style="color: #547264;">Bokningsbekräftelse</h2>
-        <p>Hej ${params.userInfo.firstName},</p>
-        <p>Tack för din bokning hos Studio Clay! Din plats är nu reserverad.</p>
-        
-        <div style="background-color: #f7f7f7; border-radius: 8px; padding: 15px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #547264;">Kursdetaljer</h3>
-          <p><strong>Kurs:</strong> ${params.courseDetails.title}</p>
-          <p><strong>Datum:</strong> ${courseDate}</p>
-          ${params.courseDetails.location ? `<p><strong>Plats:</strong> ${params.courseDetails.location}</p>` : ''}
-          <p><strong>Antal deltagare:</strong> ${numParticipants}</p>
-          <p><strong>Pris per deltagare:</strong> ${unitPrice.toFixed(2)} kr</p>
-          <p><strong>Totalt pris:</strong> ${totalPrice.toFixed(2)} kr</p>
-        </div>
-        
-        <div style="background-color: #f7f7f7; border-radius: 8px; padding: 15px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #547264;">Betalningsinformation</h3>
-          <p><strong>Betalningsmetod:</strong> ${paymentMethodText}</p>
-          <p>${paymentDetailsText}</p>
-        </div>
-        
-        <p>Din bokningsreferens: <strong>${params.bookingReference}</strong></p>
-        <p>Om du har några frågor, vänligen kontakta oss på <a href="mailto:eva@studioclay.se">eva@studioclay.se</a> eller ring 079-312 06 05.</p>
-        <p>Vi ser fram emot att träffa dig!</p>
-        <p>Vänliga hälsningar,<br>Studio Clay</p>
-      </div>
-    `;
     
     // Create reusable transporter
     const transporter = await createTransporter();
@@ -454,31 +384,31 @@ export async function sendServerGiftCardEmail(params: {
   pdfBuffer?: Buffer; // PDF as a buffer
 }): Promise<{ success: boolean; message: string }> {
   try {
-    console.log('Sending gift card email...');
-    
-    // If PDF buffer is provided, log its size
-    if (params.pdfBuffer) {
-      console.log(`Gift card PDF size: ${params.pdfBuffer.length} bytes`);
-    } else {
-      console.log('No PDF buffer provided for gift card email');
-    }
-    
-    // Format expiration date
-    let expirationDate = 'never';
-    if (params.giftCardData.expires_at) {
-      try {
-        expirationDate = new Date(params.giftCardData.expires_at).toLocaleDateString('sv-SE', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
-      } catch (e) {
-        console.error('Error formatting expiration date:', e);
-      }
-    }
-    
-    // Format amount with currency
-    const amount = `${params.giftCardData.amount.toFixed(2)} kr`;
+    // Build email HTML using the modular template system
+    const htmlContent = buildConfirmationEmail({
+      productType: 'gift_card',
+      userInfo: {
+        firstName: params.giftCardData.recipient_name,
+        lastName: '',
+        email: params.giftCardData.recipient_email
+      },
+      paymentDetails: {
+        method: 'gift_card',
+        status: 'completed',
+        amount: params.giftCardData.amount
+      },
+      itemDetails: {
+        id: params.giftCardData.code,
+        title: 'Presentkort',
+        price: params.giftCardData.amount,
+        code: params.giftCardData.code,
+        recipient_name: params.giftCardData.recipient_name,
+        recipient_email: params.giftCardData.recipient_email,
+        expires_at: params.giftCardData.expires_at,
+        description: params.giftCardData.message
+      },
+      reference: params.giftCardData.code
+    });
     
     // Create reusable transporter
     const transporter = await createTransporter();
@@ -494,35 +424,8 @@ export async function sendServerGiftCardEmail(params: {
     // For Office 365, use a simplified from address that exactly matches the authenticated user
     const authenticatedEmail = process.env.EMAIL_USER;
     
-    // Sender name for display in email content
+    // Sender name for display
     const senderName = params.senderInfo?.name || 'Studio Clay';
-    
-    // Create HTML email content
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
-        <h2 style="color: #547264;">Presentkort från Studio Clay</h2>
-        <p>Hej ${params.giftCardData.recipient_name},</p>
-        <p>Du har fått ett presentkort från ${senderName}.</p>
-        
-        <div style="background-color: #f7f7f7; border-radius: 8px; padding: 15px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #547264;">Presentkortets värde: ${amount}</h3>
-          <p><strong>Presentkortskod:</strong> ${params.giftCardData.code}</p>
-          <p><strong>Giltigt till:</strong> ${expirationDate}</p>
-        </div>
-        
-        ${params.giftCardData.message ? `
-        <div style="background-color: #f7f7f7; border-radius: 8px; padding: 15px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #547264;">Meddelande från ${senderName}</h3>
-          <p>${params.giftCardData.message}</p>
-        </div>
-        ` : ''}
-        
-        <p>Du kan använda presentkortet när du bokar kurser eller köper produkter på <a href="https://studioclay.se">studioclay.se</a>.</p>
-        <p>Presentkortet finns bifogat som en PDF-fil som du kan skriva ut om du vill.</p>
-        
-        <p>Vänliga hälsningar,<br>Studio Clay</p>
-      </div>
-    `;
     
     // Create email options
     const mailOptions = {
