@@ -296,7 +296,22 @@ export async function POST(request: Request) {
   
   try {
     const body = await request.json();
-    const validatedData = SwishPaymentSchema.parse(body);
+    
+    // Parse with error handling
+    const parseResult = SwishPaymentSchema.safeParse(body);
+    if (!parseResult.success) {
+      logError('Validation error:', parseResult.error);
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid request data',
+        details: parseResult.error.errors.map(err => ({
+          path: err.path.join('.'),
+          message: err.message
+        }))
+      }, { status: 400 });
+    }
+    
+    const validatedData = parseResult.data;
     
     const {
       phone_number,

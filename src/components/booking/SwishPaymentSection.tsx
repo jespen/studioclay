@@ -146,21 +146,21 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       
       const requestData = {
         phone_number: swishPhoneNumber,
-        payment_method: 'swish',
-        product_type: productType,
+        payment_method: 'swish' as const,
+        product_type: productType as 'course' | 'gift_card' | 'art_product',
         product_id: productId,
         amount: amount,
         quantity: parseInt(userInfo.numberOfParticipants || '1'),
         user_info: {
           ...userInfo,
-          phone: cleanPhoneNumber, // Keep original format in userInfo
+          phone: cleanPhoneNumber,
           numberOfParticipants: userInfo.numberOfParticipants || '1'
         }
       };
 
       console.log('Sending payment request with data:', {
         ...requestData,
-        phone_number: '******' + requestData.phone_number.slice(-4), // Mask phone number for privacy
+        phone_number: '******' + requestData.phone_number.slice(-4),
         user_info: {
           ...requestData.user_info,
           phone: '******' + requestData.user_info.phone.slice(-4)
