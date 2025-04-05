@@ -16,7 +16,17 @@ const SwishEnvSchema = z.object({
   /** Path to the Swish CA certificate file in test environment */
   SWISH_TEST_CA_PATH: z.string(),
   /** Base URL for the application (used for callback URLs) */
-  NEXT_PUBLIC_BASE_URL: z.string().url(),
+  NEXT_PUBLIC_BASE_URL: z.string().refine(
+    (url) => {
+      // I testläge accepterar vi både http och https
+      if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+        return url.startsWith('http://') || url.startsWith('https://');
+      }
+      // I produktionsläge kräver vi https
+      return url.startsWith('https://');
+    },
+    { message: "BASE_URL must start with 'https://' in production mode" }
+  ),
   /** Swish number for the merchant in production environment */
   SWISH_PROD_PAYEE_ALIAS: z.string().optional(),
   /** Path to the Swish certificate file in production environment */
