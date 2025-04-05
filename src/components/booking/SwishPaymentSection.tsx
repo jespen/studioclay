@@ -96,6 +96,8 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       return false;
     }
 
+    console.log('Starting payment creation with flow type:', getFlowType());
+
     // Show dialog immediately when payment starts
     setPaymentStatus(PaymentStatus.CREATED);
     setShowPaymentDialog(true);
@@ -110,6 +112,8 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       
       // Map flow type to product type
       const flowType = getFlowType();
+      console.log('Current flow type:', flowType);
+      
       let productType;
       switch (flowType) {
         case 'course_booking':
@@ -125,44 +129,80 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           productType = 'course';
       }
 
+      console.log('Mapped product type:', productType);
+
       // For gift cards, generate a UUID if courseId is "gift-card"
       const productId = courseId === 'gift-card' ? crypto.randomUUID() : courseId;
+      console.log('Using product ID:', productId);
       
+      const requestData = {
+        phone_number: swishPhoneNumber,
+        payment_method: 'swish',
+        product_type: productType,
+        product_id: productId,
+        amount: amount,
+        quantity: parseInt(userInfo.numberOfParticipants || '1'),
+        user_info: {
+          ...userInfo,
+          phone: cleanPhoneNumber, // Keep original format in userInfo
+          numberOfParticipants: userInfo.numberOfParticipants || '1'
+        }
+      };
+
+      console.log('Sending payment request with data:', {
+        ...requestData,
+        phone_number: '******' + requestData.phone_number.slice(-4), // Mask phone number for privacy
+        user_info: {
+          ...requestData.user_info,
+          phone: '******' + requestData.user_info.phone.slice(-4)
+        }
+      });
+
       const response = await fetch('/api/payments/swish/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Idempotency-Key': crypto.randomUUID()
         },
-        body: JSON.stringify({
-          phone_number: swishPhoneNumber,
-          payment_method: 'swish',
-          product_type: productType,
-          product_id: productId,
-          amount: amount,
-          quantity: parseInt(userInfo.numberOfParticipants || '1'),
-          user_info: {
-            ...userInfo,
-            phone: cleanPhoneNumber, // Keep original format in userInfo
-            numberOfParticipants: userInfo.numberOfParticipants || '1'
-          }
-        }),
+        body: JSON.stringify(requestData),
+      });
+
+      console.log('Received API response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Payment creation failed:', errorData);
+        console.error('Payment creation failed:', {
+          status: response.status,
+          errorData,
+          flowType,
+          productType
+        });
         setPaymentStatus(PaymentStatus.ERROR);
         setError(errorData.message || 'Ett fel uppstod vid skapande av betalning');
         return false;
       }
 
       const data = await response.json();
+      console.log('Payment created successfully:', {
+        paymentReference: data.paymentReference,
+        flowType,
+        productType
+      });
+      
       setPaymentReference(data.paymentReference);
       return true;
       
     } catch (error) {
-      console.error('Payment creation error:', error);
+      console.error('Payment creation error:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        flowType: getFlowType(),
+        productType: courseId === 'gift-card' ? 'gift_card' : getFlowType() === 'art_purchase' ? 'art_product' : 'course'
+      });
       setPaymentStatus(PaymentStatus.ERROR);
       setError('Ett fel uppstod vid skapande av betalning');
       return false;
