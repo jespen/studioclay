@@ -104,6 +104,26 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       // Clean phone number by removing spaces and dashes
       const cleanPhoneNumber = phoneNumber.replace(/[- ]/g, '');
       
+      // Map flow type to product type
+      const flowType = getFlowType();
+      let productType;
+      switch (flowType) {
+        case 'course_booking':
+          productType = 'course';
+          break;
+        case 'gift_card':
+          productType = 'gift_card';
+          break;
+        case 'art_purchase':
+          productType = 'art_product';
+          break;
+        default:
+          productType = 'course';
+      }
+
+      // For gift cards, generate a UUID if courseId is "gift-card"
+      const productId = courseId === 'gift-card' ? crypto.randomUUID() : courseId;
+      
       const response = await fetch('/api/payments/swish/create', {
         method: 'POST',
         headers: {
@@ -113,8 +133,8 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         body: JSON.stringify({
           phone_number: cleanPhoneNumber,
           payment_method: 'swish',
-          product_type: getFlowType() || 'course',
-          product_id: courseId,
+          product_type: productType,
+          product_id: productId,
           amount: amount,
           quantity: parseInt(userInfo.numberOfParticipants || '1'),
           user_info: {
