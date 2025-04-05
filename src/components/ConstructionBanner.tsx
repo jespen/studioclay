@@ -43,7 +43,7 @@ const ConstructionBanner = () => {
         <div className={styles.content}>
     
           <p className={styles.message}>
-            <strong>⚠️ Under uppbyggnad!</strong> Denna webbplats är under uppbyggnad. Det mesta skall fungera (ej swish) men skulle du hitta något som inte fungerar - kontakta <a href="mailto:eva@studioclay.se">eva@studioclay.se </a>.
+            <strong>⚠️ Under uppbyggnad</strong> Denna webbplats är under uppbyggnad. Det mesta skall fungera (ej swish) men skulle du hitta något som inte fungerar - kontakta <a href="mailto:eva@studioclay.se">eva@studioclay.se </a>.
           </p>
         </div>
         <button
