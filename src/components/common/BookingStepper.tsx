@@ -195,11 +195,11 @@ const GenericStepper: React.FC<StepperProps> = ({
   return (
     <Box sx={{ width: '100%', mb: 4, mt: 2 }} className={className}>
       {/* Add debug info */}
-      {process.env.NODE_ENV === 'development' && (
+      {/* {process.env.NODE_ENV === 'development' && (
         <div style={{ fontSize: '10px', color: '#666', textAlign: 'right', marginBottom: '4px' }}>
           Debug stepper: enum={numericActiveStep}, rendered={validActiveStep}, flow={flowType}
         </div>
-      )}
+      )} */}
       
       <Stepper 
         activeStep={validActiveStep} 

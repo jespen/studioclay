@@ -394,21 +394,17 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                       />
                     } 
                     label={
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Typography>Betala med Swish</Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', height: 30, width: 100, position: 'relative' }}>
+                        <Image
+                          src={swishLogoSrc}
+                          alt="Betala med Swish"
+                          fill
+                          style={{ objectFit: 'contain' }}
+                        />
                       </Box>
-                      
                     } 
                     sx={{ width: '100%' }}
                   />      
-                  <Box sx={{ mt: 2, height: 30, width: 100, position: 'relative' }}>
-                    <Image
-                      src={swishLogoSrc}
-                      alt="Swish"
-                      fill
-                      style={{ objectFit: 'contain' }}
-                    />
-                  </Box>
                   {paymentDetails.method === 'swish' && userInfo && (
                     <SwishPaymentSection
                       ref={swishPaymentRef}

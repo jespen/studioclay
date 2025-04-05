@@ -5,10 +5,10 @@ import {
   useTheme,
   useMediaQuery,
 } from '@mui/material';
-import PhoneIcon from '@mui/icons-material/Phone';
-import Image from 'next/image';
+// import PhoneIcon from '@mui/icons-material/Phone';
+// import Image from 'next/image';
 import { FormTextField } from '../common/FormField';
-import { isValidSwishPhoneNumber } from '@/utils/swish/phoneNumberFormatter';
+// import { isValidSwishPhoneNumber } from '@/utils/swish/phoneNumberFormatter';
 
 interface SwishPaymentFormProps {
   phoneNumber: string;
