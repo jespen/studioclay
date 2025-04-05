@@ -166,6 +166,56 @@ async function makeSwishRequest(data: any): Promise<{ success: boolean, data?: a
   }
 }
 
+// Förbered meddelandet baserat på produkttyp
+async function getProductTitle(productType: string, productId: string) {
+  try {
+    switch(productType) {
+      case 'course':
+        // Hämta kurstitel från databasen
+        const { data: course, error: courseError } = await supabase
+          .from('course_instances')
+          .select('*, course_templates(title)')
+          .eq('id', productId)
+          .single();
+        
+        if (courseError || !course) {
+          logError('Error fetching course title:', courseError);
+          return 'Kurs';
+        }
+        
+        // Använd kursinstansens titel om den finns, annars template-titeln
+        const courseTitle = course.title || 
+                          (course.course_templates?.title) || 
+                          'Kurs';
+        return courseTitle;
+        
+      case 'gift_card':
+        return 'Presentkort';
+        
+      case 'art_product':
+        // Hämta produkttitel från products-tabellen (inte shop_items)
+        const { data: product, error: productError } = await supabase
+          .from('products')
+          .select('title')
+          .eq('id', productId)
+          .single();
+        
+        if (productError || !product) {
+          logError('Error fetching product title:', productError);
+          return 'Produkt';
+        }
+        
+        return product.title || 'Produkt';
+        
+      default:
+        return 'Betalning';
+    }
+  } catch (error) {
+    logError('Error getting product title:', error);
+    return 'Betalning';
+  }
+}
+
 // Lägg till en GET-metod för att testa att routen fungerar
 export async function GET(request: Request) {
   try {
@@ -304,9 +354,24 @@ export async function POST(request: Request) {
       // Declare the payment variable at a higher scope
       let payment;
 
-      // For gift cards, we need to handle the product_id differently since it's not a UUID
-      if (product_type === 'gift_card') {
-        // Create a payment record with a proper UUID as product_id
+      // Handle idempotency if key is provided
+      if (metadata.idempotency_key) {
+        const existingPayment = await checkIdempotency(metadata.idempotency_key);
+        if (existingPayment) {
+          logDebug('Found existing payment with same idempotency key:', existingPayment.payment_reference);
+          return NextResponse.json({
+            success: true,
+            message: 'Payment request already processed',
+            data: {
+              reference: existingPayment.payment_reference
+            }
+          });
+        }
+      }
+
+      // Check if this is a gift card or shop purchase
+      if (product_type === 'gift_card' || product_type === 'art_product') {
+        // Create a more generic payment record for non-course products
         const { data: paymentData, error: paymentError } = await supabase
           .from('payments')
           .insert({
@@ -315,8 +380,7 @@ export async function POST(request: Request) {
             currency: 'SEK',
             payment_reference: paymentReference,
             product_type: product_type,
-            // Generate a proper UUID
-            product_id: crypto.randomUUID(),
+            product_id: product_id,
             status: 'CREATED',
             user_info: user_info,
             phone_number: phone_number,
@@ -377,13 +441,17 @@ export async function POST(request: Request) {
           formatted: formattedPhone 
         });
 
+        // Hämta produkttitel för meddelande
+        const productTitle = await getProductTitle(product_type, product_id);
+        logDebug('Got product title for Swish message:', productTitle);
+
         const swishPaymentData = {
           payeePaymentReference: paymentReference,
           callbackUrl: callbackUrl,
           payeeAlias: swishService.getPayeeAlias(),
           amount: amount.toString(),
           currency: "SEK",
-          message: `Betalning för ${product_id}`.substring(0, 50), // Max 50 chars
+          message: `studioclay.se - ${productTitle}`.substring(0, 50), // Max 50 chars för Swish-meddelande
           payerAlias: formattedPhone
         };
         

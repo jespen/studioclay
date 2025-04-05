@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
-import { getPaymentReference, setPaymentReference, setBookingReference } from '@/utils/flowStorage';
+import { getPaymentReference, setPaymentReference, setBookingReference, getFlowType } from '@/utils/flowStorage';
+import { FlowType } from '@/components/common/BookingStepper';
 
 interface UseSwishPaymentStatusProps {
   paymentReference: string | null;
-  courseId: string;
+  courseId?: string;
   onSuccess?: () => void;
+  redirectPath?: string;
 }
 
 interface UseSwishPaymentStatusResult {
@@ -21,6 +23,7 @@ export const useSwishPaymentStatus = ({
   paymentReference,
   courseId,
   onSuccess,
+  redirectPath
 }: UseSwishPaymentStatusProps): UseSwishPaymentStatusResult => {
   const router = useRouter();
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
@@ -89,6 +92,32 @@ export const useSwishPaymentStatus = ({
     }
   };
 
+  // Funktion för att välja rätt redirectsida baserat på produkttyp
+  const getRedirectPath = () => {
+    // Om en specifik redirectPath är angiven, använd den
+    if (redirectPath) {
+      return redirectPath;
+    }
+
+    // Annars, använd rätt redirectsida baserat på produkttyp
+    const flowType = getFlowType();
+    console.log('Current flow type:', flowType);
+
+    switch (flowType) {
+      case FlowType.GIFT_CARD:
+      case 'gift_card':
+        return '/presentkort/bekraftelse';
+      case FlowType.ART_PURCHASE:
+      case 'art_purchase':
+        return '/shop/bekraftelse';
+      case FlowType.COURSE_BOOKING:
+      case 'course_booking':
+      default:
+        // För kurser, använd kurs-ID för att bygga redirectlänken
+        return courseId ? `/book-course/${courseId}/confirmation` : '/bekraftelse';
+    }
+  };
+
   // Start polling payment status
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -131,11 +160,13 @@ export const useSwishPaymentStatus = ({
           clearInterval(intervalId);
           
           redirectTimeout = setTimeout(() => {
-            console.log('Redirecting to confirmation page');
+            console.log('Redirecting after successful payment');
             if (onSuccess) {
               onSuccess();
             } else {
-              router.push(`/book-course/${courseId}/confirmation`);
+              const redirectUrl = getRedirectPath();
+              console.log('Redirecting to:', redirectUrl);
+              router.push(redirectUrl);
             }
           }, 1500);
         } else if (status === PAYMENT_STATUS.DECLINED || status === PAYMENT_STATUS.ERROR) {
@@ -161,7 +192,7 @@ export const useSwishPaymentStatus = ({
         clearTimeout(redirectTimeout);
       }
     };
-  }, [showPaymentDialog, paymentReference, paymentStatus, courseId, router, onSuccess]);
+  }, [showPaymentDialog, paymentReference, paymentStatus, courseId, router, onSuccess, redirectPath]);
 
   return {
     paymentStatus,
