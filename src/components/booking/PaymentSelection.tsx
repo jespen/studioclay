@@ -48,6 +48,7 @@ import EmailIcon from '@mui/icons-material/Email';
 import PhoneIcon from '@mui/icons-material/Phone';
 import PeopleIcon from '@mui/icons-material/People';
 import ReceiptIcon from '@mui/icons-material/Receipt';
+import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 
 import { GenericStep, FlowType } from '../common/BookingStepper';
 import GenericFlowContainer from '../common/GenericFlowContainer';
@@ -483,7 +484,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
           Sammanfattning
         </Typography>
         
-        {courseDetail && (
+        {courseDetail && flowType !== FlowType.GIFT_CARD && (
           <Card variant="outlined" sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
@@ -513,6 +514,44 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
                   Plats: {courseDetail.location}
                 </Typography>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Gift Card Summary */}
+        {flowType === FlowType.GIFT_CARD && flowData?.itemDetails && (
+          <Card variant="outlined" sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <CardGiftcardIcon sx={{ mr: 1, color: 'var(--primary)' }} />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Presentkort
+                </Typography>
+              </Box>
+
+              <Typography variant="body2" sx={{ mb: 0.5 }}>
+                Belopp: {flowData.itemDetails.amount} kr
+              </Typography>
+
+              {flowData.itemDetails.recipientName && (
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  Till: {flowData.itemDetails.recipientName}
+                </Typography>
+              )}
+
+              {flowData.itemDetails.recipientEmail && (
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  E-post: {flowData.itemDetails.recipientEmail}
+                </Typography>
+              )}
+
+              {flowData.itemDetails.message && (
+                <Box sx={{ mt: 1, p: 1.5, bgcolor: 'rgba(84, 114, 100, 0.05)', borderRadius: 1 }}>
+                  <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                    "{flowData.itemDetails.message}"
+                  </Typography>
+                </Box>
               )}
             </CardContent>
           </Card>
