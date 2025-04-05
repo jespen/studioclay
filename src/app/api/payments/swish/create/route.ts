@@ -496,8 +496,32 @@ export async function POST(request: Request) {
           }, { status: 400 });
         }
 
-        logDebug('Swish payment request successful');
+        logDebug('Swish payment request successful', result);
         
+        // Uppdatera betalningsposten med Swish-information
+        if (result.data?.reference) {
+          await supabase
+            .from('payments')
+            .update({
+              swish_payment_id: result.data.reference,
+              swish_callback_url: callbackUrl,
+              metadata: {
+                ...payment.metadata,
+                swish_request: {
+                  sent_at: new Date().toISOString(),
+                  data: {
+                    ...swishPaymentData,
+                    // Maskera telefonnumret för loggning
+                    payerAlias: swishPaymentData.payerAlias ? 
+                      `${swishPaymentData.payerAlias.substring(0, 4)}****${swishPaymentData.payerAlias.slice(-2)}` : 
+                      undefined
+                  }
+                }
+              }
+            })
+            .eq('payment_reference', paymentReference);
+        }
+
         // Handle art_product logic if this is an art product
         if (product_type === 'art_product') {
           try {

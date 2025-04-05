@@ -279,11 +279,72 @@ export async function POST(request: NextRequest) {
     const reference = paymentReference || payeePaymentReference;
     logDebug(`[${requestId}] Looking up payment with reference: ${reference}`);
 
-    const { data: payment, error: fetchError } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('payment_reference', reference)
-      .single();
+    // Försök först med payeePaymentReference (vår interna referens)
+    let payment = null;
+    let fetchError = null;
+
+    // Logg alla parametrar för felsökning
+    logDebug(`[${requestId}] Payment lookup parameters:`, { 
+      payeePaymentReference, 
+      paymentReference,
+      reference 
+    });
+
+    if (payeePaymentReference) {
+      logDebug(`[${requestId}] Trying to find payment with payeePaymentReference: ${payeePaymentReference}`);
+      const result = await supabase
+        .from('payments')
+        .select('*')
+        .eq('payment_reference', payeePaymentReference)
+        .maybeSingle();
+
+      fetchError = result.error;
+      payment = result.data;
+
+      logDebug(`[${requestId}] Result from first lookup:`, { 
+        found: !!payment, 
+        error: !!fetchError,
+        paymentId: payment?.id
+      });
+    }
+
+    // Om vi inte hittade något med payeePaymentReference, prova med paymentReference
+    if (!payment && !fetchError && paymentReference) {
+      logDebug(`[${requestId}] Trying to find payment with paymentReference: ${paymentReference}`);
+      const result = await supabase
+        .from('payments')
+        .select('*')
+        .eq('swish_payment_id', paymentReference)
+        .maybeSingle();
+
+      fetchError = result.error;
+      payment = result.data;
+
+      logDebug(`[${requestId}] Result from second lookup:`, { 
+        found: !!payment, 
+        error: !!fetchError,
+        paymentId: payment?.id 
+      });
+    }
+
+    // Om vi fortfarande inte hittat något, försök med en fuzzy-sökning (för säkerhets skull)
+    if (!payment && !fetchError) {
+      logDebug(`[${requestId}] Trying fuzzy lookup for reference: ${reference}`);
+      const result = await supabase
+        .from('payments')
+        .select('*')
+        .or(`payment_reference.ilike.%${reference}%,swish_payment_id.ilike.%${reference}%`)
+        .limit(1);
+
+      fetchError = result.error;
+      payment = result.data?.[0] || null;
+
+      logDebug(`[${requestId}] Result from fuzzy lookup:`, { 
+        found: !!payment, 
+        error: !!fetchError,
+        paymentId: payment?.id
+      });
+    }
 
     if (fetchError || !payment) {
       logError(`[${requestId}] Payment not found:`, { reference, error: fetchError });

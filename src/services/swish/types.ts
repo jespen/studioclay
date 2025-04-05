@@ -42,16 +42,20 @@ export interface SwishRequestData {
 }
 
 /**
- * Response type for Swish API calls.
- * Represents the standard response format from Swish endpoints.
+ * Response type for Swish API requests.
+ * Used to standardize responses from various Swish operations.
  */
 export interface SwishApiResponse {
-  /** Whether the API call was successful */
+  /** Whether the API request was successful */
   success: boolean;
-  /** Response data if successful */
+  /** Data returned from the API if successful */
   data?: {
-    /** Payment reference for tracking */
+    /** Payment reference ID */
     reference: string;
+    /** Payment status (CREATED, PAID, DECLINED, ERROR) */
+    status?: PaymentStatus;
+    /** Payment amount */
+    amount?: number;
   };
   /** Error message if unsuccessful */
   error?: string;

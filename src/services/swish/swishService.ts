@@ -126,14 +126,24 @@ export class SwishService {
    * Makes a request to the Swish API with proper certificates.
    * Handles HTTPS communication and error responses.
    * 
-   * @param data - The data to send to the Swish API
+   * @param options - The options for the API request (can be data object or request options)
    * @returns {Promise<{success: boolean, data?: any, error?: string}>} The API response
    * @throws {SwishApiError} If the API request fails
    */
-  private async makeSwishRequest(data: any): Promise<{ success: boolean; data?: any; error?: string }> {
+  private async makeSwishRequest(options: any): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-      const url = this.config.getEndpointUrl('createPayment');
+      const isStatusRequest = options.isStatusCheck === true;
+      const requestMethod = options.method || 'POST';
+      
+      // För status requests använder vi den URL som skickats in
+      const url = isStatusRequest ? options.url : this.config.getEndpointUrl('createPayment');
       const isTestMode = this.config.isTest;
+      
+      logDebug('Swish API request:', {
+        url,
+        method: requestMethod,
+        isStatusRequest
+      });
 
       logDebug('Swish config info:', {
         isTestMode,
@@ -223,31 +233,31 @@ export class SwishService {
       
       const agent = new https.Agent(agentOptions);
 
-      // Redact sensitive information for logging
-      const logData = { ...data };
-      if (logData.payerAlias) {
-        logData.payerAlias = logData.payerAlias.substring(0, 4) + '****' + logData.payerAlias.slice(-2);
-      }
-      
-      logDebug('Sending request to Swish API:', {
-        url,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        data: logData
-      });
-
-      const response = await fetch(url, {
-        method: 'POST',
+      // Prepare fetch options
+      const fetchOptions: any = {
+        method: requestMethod,
         agent,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        },
-        body: JSON.stringify(data)
-      });
+        }
+      };
+      
+      // Add body only for POST requests
+      if (requestMethod === 'POST' && !isStatusRequest) {
+        // Redact sensitive information for logging
+        const logData = { ...options };
+        if (logData.payerAlias) {
+          logData.payerAlias = logData.payerAlias.substring(0, 4) + '****' + logData.payerAlias.slice(-2);
+        }
+        
+        logDebug('Sending request to Swish API with data:', { url, ...logData });
+        fetchOptions.body = JSON.stringify(options);
+      } else {
+        logDebug('Sending request to Swish API:', { url, method: requestMethod });
+      }
+
+      const response = await fetch(url, fetchOptions);
 
       logDebug('Swish API response received:', {
         status: response.status,
@@ -255,6 +265,31 @@ export class SwishService {
         headers: Object.fromEntries(response.headers)
       });
 
+      // Handle status check response
+      if (isStatusRequest) {
+        try {
+          const responseData = await response.json();
+          logDebug('Status check response:', responseData);
+          
+          if (response.ok) {
+            return { success: true, data: responseData };
+          } else {
+            return { 
+              success: false, 
+              error: `Swish API error: ${response.status} ${response.statusText}`,
+              data: responseData
+            };
+          }
+        } catch (parseError) {
+          logError('Error parsing status response:', parseError);
+          return { 
+            success: false, 
+            error: 'Failed to parse status response' 
+          };
+        }
+      }
+      
+      // Handle payment creation response
       if (response.status === 201) {
         const location = response.headers.get('location');
         if (!location) {
@@ -335,6 +370,58 @@ export class SwishService {
       };
     } catch (error) {
       logError('Error in createPayment:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Gets the status of a Swish payment.
+   * 
+   * @param paymentReference - The Swish payment reference (ID) to check
+   * @returns {Promise<SwishApiResponse>} The API response with payment status
+   */
+  public async getPaymentStatus(paymentReference: string): Promise<SwishApiResponse> {
+    try {
+      logDebug(`Getting payment status for Swish reference: ${paymentReference}`);
+      
+      if (!paymentReference) {
+        throw new Error('Payment reference is required');
+      }
+
+      // Construct the URL for the payment status endpoint
+      const url = this.config.getEndpointUrl('paymentStatus').replace('{id}', paymentReference);
+      
+      logDebug('Fetching payment status from URL:', url);
+
+      // Make the request using the same mechanism as createPayment
+      const result = await this.makeSwishRequest({
+        method: 'GET',
+        url,
+        isStatusCheck: true
+      });
+
+      if (!result.success) {
+        return {
+          success: false,
+          error: result.error || 'Unknown error from Swish API',
+          data: result.data
+        };
+      }
+
+      // Extract status information
+      return {
+        success: true,
+        data: {
+          reference: paymentReference,
+          status: result.data?.status,
+          amount: result.data?.amount ? parseFloat(result.data.amount) : undefined
+        }
+      };
+    } catch (error) {
+      logError('Error in getPaymentStatus:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'

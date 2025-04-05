@@ -67,6 +67,8 @@ export const SWISH_ENDPOINTS = {
   createPayment: '/swish-cpcapi/api/v1/paymentrequests',
   /** Endpoint for retrieving payment status */
   getPayment: '/swish-cpcapi/api/v1/paymentrequests',
+  /** Endpoint for checking payment status (alias for getPayment) */
+  paymentStatus: '/swish-cpcapi/api/v1/paymentrequests/{id}',
   /** Endpoint for canceling payment requests */
   cancelPayment: '/swish-cpcapi/api/v1/paymentrequests/cancel'
 } as const;
