@@ -32,17 +32,23 @@ interface PaymentMetadata {
 
 // Unified schema for all payment types
 const SwishPaymentSchema = z.object({
-  phone_number: z.string(),
+  phone_number: z.string()
+    .min(10, 'Telefonnummer måste vara minst 10 siffror')
+    .max(15, 'Telefonnummer får inte vara längre än 15 siffror'),
   payment_method: z.literal('swish'),
   product_type: z.enum(['course', 'gift_card', 'art_product']),
-  product_id: z.string(),
-  amount: z.number(),
-  quantity: z.number().default(1),
+  product_id: z.string().uuid('Ogiltigt produkt-ID'),
+  amount: z.number()
+    .min(1, 'Beloppet måste vara större än 0')
+    .max(999999, 'Beloppet får inte överstiga 999999'),
+  quantity: z.number()
+    .min(1, 'Antal måste vara minst 1')
+    .default(1),
   user_info: z.object({
-    firstName: z.string(),
-    lastName: z.string(),
-    email: z.string().email(),
-    phone: z.string(),
+    firstName: z.string().min(1, 'Förnamn är obligatoriskt'),
+    lastName: z.string().min(1, 'Efternamn är obligatoriskt'),
+    email: z.string().email('Ogiltig e-postadress'),
+    phone: z.string().min(10, 'Telefonnummer måste vara minst 10 siffror'),
     numberOfParticipants: z.string().optional(),
     address: z.string().optional(),
     postalCode: z.string().optional(),

@@ -114,7 +114,6 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     try {
       // Clean phone number by removing spaces and dashes, then format for Swish
       const cleanPhoneNumber = phoneNumber.replace(/[- ]/g, '');
-      // Convert from 07XXXXXXXX to 467XXXXXXXX format
       const swishPhoneNumber = cleanPhoneNumber.startsWith('0') 
         ? `46${cleanPhoneNumber.substring(1)}` 
         : cleanPhoneNumber;
@@ -190,8 +189,18 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           flowType,
           productType
         });
+
+        // Handle validation errors
+        if (response.status === 400 && errorData.details) {
+          const errorMessages = errorData.details
+            .map((err: { path: string; message: string }) => `${err.message} (${err.path})`)
+            .join('\n');
+          setError(errorMessages);
+        } else {
+          setError(errorData.error || 'Ett fel uppstod vid skapande av betalning');
+        }
+        
         setPaymentStatus(PaymentStatus.ERROR);
-        setError(errorData.message || 'Ett fel uppstod vid skapande av betalning');
         return false;
       }
 
