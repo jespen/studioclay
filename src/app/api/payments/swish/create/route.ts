@@ -30,30 +30,25 @@ interface PaymentMetadata {
   [key: string]: any;
 }
 
-// Unified schema for all payment types
+// Schema för validering av Swish-betalningsdata
 const SwishPaymentSchema = z.object({
-  phone_number: z.string()
-    .min(10, 'Telefonnummer måste vara minst 10 siffror')
-    .max(15, 'Telefonnummer får inte vara längre än 15 siffror'),
+  phone_number: z.string().min(1),
   payment_method: z.literal('swish'),
   product_type: z.enum(['course', 'gift_card', 'art_product']),
-  product_id: z.string().uuid('Ogiltigt produkt-ID'),
-  amount: z.number()
-    .min(1, 'Beloppet måste vara större än 0')
-    .max(999999, 'Beloppet får inte överstiga 999999'),
-  quantity: z.number()
-    .min(1, 'Antal måste vara minst 1')
-    .default(1),
+  product_id: z.string(),
+  amount: z.number(),
+  quantity: z.number(),
   user_info: z.object({
-    firstName: z.string().min(1, 'Förnamn är obligatoriskt'),
-    lastName: z.string().min(1, 'Efternamn är obligatoriskt'),
-    email: z.string().email('Ogiltig e-postadress'),
-    phone: z.string().min(10, 'Telefonnummer måste vara minst 10 siffror'),
-    numberOfParticipants: z.string().optional(),
+    firstName: z.string().min(1),
+    lastName: z.string().min(1),
+    email: z.string().email(),
+    phone: z.string().min(1),
+    numberOfParticipants: z.string().transform(val => Number(val) || 1),
+    // Optional fields for invoice payments
     address: z.string().optional(),
     postalCode: z.string().optional(),
     city: z.string().optional()
-  }).required()
+  })
 });
 
 // Hjälpfunktion för att kontrollera idempotency
@@ -295,181 +290,220 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-  
   try {
+    // Konfigurera certifikat i produktionsmiljö om vi använder Swish i produktionsläge
+    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_SWISH_TEST_MODE !== 'true') {
+      logDebug('Setting up Swish certificates from environment variables in create endpoint');
+      const certSetupResult = setupCertificate();
+      
+      if (!certSetupResult.success) {
+        logError('Failed to set up Swish certificates in create endpoint:', certSetupResult);
+        return NextResponse.json({
+          success: false,
+          error: 'Failed to set up Swish certificates',
+          details: 'Configuration error'
+        }, { status: 500 });
+      }
+    }
+    
     const body = await request.json();
     
-    // Parse with error handling
-    const parseResult = SwishPaymentSchema.safeParse(body);
-    if (!parseResult.success) {
-      logError('Validation error:', parseResult.error);
+    try {
+      // Validate the request body
+      const validatedData = SwishPaymentSchema.parse(body);
+      const { phone_number, product_id, product_type, user_info, amount, quantity } = validatedData;
+
+      // Generate payment reference
+      const timestamp = new Date().getTime().toString().slice(-6);
+      const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      const paymentReference = `SC-${timestamp}-${randomNum}`;
+
+      // Create generic payment record
+      const { data: paymentData, error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          payment_method: 'swish',
+          amount: amount,
+          currency: 'SEK',
+          payment_reference: paymentReference,
+          product_type: product_type,
+          product_id: product_id,
+          status: 'CREATED',
+          user_info: user_info,
+          phone_number: phone_number,
+          metadata: {
+            idempotency_key: request.headers.get('Idempotency-Key'),
+            quantity: quantity
+          }
+        })
+        .select()
+        .single();
+
+      if (paymentError) {
+        throw new Error(`Failed to create payment record: ${paymentError.message}`);
+      }
+
+      // Get base URL and create callback URL
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+      let callbackUrl = baseUrl.replace('http://', 'https://');
+      
+      // Use non-www domain in production
+      if (process.env.NODE_ENV === 'production' && callbackUrl.includes('www.studioclay.se')) {
+        callbackUrl = callbackUrl.replace('www.studioclay.se', 'studioclay.se');
+      }
+      
+      // Add callback path
+      const callbackPath = '/api/payments/swish/callback';
+      callbackUrl = callbackUrl.endsWith('/') 
+        ? callbackUrl + callbackPath.substring(1)
+        : callbackUrl + callbackPath;
+
+      try {
+        // Format phone number and get product title
+        const swishService = SwishService.getInstance();
+        const formattedPhone = swishService.formatPhoneNumber(phone_number);
+        const productTitle = await getProductTitle(product_type, product_id);
+
+        // Create Swish payment request
+        const swishPaymentData = {
+          payeePaymentReference: paymentReference,
+          callbackUrl: callbackUrl,
+          payeeAlias: swishService.getPayeeAlias(),
+          amount: amount.toString(),
+          currency: "SEK",
+          message: `studioclay.se - ${productTitle}`.substring(0, 50),
+          payerAlias: formattedPhone
+        };
+
+        const result = await swishService.createPayment(swishPaymentData);
+
+        if (!result.success) {
+          // Update payment status to ERROR if Swish request fails
+          await supabase
+            .from('payments')
+            .update({ 
+              status: 'ERROR',
+              metadata: {
+                ...paymentData.metadata,
+                swish_error: result.error
+              }
+            })
+            .eq('payment_reference', paymentReference);
+
+          return NextResponse.json({
+            success: false,
+            error: result.error,
+            details: result.data
+          }, { status: 400 });
+        }
+
+        // Update payment with Swish details
+        if (result.data?.reference) {
+          await supabase
+            .from('payments')
+            .update({
+              swish_payment_id: result.data.reference,
+              swish_callback_url: callbackUrl,
+              metadata: {
+                ...paymentData.metadata,
+                swish_request: {
+                  sent_at: new Date().toISOString(),
+                  data: {
+                    ...swishPaymentData,
+                    payerAlias: `${swishPaymentData.payerAlias.substring(0, 4)}****${swishPaymentData.payerAlias.slice(-2)}`
+                  }
+                }
+              }
+            })
+            .eq('payment_reference', paymentReference);
+        }
+
+        // Handle product-specific logic
+        if (product_type === 'art_product') {
+          await handleArtProduct(product_id, user_info, phone_number, amount, paymentReference, paymentData.id);
+        }
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            reference: paymentReference
+          }
+        });
+
+      } catch (swishError) {
+        throw swishError;
+      }
+    } catch (validationError) {
       return NextResponse.json({
         success: false,
-        error: 'Invalid request data',
-        details: parseResult.error.errors.map(err => ({
-          path: err.path.join('.'),
-          message: err.message
-        }))
+        error: validationError instanceof Error ? validationError.message : 'Validation error',
+        validationError: true
       }, { status: 400 });
     }
-    
-    const validatedData = parseResult.data;
-    
-    const {
-      phone_number,
-      payment_method,
-      product_type,
-      product_id,
-      amount,
-      quantity,
-      user_info
-    } = validatedData;
-
-    // Basic validation based on product type
-    try {
-      if (product_type === 'course') {
-        const { data: course } = await supabase
-          .from('courses')
-          .select('spots_available')
-          .eq('id', product_id)
-          .single();
-          
-        if (!course || course.spots_available < quantity) {
-          return NextResponse.json({
-            success: false,
-            error: 'Course is full or not available'
-          }, { status: 400 });
-        }
-      } 
-      else if (product_type === 'art_product') {
-        // Query shop_items table instead of products
-        const { data: product, error: productError } = await supabase
-          .from('shop_items')
-          .select('in_stock, stock_quantity')
-          .eq('id', product_id)
-          .single();
-          
-        if (productError) {
-          logError('Error fetching shop item:', productError);
-          return NextResponse.json({
-            success: false,
-            error: 'Failed to verify product availability',
-            details: [{ path: 'product_id', message: 'Kunde inte hitta produkten' }]
-          }, { status: 400 });
-        }
-
-        if (!product) {
-          return NextResponse.json({
-            success: false,
-            error: 'Product not found',
-            details: [{ path: 'product_id', message: 'Produkten hittades inte' }]
-          }, { status: 400 });
-        }
-
-        if (!product.in_stock || (product.stock_quantity || 0) < quantity) {
-          return NextResponse.json({
-            success: false,
-            error: 'Product not available',
-            details: [{ path: 'quantity', message: 'Produkten är tyvärr slut i lager' }]
-          }, { status: 400 });
-        }
-      }
-    } catch (error) {
-      logError('Error checking product availability:', error);
-      return NextResponse.json({
-        success: false,
-        error: 'Failed to verify product availability'
-      }, { status: 500 });
-    }
-
-    // Generate payment reference
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000);
-    const paymentReference = `${timestamp}-${random}`;
-
-    // Create payment record with CREATED status
-    const { data: paymentData, error: paymentError } = await supabase
-      .from('payments')
-      .insert({
-        status: 'CREATED',
-        payment_method,
-        amount,
-        currency: 'SEK',
-        payment_reference: paymentReference,
-        product_type,
-        product_id,
-        user_info,
-        metadata: {
-          idempotency_key: request.headers.get('Idempotency-Key'),
-          quantity
-        },
-        phone_number: phone_number
-      })
-      .select()
-      .single();
-
-    if (paymentError) {
-      logError('Failed to create payment record:', paymentError);
-      return NextResponse.json({
-        success: false,
-        error: 'Failed to create payment record'
-      }, { status: 500 });
-    }
-
-    // Initialize Swish service
-    const swishService = SwishService.getInstance();
-
-    // Construct callback URL
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-    const host = request.headers.get('host') || 'localhost:3000';
-    const callbackUrl = `${protocol}://${host}/api/payments/swish/callback`;
-
-    // Format phone number for Swish
-    const swishPhoneNumber = swishService.formatPhoneNumber(phone_number);
-
-    // Get product title for payment message
-    let productTitle = await getProductTitle(product_type, product_id);
-
-    // Create Swish payment request
-    const swishResult = await swishService.createPayment({
-      payeeAlias: swishService.getPayeeAlias(),
-      amount: amount.toString(),
-      currency: 'SEK',
-      message: productTitle,
-      payerAlias: swishPhoneNumber,
-      callbackUrl,
-      payeePaymentReference: paymentReference
-    });
-
-    if (!swishResult.success) {
-      logError('Failed to create Swish payment:', swishResult.error);
-      // Update payment status to ERROR
-      await supabase
-        .from('payments')
-        .update({ status: 'ERROR' })
-        .eq('payment_reference', paymentReference);
-        
-      return NextResponse.json({
-        success: false,
-        error: swishResult.error || 'Failed to create Swish payment'
-      }, { status: 500 });
-    }
-
-    // Return only the payment reference
-    return NextResponse.json({
-      success: true,
-      paymentReference
-    });
-
   } catch (error) {
-    logError('Error in payment creation:', error);
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
+  }
+}
+
+// Helper function to handle art product specific logic
+async function handleArtProduct(
+  productId: string,
+  userInfo: any,
+  phoneNumber: string,
+  amount: number,
+  paymentReference: string,
+  paymentId: string
+) {
+  try {
+    // Create art order record with CREATED status
+    const { data: orderData, error: orderError } = await supabase
+      .from('art_orders')
+      .insert({
+        product_id: productId,
+        customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
+        customer_email: userInfo.email,
+        customer_phone: phoneNumber,
+        payment_method: 'swish',
+        order_reference: paymentReference,
+        unit_price: amount,
+        total_price: amount,
+        status: 'pending',
+        payment_status: 'CREATED', // Using the standard Swish payment status
+        metadata: {
+          payment_id: paymentId,
+          user_info: userInfo,
+          created_at: new Date().toISOString()
+        }
+      })
+      .select()
+      .single();
+
+    if (orderError) {
+      throw new Error('Failed to create art order');
+    }
+
+    // Only fetch product data to verify it exists and is in stock
+    const { data: productData, error: productFetchError } = await supabase
+      .from('products')
+      .select('stock_quantity, in_stock')
+      .eq('id', productId)
+      .single();
+
+    if (productFetchError || !productData) {
+      throw new Error('Failed to fetch product data');
+    }
+
+    if (!productData.in_stock || productData.stock_quantity < 1) {
+      throw new Error('Product is out of stock');
+    }
+
+    // Note: We don't update stock or send email here
+    // This will be handled in the callback when payment is confirmed
+  } catch (error) {
+    // Log error but don't throw - we don't want to fail the payment process
+    console.error('Error in art product handling:', error);
   }
 } 

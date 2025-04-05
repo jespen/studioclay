@@ -60,15 +60,6 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     paymentReference,
     courseId,
     onSuccess: () => onPaymentComplete(true),
-    onError: () => onPaymentComplete(false),
-    onDeclined: () => {
-      onPaymentComplete(false);
-      setError('Betalningen avbröts. Du kan försöka igen eller välja en annan betalningsmetod.');
-    },
-    onTimeout: () => {
-      onPaymentComplete(false);
-      setError('Betalningen tog för lång tid. Kontrollera Swish-appen eller försök igen.');
-    }
   });
 
   const validatePhoneNumber = (phone: string): boolean => {
@@ -114,6 +105,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     try {
       // Clean phone number by removing spaces and dashes, then format for Swish
       const cleanPhoneNumber = phoneNumber.replace(/[- ]/g, '');
+      // Convert from 07XXXXXXXX to 467XXXXXXXX format
       const swishPhoneNumber = cleanPhoneNumber.startsWith('0') 
         ? `46${cleanPhoneNumber.substring(1)}` 
         : cleanPhoneNumber;
@@ -145,21 +137,21 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       
       const requestData = {
         phone_number: swishPhoneNumber,
-        payment_method: 'swish' as const,
-        product_type: productType as 'course' | 'gift_card' | 'art_product',
+        payment_method: 'swish',
+        product_type: productType,
         product_id: productId,
         amount: amount,
         quantity: parseInt(userInfo.numberOfParticipants || '1'),
         user_info: {
           ...userInfo,
-          phone: cleanPhoneNumber,
+          phone: cleanPhoneNumber, // Keep original format in userInfo
           numberOfParticipants: userInfo.numberOfParticipants || '1'
         }
       };
 
       console.log('Sending payment request with data:', {
         ...requestData,
-        phone_number: '******' + requestData.phone_number.slice(-4),
+        phone_number: '******' + requestData.phone_number.slice(-4), // Mask phone number for privacy
         user_info: {
           ...requestData.user_info,
           phone: '******' + requestData.user_info.phone.slice(-4)
@@ -189,18 +181,8 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           flowType,
           productType
         });
-
-        // Handle validation errors
-        if (response.status === 400 && errorData.details) {
-          const errorMessages = errorData.details
-            .map((err: { path: string; message: string }) => `${err.message} (${err.path})`)
-            .join('\n');
-          setError(errorMessages);
-        } else {
-          setError(errorData.error || 'Ett fel uppstod vid skapande av betalning');
-        }
-        
         setPaymentStatus(PaymentStatus.ERROR);
+        setError(errorData.message || 'Ett fel uppstod vid skapande av betalning');
         return false;
       }
 
@@ -227,13 +209,6 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     }
   };
 
-  const handleCloseDialog = () => {
-    handleClosePaymentDialog();
-    if (paymentStatus === PaymentStatus.DECLINED || paymentStatus === PaymentStatus.ERROR) {
-      setPaymentReference('');
-    }
-  };
-
   useImperativeHandle(ref, () => ({
     handleCreatePayment
   }));
@@ -244,12 +219,12 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         phoneNumber={phoneNumber}
         onPhoneNumberChange={handlePhoneNumberChange}
         error={error}
-        disabled={disabled || paymentStatus === PaymentStatus.CREATED}
+        disabled={disabled}
       />
       
       <SwishPaymentDialog
         open={showPaymentDialog}
-        onClose={handleCloseDialog}
+        onClose={handleClosePaymentDialog}
         paymentStatus={paymentStatus}
       />
     </Box>
