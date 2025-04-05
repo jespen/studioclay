@@ -346,16 +346,35 @@ export async function POST(request: Request) {
         }
       } 
       else if (product_type === 'art_product') {
-        const { data: product } = await supabase
-          .from('products')
+        // Query shop_items table instead of products
+        const { data: product, error: productError } = await supabase
+          .from('shop_items')
           .select('in_stock, stock_quantity')
           .eq('id', product_id)
           .single();
           
-        if (!product?.in_stock || (product.stock_quantity || 0) < quantity) {
+        if (productError) {
+          logError('Error fetching shop item:', productError);
           return NextResponse.json({
             success: false,
-            error: 'Product not available'
+            error: 'Failed to verify product availability',
+            details: [{ path: 'product_id', message: 'Kunde inte hitta produkten' }]
+          }, { status: 400 });
+        }
+
+        if (!product) {
+          return NextResponse.json({
+            success: false,
+            error: 'Product not found',
+            details: [{ path: 'product_id', message: 'Produkten hittades inte' }]
+          }, { status: 400 });
+        }
+
+        if (!product.in_stock || (product.stock_quantity || 0) < quantity) {
+          return NextResponse.json({
+            success: false,
+            error: 'Product not available',
+            details: [{ path: 'quantity', message: 'Produkten är tyvärr slut i lager' }]
           }, { status: 400 });
         }
       }

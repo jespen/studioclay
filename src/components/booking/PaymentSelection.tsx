@@ -258,14 +258,32 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
 
   // Calculate price based on number of participants
   const calculatePrice = () => {
-    if (!userInfo || !courseDetail || !courseDetail.price) {
-      // For shop items, use the product price directly from flowData
-      if (flowType === FlowType.ART_PURCHASE && flowData?.itemDetails?.price) {
-        return flowData.itemDetails.price;
+    // For art products, use the price from flowData
+    if (flowType === FlowType.ART_PURCHASE) {
+      if (!flowData?.itemDetails?.price) {
+        console.error('Missing price for art product:', flowData?.itemDetails);
+        throw new Error('Produktpris saknas');
       }
-      return 0;
+      return flowData.itemDetails.price;
     }
-    const numParticipants = parseInt(userInfo.numberOfParticipants) || 1;
+    
+    // For gift cards, use the amount from flowData or gift card details
+    if (flowType === FlowType.GIFT_CARD) {
+      const amount = flowData?.itemDetails?.amount || getGiftCardAmount();
+      if (!amount) {
+        console.error('Missing amount for gift card');
+        throw new Error('Presentkortsbelopp saknas');
+      }
+      return amount;
+    }
+    
+    // For courses, calculate based on number of participants
+    if (!courseDetail?.price) {
+      console.error('Missing price for course:', courseDetail);
+      throw new Error('Kurspris saknas');
+    }
+    
+    const numParticipants = parseInt(userInfo?.numberOfParticipants || '1');
     return courseDetail.price * numParticipants;
   };
 
