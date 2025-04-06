@@ -313,6 +313,39 @@ export async function POST(request: Request) {
       const validatedData = SwishPaymentSchema.parse(body);
       const { phone_number, product_id, product_type, user_info, amount, quantity } = validatedData;
 
+      // Get idempotency key from headers
+      const idempotencyKey = request.headers.get('Idempotency-Key');
+      
+      // Check for existing payment with this idempotency key
+      if (idempotencyKey) {
+        logDebug('Checking idempotency key:', { idempotencyKey });
+        const existingPayment = await checkIdempotency(idempotencyKey);
+        
+        if (existingPayment) {
+          logDebug('Found existing payment with same idempotency key:', { 
+            paymentReference: existingPayment.payment_reference,
+            status: existingPayment.status
+          });
+          
+          // If payment already exists, return it instead of creating a new one
+          return NextResponse.json({
+            success: true,
+            paymentReference: existingPayment.payment_reference,
+            data: {
+              id: existingPayment.id,
+              status: existingPayment.status,
+              amount: existingPayment.amount,
+              currency: existingPayment.currency,
+              already_exists: true
+            }
+          });
+        }
+        
+        logDebug('No existing payment found with this idempotency key');
+      } else {
+        logDebug('No idempotency key provided in request');
+      }
+
       // Generate payment reference
       const timestamp = new Date().getTime().toString().slice(-6);
       const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');

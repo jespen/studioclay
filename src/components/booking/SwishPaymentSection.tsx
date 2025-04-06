@@ -53,6 +53,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
   );
   const [error, setError] = useState<string>();
   const [paymentReference, setPaymentReference] = useState<string>('');
+  const [paymentInProgress, setPaymentInProgress] = useState<boolean>(false);
 
   const {
     paymentStatus,
@@ -96,10 +97,18 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
   };
 
   const handleCreatePayment = async (): Promise<boolean> => {
+    // Prevent multiple simultaneous payment creation attempts
+    if (paymentInProgress) {
+      console.warn('Payment creation already in progress, ignoring duplicate call');
+      return false;
+    }
+    
     if (!validatePhoneNumber(phoneNumber)) {
       return false;
     }
 
+    // Mark payment creation as in progress
+    setPaymentInProgress(true);
     console.log('Starting payment creation with flow type:', getFlowType());
 
     // Show dialog immediately when payment starts
@@ -139,6 +148,9 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       const productId = courseId === 'gift-card' ? crypto.randomUUID() : courseId;
       console.log('Using product ID:', productId);
       
+      // Generate a unique idempotency key for this request
+      const idempotencyKey = crypto.randomUUID();
+      
       const requestData = {
         phone_number: swishPhoneNumber,
         payment_method: 'swish',
@@ -166,7 +178,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': crypto.randomUUID()
+          'Idempotency-Key': idempotencyKey
         },
         body: JSON.stringify(requestData),
       });
@@ -187,14 +199,22 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         });
         setPaymentStatus(PaymentStatus.ERROR);
         setError(errorData.message || 'Ett fel uppstod vid skapande av betalning');
+        setPaymentInProgress(false);
         return false;
       }
 
       const data = await response.json();
+      
+      // Check if this was a duplicate payment that already exists
+      if (data.data?.already_exists) {
+        console.log('Found existing payment with same idempotency key:', data.paymentReference);
+      }
+      
       if (!data.paymentReference) {
         console.error('No payment reference received:', data);
         setPaymentStatus(PaymentStatus.ERROR);
         setError('Ett fel uppstod vid skapande av betalning (ingen referens)');
+        setPaymentInProgress(false);
         return false;
       }
 
@@ -205,6 +225,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       });
       
       setPaymentReference(data.paymentReference);
+      setPaymentInProgress(false);
       return true;
       
     } catch (error) {
@@ -216,6 +237,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       });
       setPaymentStatus(PaymentStatus.ERROR);
       setError('Ett fel uppstod vid skapande av betalning');
+      setPaymentInProgress(false);
       return false;
     }
   };

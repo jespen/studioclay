@@ -195,6 +195,12 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Prevent double-submits
+    if (isSubmitting) {
+      console.log('Submission already in progress, ignoring click');
+      return;
+    }
+    
     if (!validateForm()) {
       return;
     }
@@ -240,7 +246,11 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       console.error('Payment error:', error);
       setSubmitError('Det gick inte att skapa betalningen. Försök igen senare.');
     } finally {
-      setIsSubmitting(false);
+      // Add a small delay before enabling the button again
+      // to prevent accidental double-clicks
+      setTimeout(() => {
+        setIsSubmitting(false);
+      }, 1000);
     }
   };
 
@@ -822,8 +832,11 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
         
         <StyledButton
           onClick={(e) => {
-            console.log('Submit button clicked');
-            handleSubmit(e);
+            // Disable the button immediately when clicked
+            if (!isSubmitting) {
+              console.log('Submit button clicked');
+              handleSubmit(e);
+            }
           }}
           disabled={isSubmitting}
           startIcon={isSubmitting ? <CircularProgress size={20} sx={{ color: 'white' }} /> : undefined}
