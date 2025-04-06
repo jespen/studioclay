@@ -435,54 +435,103 @@ export async function POST(request: NextRequest) {
             
             logDebug(`[${requestId}] Booking created with reference: ${bookingReference}`);
             
-            // Try to send confirmation email
-            try {
-              logDebug(`[${requestId}] Sending booking confirmation email`);
+            // CRITICAL DB OPERATIONS COMPLETE
+            // Early response could be sent here in a different architectural approach
+            
+            // CONTINUE PROCESSING IN THE BACKGROUND
+            // Create a promised-based background process for email sending
+            logDebug(`[${requestId}] Setting up background process for email sending`);
+            
+            const runEmailBackgroundTask = async () => {
+              logDebug(`[${requestId}] Starting background email process`);
+              const backgroundStartTime = Date.now();
               
-              const { sendServerBookingConfirmationEmail } = await import('@/utils/serverEmail');
-              
-              // Fetch course details
-              const { data: courseData, error: courseError } = await supabase
-                .from('course_instances')
-                .select('*')
-                .eq('id', productId)
-                .single();
+              // Create a keep-alive promise to delay function termination
+              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
+              const keepAlivePromise = new Promise(resolve => {
+                const timerId = setTimeout(() => {
+                  logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
+                  resolve(true);
+                }, 15000);
                 
-              if (courseError) {
-                logError(`[${requestId}] Error fetching course details for email:`, courseError);
-                throw new Error('Failed to fetch course details for email');
-              }
-              
-              const emailResult = await sendServerBookingConfirmationEmail({
-                userInfo: {
-                  firstName: userInfo.firstName,
-                  lastName: userInfo.lastName,
-                  email: userInfo.email,
-                  phone: userInfo.phone,
-                  numberOfParticipants: userInfo.numberOfParticipants || "1",
-                  specialRequirements: userInfo.specialRequirements || ""
-                },
-                paymentDetails: {
-                  method: 'swish',
-                  status: 'PAID',
-                  paymentReference: reference
-                },
-                courseDetails: {
-                  id: productId,
-                  title: courseData.title,
-                  description: courseData.description,
-                  start_date: courseData.start_date,
-                  location: courseData.location,
-                  price: courseData.price
-                },
-                bookingReference: bookingReference
+                // Ensure timer isn't lost to garbage collection
+                global.setTimeout = global.setTimeout || setTimeout;
+                if (global.keepAliveTimers === undefined) {
+                  global.keepAliveTimers = [];
+                }
+                global.keepAliveTimers.push(timerId);
               });
               
-              logDebug(`[${requestId}] Email sending result:`, emailResult);
-            } catch (emailError) {
-              logError(`[${requestId}] Error sending confirmation email:`, emailError);
-              // Don't fail the overall process if email sending fails
-            }
+              try {
+                // Try to send confirmation email
+                logDebug(`[${requestId}] Sending booking confirmation email`);
+                
+                const { sendServerBookingConfirmationEmail } = await import('@/utils/serverEmail');
+                
+                // Fetch course details
+                const { data: courseData, error: courseError } = await supabase
+                  .from('course_instances')
+                  .select('*')
+                  .eq('id', productId)
+                  .single();
+                  
+                if (courseError) {
+                  logError(`[${requestId}] Error fetching course details for email:`, courseError);
+                  throw new Error('Failed to fetch course details for email');
+                }
+                
+                logDebug(`[${requestId}] DIAGNOSTIC: About to attempt email sending for course booking`);
+                logDebug(`[${requestId}] DIAGNOSTIC: Email parameters:`, {
+                  recipientEmail: userInfo.email,
+                  courseTitle: courseData.title,
+                  bookingReference: bookingReference,
+                  paymentReference: reference
+                });
+                
+                const emailResult = await sendServerBookingConfirmationEmail({
+                  userInfo: {
+                    firstName: userInfo.firstName,
+                    lastName: userInfo.lastName,
+                    email: userInfo.email,
+                    phone: userInfo.phone,
+                    numberOfParticipants: userInfo.numberOfParticipants || "1",
+                    specialRequirements: userInfo.specialRequirements || ""
+                  },
+                  paymentDetails: {
+                    method: 'swish',
+                    status: 'PAID',
+                    paymentReference: reference
+                  },
+                  courseDetails: {
+                    id: productId,
+                    title: courseData.title,
+                    description: courseData.description,
+                    start_date: courseData.start_date,
+                    location: courseData.location,
+                    price: courseData.price
+                  },
+                  bookingReference: bookingReference
+                });
+                
+                logDebug(`[${requestId}] Email sending result:`, emailResult);
+                logDebug(`[${requestId}] Background email process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
+              } catch (emailError) {
+                logError(`[${requestId}] Error sending confirmation email:`, emailError);
+                // Don't fail the overall process if email sending fails
+              }
+              
+              // Wait for the keep-alive promise to resolve before finishing
+              logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
+              await keepAlivePromise;
+              logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
+              
+              return { success: true };
+            };
+            
+            // Execute the background process with explicit promise handling
+            Promise.resolve().then(runEmailBackgroundTask).catch(err => {
+              logError(`[${requestId}] Critical error in background email processing:`, err);
+            });
           } else {
             logDebug(`[${requestId}] Booking already exists for this payment`, { 
               booking_id: existingBooking.id, 
@@ -513,82 +562,132 @@ export async function POST(request: NextRequest) {
             
             logDebug(`[${requestId}] Gift card created with code: ${giftCard.code}`);
             
-            // Generate gift card PDF if digital
-            if (giftCard.type === 'digital' && giftCard.recipient_email) {
+            // CRITICAL DB OPERATIONS COMPLETE
+            // Now handle PDF generation and email sending in the background
+            
+            // Create a promised-based background process
+            logDebug(`[${requestId}] Setting up background process for gift card PDF and email`);
+            
+            const runGiftCardBackgroundTask = async () => {
+              logDebug(`[${requestId}] Starting background gift card process`);
+              const backgroundStartTime = Date.now();
+              
+              // Create a keep-alive promise to delay function termination
+              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
+              const keepAlivePromise = new Promise(resolve => {
+                const timerId = setTimeout(() => {
+                  logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
+                  resolve(true);
+                }, 15000);
+                
+                // Ensure timer isn't lost to garbage collection
+                global.setTimeout = global.setTimeout || setTimeout;
+                if (global.keepAliveTimers === undefined) {
+                  global.keepAliveTimers = [];
+                }
+                global.keepAliveTimers.push(timerId);
+              });
+              
               try {
-                logDebug(`[${requestId}] Generating gift card PDF`);
-                
-                const giftCardData: GiftCardData = {
-                  code: giftCard.code,
-                  amount: giftCard.amount,
-                  recipientName: giftCard.recipient_name,
-                  recipientEmail: giftCard.recipient_email,
-                  senderName: giftCard.sender_name,
-                  senderEmail: giftCard.sender_email,
-                  message: giftCard.message || '',
-                  createdAt: new Date().toISOString(),
-                  expiresAt: giftCard.expires_at
-                };
-                
-                const pdfBuffer = await generateGiftCardPDF(giftCardData);
-                
-                // Store PDF in Supabase storage
-                const { data: storageData, error: storageError } = await supabase
-                  .storage
-                  .from('gift-cards')
-                  .upload(`${giftCard.code}.pdf`, pdfBuffer, {
-                    contentType: 'application/pdf',
-                    upsert: true
-                  });
-                  
-                if (storageError) {
-                  logError(`[${requestId}] Error storing gift card PDF:`, storageError);
-                } else {
-                  logDebug(`[${requestId}] Gift card PDF stored:`, storageData);
-                  
-                  // Try to send gift card email
+                // Generate gift card PDF if digital
+                if (giftCard.type === 'digital' && giftCard.recipient_email) {
                   try {
-                    logDebug(`[${requestId}] Sending gift card email`);
+                    logDebug(`[${requestId}] Generating gift card PDF`);
                     
-                    const { sendServerGiftCardEmail } = await import('@/utils/serverEmail');
+                    const giftCardData: GiftCardData = {
+                      code: giftCard.code,
+                      amount: giftCard.amount,
+                      recipientName: giftCard.recipient_name,
+                      recipientEmail: giftCard.recipient_email,
+                      senderName: giftCard.sender_name,
+                      senderEmail: giftCard.sender_email,
+                      message: giftCard.message || '',
+                      createdAt: new Date().toISOString(),
+                      expiresAt: giftCard.expires_at
+                    };
                     
-                    // Convert Blob to Buffer for email attachment
-                    const buffer = Buffer.from(await pdfBuffer.arrayBuffer());
+                    const pdfBuffer = await generateGiftCardPDF(giftCardData);
                     
-                    // Send email using the gift card data from database
-                    const emailResult = await sendServerGiftCardEmail({
-                      giftCardData: {
-                        code: giftCard.code,
-                        amount: giftCard.amount,
-                        recipient_name: giftCard.recipient_name,
-                        recipient_email: giftCard.recipient_email || '',
-                        message: giftCard.message,
-                        expires_at: giftCard.expires_at
-                      },
-                      senderInfo: {
-                        name: giftCard.sender_name,
-                        email: giftCard.sender_email
-                      },
-                      pdfBuffer: buffer
-                    });
-                    
-                    logDebug(`[${requestId}] Email sending result:`, emailResult);
-                    
-                    // Mark as emailed
-                    await supabase
-                      .from('gift_cards')
-                      .update({ is_emailed: true })
-                      .eq('id', giftCard.id);
-                  } catch (emailError) {
-                    logError(`[${requestId}] Error sending gift card email:`, emailError);
+                    // Store PDF in Supabase storage
+                    const { data: storageData, error: storageError } = await supabase
+                      .storage
+                      .from('gift-cards')
+                      .upload(`${giftCard.code}.pdf`, pdfBuffer, {
+                        contentType: 'application/pdf',
+                        upsert: true
+                      });
+                      
+                    if (storageError) {
+                      logError(`[${requestId}] Error storing gift card PDF:`, storageError);
+                    } else {
+                      logDebug(`[${requestId}] Gift card PDF stored:`, storageData);
+                      
+                      // Try to send gift card email
+                      try {
+                        logDebug(`[${requestId}] Sending gift card email`);
+                        logDebug(`[${requestId}] DIAGNOSTIC: About to attempt email sending for gift card`);
+                        logDebug(`[${requestId}] DIAGNOSTIC: Email parameters:`, {
+                          senderEmail: giftCard.sender_email,
+                          recipientEmail: giftCard.recipient_email,
+                          giftCardCode: giftCard.code,
+                          giftCardAmount: giftCard.amount
+                        });
+                        
+                        const { sendServerGiftCardEmail } = await import('@/utils/serverEmail');
+                        
+                        // Convert Blob to Buffer for email attachment
+                        const buffer = Buffer.from(await pdfBuffer.arrayBuffer());
+                        
+                        // Send email using the gift card data from database
+                        const emailResult = await sendServerGiftCardEmail({
+                          giftCardData: {
+                            code: giftCard.code,
+                            amount: giftCard.amount,
+                            recipient_name: giftCard.recipient_name,
+                            recipient_email: giftCard.recipient_email || '',
+                            message: giftCard.message,
+                            expires_at: giftCard.expires_at
+                          },
+                          senderInfo: {
+                            name: giftCard.sender_name,
+                            email: giftCard.sender_email
+                          },
+                          pdfBuffer: buffer
+                        });
+                        
+                        logDebug(`[${requestId}] Email sending result:`, emailResult);
+                        
+                        // Mark as emailed
+                        await supabase
+                          .from('gift_cards')
+                          .update({ is_emailed: true })
+                          .eq('id', giftCard.id);
+                      } catch (emailError) {
+                        logError(`[${requestId}] Error sending gift card email:`, emailError);
+                      }
+                    }
+                  } catch (pdfError) {
+                    logError(`[${requestId}] Error generating gift card PDF:`, pdfError);
                   }
                 }
-              } catch (pdfError) {
-                logError(`[${requestId}] Error generating gift card PDF:`, pdfError);
+                
+                logDebug(`[${requestId}] Background gift card process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
+              } catch (backgroundError) {
+                logError(`[${requestId}] Error in gift card background processing:`, backgroundError);
               }
-            }
-          } else {
-            logDebug(`[${requestId}] Gift card already exists:`, existingGiftCard);
+              
+              // Wait for the keep-alive promise to resolve before finishing
+              logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
+              await keepAlivePromise;
+              logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
+              
+              return { success: true };
+            };
+            
+            // Execute the background process with explicit promise handling
+            Promise.resolve().then(runGiftCardBackgroundTask).catch(err => {
+              logError(`[${requestId}] Critical error in background gift card processing:`, err);
+            });
           }
         } catch (giftCardError) {
           logError(`[${requestId}] Error processing gift card:`, giftCardError);
@@ -666,38 +765,87 @@ export async function POST(request: NextRequest) {
                     logDebug(`[${requestId}] Updated product ${productId} stock to ${newQuantity}`);
                   }
                   
-                  // Send confirmation email
-                  try {
-                    const { sendServerProductOrderConfirmationEmail } = await import('@/utils/serverEmail');
+                  // CRITICAL DB OPERATIONS COMPLETE
+                  // Now proceed with email sending in background
+                  
+                  // Create a promised-based background process
+                  logDebug(`[${requestId}] Setting up background process for product order email`);
+                  
+                  const runProductEmailBackgroundTask = async () => {
+                    logDebug(`[${requestId}] Starting background product email process`);
+                    const backgroundStartTime = Date.now();
                     
-                    const emailResult = await sendServerProductOrderConfirmationEmail({
-                      userInfo: {
-                        firstName: userInfo.firstName,
-                        lastName: userInfo.lastName,
-                        email: userInfo.email,
-                        phone: userInfo.phone || payment.phone_number
-                      },
-                      paymentDetails: {
-                        method: 'swish',
-                        status: 'PAID',
-                        reference: reference,
-                        amount: payment.amount
-                      },
-                      productDetails: {
-                        id: productId,
-                        title: productData.title,
-                        description: productData.description,
-                        price: payment.amount,
-                        quantity: 1,
-                        image: productData.image
-                      },
-                      orderReference: reference
+                    // Create a keep-alive promise to delay function termination
+                    logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
+                    const keepAlivePromise = new Promise(resolve => {
+                      const timerId = setTimeout(() => {
+                        logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
+                        resolve(true);
+                      }, 15000);
+                      
+                      // Ensure timer isn't lost to garbage collection
+                      global.setTimeout = global.setTimeout || setTimeout;
+                      if (global.keepAliveTimers === undefined) {
+                        global.keepAliveTimers = [];
+                      }
+                      global.keepAliveTimers.push(timerId);
                     });
                     
-                    logDebug(`[${requestId}] Product order email result:`, emailResult);
-                  } catch (emailError) {
-                    logError(`[${requestId}] Error sending product order email:`, emailError);
-                  }
+                    try {
+                      // Send confirmation email
+                      logDebug(`[${requestId}] Sending product order confirmation email`);
+                      logDebug(`[${requestId}] DIAGNOSTIC: About to attempt email sending for product order`);
+                      logDebug(`[${requestId}] DIAGNOSTIC: Email parameters:`, {
+                        recipientEmail: userInfo.email,
+                        productTitle: productData.title,
+                        orderReference: reference,
+                        amount: payment.amount
+                      });
+                      
+                      const { sendServerProductOrderConfirmationEmail } = await import('@/utils/serverEmail');
+                      
+                      const emailResult = await sendServerProductOrderConfirmationEmail({
+                        userInfo: {
+                          firstName: userInfo.firstName,
+                          lastName: userInfo.lastName,
+                          email: userInfo.email,
+                          phone: userInfo.phone || payment.phone_number
+                        },
+                        paymentDetails: {
+                          method: 'swish',
+                          status: 'PAID',
+                          reference: reference,
+                          amount: payment.amount
+                        },
+                        productDetails: {
+                          id: productId,
+                          title: productData.title,
+                          description: productData.description,
+                          price: payment.amount,
+                          quantity: 1,
+                          image: productData.image
+                        },
+                        orderReference: reference
+                      });
+                      
+                      logDebug(`[${requestId}] Product order email result:`, emailResult);
+                      logDebug(`[${requestId}] Background product email process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
+                    } catch (emailError) {
+                      logError(`[${requestId}] Error sending product order email:`, emailError);
+                    }
+                    
+                    // Wait for the keep-alive promise to resolve before finishing
+                    logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
+                    await keepAlivePromise;
+                    logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
+                    
+                    return { success: true };
+                  };
+                  
+                  // Execute the background process with explicit promise handling
+                  Promise.resolve().then(runProductEmailBackgroundTask).catch(err => {
+                    logError(`[${requestId}] Critical error in background product email processing:`, err);
+                  });
                 }
               } catch (stockError) {
                 logError(`[${requestId}] Error updating product stock:`, stockError);

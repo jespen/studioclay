@@ -395,19 +395,31 @@ export async function POST(request: Request) {
           console.log('5. Sending immediate response to client, time elapsed:', Date.now() - startTime, 'ms');
           
           // CONTINUE PROCESSING IN THE BACKGROUND
-          // The code below will continue executing but won't block the response
+          // Create a promised-based background process
+          console.log('5a. Setting up background process with more robust Promise handling');
           
-          // Start asynchronous PDF generation and email sending
-          // This is "fire and forget" - we don't await this Promise
-          (async () => {
+          // Define the background process as a separate function for clarity
+          const runBackgroundTasks = async () => {
+            console.log('6. Starting background PDF generation and email sending');
+            const backgroundStartTime = Date.now();
+            
+            // Create a keep-alive promise to delay function termination
+            console.log('6a. KEEP-ALIVE: Creating keep-alive promise for 15 seconds');
+            const keepAlivePromise = new Promise(resolve => {
+              const timerId = setTimeout(() => {
+                console.log('KEEP-ALIVE: Timer complete, resolving promise');
+                resolve(true);
+              }, 15000);
+              
+              // Ensure timer isn't lost to garbage collection
+              global.setTimeout = global.setTimeout || setTimeout;
+              if (global.keepAliveTimers === undefined) {
+                global.keepAliveTimers = [];
+              }
+              global.keepAliveTimers.push(timerId);
+            });
+            
             try {
-              console.log('6. Starting background PDF generation and email sending');
-              const backgroundStartTime = Date.now();
-              
-              // Create a keep-alive promise to delay function termination
-              console.log('6a. KEEP-ALIVE: Creating keep-alive promise for 15 seconds');
-              const keepAlivePromise = new Promise(resolve => setTimeout(resolve, 15000)); // 15 seconds
-              
               // Generate gift card PDF
               console.log('7. Generating gift card PDF in background');
               try {
@@ -564,10 +576,18 @@ export async function POST(request: Request) {
               await keepAlivePromise;
               console.log('17b. KEEP-ALIVE: Keep-alive timer finished, ending background process');
               
+              return { success: true };
             } catch (backgroundError) {
               console.error('Background processing error:', backgroundError);
+              return { success: false, error: backgroundError };
             }
-          })();
+          };
+          
+          // Execute the background process with explicit promise handling
+          console.log('5b. Executing background process with Promise.resolve');
+          Promise.resolve().then(runBackgroundTasks).catch(err => {
+            console.error('Critical error in background processing:', err);
+          });
           
           // Return the success response to the client
           return NextResponse.json(responseData);
@@ -756,19 +776,31 @@ export async function POST(request: Request) {
         console.log('16. Sending immediate response to client, time elapsed:', Date.now() - startTime, 'ms');
         
         // CONTINUE PROCESSING IN THE BACKGROUND
-        // The code below will continue executing but won't block the response
+        // Create a promised-based background process
+        console.log('16a. Setting up background process with more robust Promise handling');
         
-        // Start asynchronous PDF generation and email sending
-        // This is "fire and forget" - we don't await this Promise
-        (async () => {
+        // Define the background process as a separate function for clarity
+        const runBackgroundTasks = async () => {
+          console.log('17. Starting background PDF generation and email sending');
+          const backgroundStartTime = Date.now();
+          
+          // Create a keep-alive promise to delay function termination
+          console.log('17a. KEEP-ALIVE: Creating keep-alive promise for 15 seconds');
+          const keepAlivePromise = new Promise(resolve => {
+            const timerId = setTimeout(() => {
+              console.log('KEEP-ALIVE: Timer complete, resolving promise');
+              resolve(true);
+            }, 15000);
+            
+            // Ensure timer isn't lost to garbage collection
+            global.setTimeout = global.setTimeout || setTimeout;
+            if (global.keepAliveTimers === undefined) {
+              global.keepAliveTimers = [];
+            }
+            global.keepAliveTimers.push(timerId);
+          });
+          
           try {
-            console.log('17. Starting background PDF generation and email sending');
-            const backgroundStartTime = Date.now();
-            
-            // Create a keep-alive promise to delay function termination
-            console.log('17a. KEEP-ALIVE: Creating keep-alive promise for 15 seconds');
-            const keepAlivePromise = new Promise(resolve => setTimeout(resolve, 15000)); // 15 seconds
-            
             // Generate invoice PDF
             console.log('18. Generating invoice PDF in background');
             let pdfBlob = null;
@@ -871,10 +903,18 @@ export async function POST(request: Request) {
             await keepAlivePromise;
             console.log('28b. KEEP-ALIVE: Keep-alive timer finished, ending background process');
             
+            return { success: true };
           } catch (backgroundError) {
             console.error('Background processing error:', backgroundError);
+            return { success: false, error: backgroundError };
           }
-        })();
+        };
+        
+        // Execute the background process with explicit promise handling
+        console.log('5b. Executing background process with Promise.resolve');
+        Promise.resolve().then(runBackgroundTasks).catch(err => {
+          console.error('Critical error in background processing:', err);
+        });
         
         // Return the success response to the client
         return NextResponse.json(responseData);
