@@ -310,6 +310,10 @@ export async function POST(request: Request) {
           );
         }
 
+        // Get the correct amount from itemDetails
+        const giftCardAmount = parseFloat(itemDetails.amount || amount);
+        console.log('Gift card amount:', giftCardAmount);
+        
         // Generate a unique gift card code
         const giftCardCode = `GC-${dateStr}-${Math.floor(1000 + Math.random() * 9000)}`;
         console.log('Generated gift card code:', giftCardCode);
@@ -326,7 +330,7 @@ export async function POST(request: Request) {
         // Prepare gift card data
         const giftCardData = {
           code: giftCardCode,
-          amount: parseFloat(itemDetails.amount || amount),
+          amount: giftCardAmount,
           type: itemDetails.type || 'digital',
           sender_name: userInfo.firstName + ' ' + userInfo.lastName,
           sender_email: userInfo.email,
@@ -380,7 +384,7 @@ export async function POST(request: Request) {
                 const giftCardPdfData: GiftCardData = {
                   recipientName: itemDetails.recipientName || 'Presentkortsmottagare',
                   senderName: userInfo.firstName + ' ' + userInfo.lastName,
-                  amount: parseFloat(itemDetails.amount || amount),
+                  amount: giftCardAmount,
                   message: itemDetails.message || '',
                   code: giftCardCode,
                   expiryDate: expiryDate.toLocaleDateString('sv-SE'),
@@ -426,11 +430,11 @@ export async function POST(request: Request) {
                   const invoiceData = {
                     customerInfo: userInfo,
                     courseDetails: {
-                      title: `Presentkort ${parseFloat(itemDetails.amount || amount)} kr`,
+                      title: `Presentkort ${giftCardAmount} kr`,
                       description: itemDetails.message || '',
                       start_date: new Date().toISOString(),
                       location: "Studio Clay",
-                      price: parseFloat(itemDetails.amount || amount)
+                      price: giftCardAmount
                     },
                     invoiceDetails: paymentDetails.invoiceDetails || {
                       address: '',
@@ -476,11 +480,11 @@ export async function POST(request: Request) {
                     paymentDetails: paymentDetails as PaymentDetails,
                     courseDetails: {
                       id: 'gift-card',
-                      title: `Presentkort ${parseFloat(itemDetails.amount || amount)} kr`,
+                      title: `Presentkort ${giftCardAmount} kr`,
                       description: itemDetails.message || '',
                       start_date: new Date().toISOString(),
                       location: "Studio Clay",
-                      price: parseFloat(itemDetails.amount || amount)
+                      price: giftCardAmount
                     },
                     invoiceNumber,
                     pdfBuffer: invoicePdfBuffer || undefined, // Use the invoice PDF, handle null case

@@ -156,6 +156,12 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
         itemDetails, // Include item details for gift cards
       };
       
+      // For gift cards, ensure we use the amount from itemDetails
+      if (isGiftCard && itemDetails && itemDetails.amount) {
+        console.log('InvoicePaymentSection: Using gift card amount from itemDetails:', itemDetails.amount);
+        requestData.amount = parseFloat(itemDetails.amount);
+      }
+      
       console.log('InvoicePaymentSection: Payment request data:', JSON.stringify({
         ...requestData,
         userInfo: {
