@@ -547,6 +547,52 @@ export async function POST(request: Request) {
           console.log('9. Successfully created booking:', bookingData?.id);
           databaseResponse = bookingData;
           responseData.id = bookingData?.id;
+          
+          // Update the current_participants count in the course_instances table
+          console.log('9a. Updating current_participants in course_instances table');
+          const participantsToAdd = parseInt(userInfo.numberOfParticipants) || 1;
+          
+          try {
+            // First get the current participants count
+            const { data: courseBeforeUpdate, error: getCourseError } = await supabase
+              .from('course_instances')
+              .select('current_participants, max_participants')
+              .eq('id', courseId)
+              .single();
+              
+            if (getCourseError) {
+              console.error('9b. Error getting current course data:', getCourseError);
+              // Continue with the booking process even if updating participants fails
+            } else {
+              // Calculate new participants count
+              const currentParticipants = courseBeforeUpdate.current_participants || 0;
+              const newParticipantsCount = currentParticipants + participantsToAdd;
+              
+              console.log('9c. Current participants:', currentParticipants);
+              console.log('9d. Adding participants:', participantsToAdd);
+              console.log('9e. New participants count:', newParticipantsCount);
+              
+              // Update the course_instances record
+              const { data: updatedCourse, error: updateError } = await supabase
+                .from('course_instances')
+                .update({ 
+                  current_participants: newParticipantsCount
+                })
+                .eq('id', courseId)
+                .select()
+                .single();
+                
+              if (updateError) {
+                console.error('9f. Error updating course participants:', updateError);
+                // Continue with the booking process even if updating participants fails
+              } else {
+                console.log('9g. Successfully updated course participants:', updatedCourse.current_participants);
+              }
+            }
+          } catch (participantsError) {
+            console.error('9h. Unexpected error updating course participants:', participantsError);
+            // Continue with the booking process even if updating participants fails
+          }
         } catch (bookingError) {
           console.error('10. Failed to create booking:', bookingError);
           return NextResponse.json(
