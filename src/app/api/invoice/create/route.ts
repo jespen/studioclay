@@ -257,7 +257,17 @@ export async function POST(request: Request) {
 
               // Send invoice email
               console.log('18. Sending art product invoice email in background');
+              console.log('18a. DIAGNOSTIC: About to attempt email sending');
+              console.log('18b. DIAGNOSTIC: Email parameters:', {
+                recipientEmail: userInfo.email,
+                hasBuffer: !!pdfBuffer,
+                bufferSize: pdfBuffer ? pdfBuffer.length : 0,
+                invoiceNumber: invoiceNumber,
+                productTitle: productData.title
+              });
+              
               try {
+                console.log('18c. DIAGNOSTIC: Calling sendServerInvoiceEmail function');
                 const emailResult = await sendServerInvoiceEmail({
                   userInfo: userInfo as UserInfo,
                   paymentDetails: paymentDetails as PaymentDetails,
@@ -274,9 +284,15 @@ export async function POST(request: Request) {
                   isProduct: true
                 });
                 
+                console.log('18d. DIAGNOSTIC: Returned from sendServerInvoiceEmail function');
                 console.log('19. Email result:', JSON.stringify(emailResult), 'time:', Date.now() - backgroundStartTime, 'ms');
               } catch (emailError) {
                 console.error('20. Error sending email in background:', emailError);
+                console.error('20a. DIAGNOSTIC: Email error details:', emailError instanceof Error ? {
+                  name: emailError.name,
+                  message: emailError.message,
+                  stack: emailError.stack
+                } : emailError);
                 // Continue even if email fails
               }
             }
@@ -475,6 +491,19 @@ export async function POST(request: Request) {
                 try {
                   // First send email with invoice PDF attachment
                   console.log('14a. Sending invoice email with invoice PDF');
+                  console.log('14b. DIAGNOSTIC: About to attempt email sending for gift card');
+                  console.log('14c. DIAGNOSTIC: Email parameters:', {
+                    recipientEmail: userInfo.email,
+                    hasInvoiceBuffer: !!invoicePdfBuffer,
+                    invoiceBufferSize: invoicePdfBuffer ? invoicePdfBuffer.length : 0,
+                    hasGiftCardBuffer: !!pdfBuffer,
+                    giftCardBufferSize: pdfBuffer ? pdfBuffer.length : 0,
+                    invoiceNumber: invoiceNumber,
+                    giftCardCode: giftCardCode,
+                    giftCardAmount: giftCardAmount
+                  });
+                  
+                  console.log('14d. DIAGNOSTIC: Calling sendServerInvoiceEmail function for gift card');
                   const invoiceEmailResult = await sendServerInvoiceEmail({
                     userInfo: userInfo as UserInfo,
                     paymentDetails: paymentDetails as PaymentDetails,
@@ -493,7 +522,8 @@ export async function POST(request: Request) {
                     giftCardPdfBuffer: pdfBuffer || undefined // Pass the gift card PDF, handle null case
                   });
                   
-                  console.log('14b. Invoice email result:', JSON.stringify(invoiceEmailResult));
+                  console.log('14e. DIAGNOSTIC: Returned from sendServerInvoiceEmail function for gift card');
+                  console.log('14f. Invoice email result:', JSON.stringify(invoiceEmailResult));
                   
                   // If recipient email exists in itemDetails, send another email to them
                   if (itemDetails.recipientEmail) {
@@ -504,6 +534,11 @@ export async function POST(request: Request) {
                   console.log('15. Email result completed, time:', Date.now() - backgroundStartTime, 'ms');
                 } catch (emailError) {
                   console.error('16. Error sending email in background:', emailError);
+                  console.error('16a. DIAGNOSTIC: Gift card email error details:', emailError instanceof Error ? {
+                    name: emailError.name,
+                    message: emailError.message,
+                    stack: emailError.stack
+                  } : emailError);
                   // Continue even if email fails
                 }
               }
@@ -766,6 +801,17 @@ export async function POST(request: Request) {
               // Send invoice email
               console.log('25. Sending course invoice email in background');
               try {
+                console.log('25a. DIAGNOSTIC: About to attempt email sending for course');
+                console.log('25b. DIAGNOSTIC: Email parameters:', {
+                  recipientEmail: userInfo.email,
+                  hasBuffer: !!pdfBuffer,
+                  bufferSize: pdfBuffer ? pdfBuffer.length : 0,
+                  invoiceNumber: invoiceNumber,
+                  courseTitle: courseData.title,
+                  courseDate: courseData.start_date
+                });
+                
+                console.log('25c. DIAGNOSTIC: Calling sendServerInvoiceEmail function for course');
                 const emailResult = await sendServerInvoiceEmail({
                   userInfo: userInfo as UserInfo,
                   paymentDetails: paymentDetails as PaymentDetails,
@@ -781,9 +827,15 @@ export async function POST(request: Request) {
                   pdfBuffer
                 });
                 
+                console.log('25d. DIAGNOSTIC: Returned from sendServerInvoiceEmail function for course');
                 console.log('26. Email result:', JSON.stringify(emailResult), 'time:', Date.now() - backgroundStartTime, 'ms');
               } catch (emailError) {
                 console.error('27. Error sending email in background:', emailError);
+                console.error('27a. DIAGNOSTIC: Course email error details:', emailError instanceof Error ? {
+                  name: emailError.name,
+                  message: emailError.message,
+                  stack: emailError.stack
+                } : emailError);
                 // Continue even if email fails
               }
             }

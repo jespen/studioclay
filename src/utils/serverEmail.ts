@@ -41,6 +41,14 @@ function logSMTPError(error: any) {
 
 // Create a reusable transporter
 const createTransporter = async () => {
+  console.log('📧 TRANSPORTER DIAGNOSTIC 1: Function createTransporter called');
+  console.log('📧 TRANSPORTER DIAGNOSTIC 2: Process info:', {
+    nodeEnv: process.env.NODE_ENV,
+    vercelEnv: process.env.VERCEL_ENV,
+    region: process.env.VERCEL_REGION,
+    isProduction: process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production'
+  });
+  
   // PRODUCTION DIAGNOSTIC: Add more detailed environment information
   console.log('📧 =========== EMAIL CONFIGURATION DETAILS ===========');
   console.log(`📧 Running in environment: ${process.env.NODE_ENV || 'undefined'}`);
@@ -219,6 +227,16 @@ export async function sendServerInvoiceEmail(params: {
   giftCardPdfBuffer?: Buffer; // Optional gift card PDF buffer to attach
   isProduct?: boolean; // Flag to indicate if this is a product purchase
 }): Promise<{ success: boolean; message: string }> {
+  console.log('📧 CRITICAL DIAGNOSTIC: sendServerInvoiceEmail function entered');
+  console.log('📧 CRITICAL DIAGNOSTIC: Function parameters:', {
+    invoiceNumber: params.invoiceNumber,
+    recipientEmail: params.userInfo.email,
+    isGiftCard: params.isGiftCard,
+    isProduct: params.isProduct,
+    hasPdfBuffer: !!params.pdfBuffer,
+    hasGiftCardPdfBuffer: !!params.giftCardPdfBuffer
+  });
+  
   const startTime = Date.now();
   console.log('📧 =========== EMAIL SENDING ATTEMPT ===========');
   console.log(`📧 Time: ${new Date().toISOString()}`);
