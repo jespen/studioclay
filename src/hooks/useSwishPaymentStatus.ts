@@ -28,8 +28,10 @@ export const useSwishPaymentStatus = ({
   const router = useRouter();
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const sessionIdRef = useRef(`session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
   const sessionId = sessionIdRef.current;
+  const isCancelledRef = useRef(false);
 
   // Check payment status
   const checkPaymentStatus = async (directReference?: string): Promise<PaymentStatus> => {
@@ -98,6 +100,12 @@ export const useSwishPaymentStatus = ({
   // Handle closing the payment dialog
   const handleClosePaymentDialog = () => {
     if (paymentStatus === PAYMENT_STATUS.ERROR || paymentStatus === PAYMENT_STATUS.DECLINED) {
+      // Stop polling
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      isCancelledRef.current = true;
       setShowPaymentDialog(false);
       setPaymentStatus(null);
       // Clear the payment reference from flowStorage
@@ -133,18 +141,19 @@ export const useSwishPaymentStatus = ({
 
   // Start polling payment status
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
     let attempts = 0;
     const maxAttempts = 30; // 60 seconds with 2 second interval
     let redirectTimeout: NodeJS.Timeout;
-    let hasCheckedWithSwish = false;
 
     const pollStatus = async () => {
-      if (!showPaymentDialog) return;
+      if (!showPaymentDialog || isCancelledRef.current) return;
       
       if (attempts >= maxAttempts) {
         console.log(`[${sessionId}] Status check reached max attempts (${maxAttempts}). Stopping polling.`);
-        clearInterval(intervalId);
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
         return;
       }
 
@@ -152,7 +161,10 @@ export const useSwishPaymentStatus = ({
       if (!currentReference || currentReference === 'undefined' || currentReference === 'null') {
         console.log(`[${sessionId}] No valid reference available for polling`);
         setPaymentStatus(PAYMENT_STATUS.ERROR);
-        clearInterval(intervalId);
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
         return;
       }
 
@@ -160,42 +172,6 @@ export const useSwishPaymentStatus = ({
       console.log(`[${sessionId}] Payment status check attempt ${attempts}/${maxAttempts} for reference: ${currentReference}`);
       
       try {
-        // After 20 seconds (attempt 10) with CREATED status, ask server to check with Swish directly
-        if (!hasCheckedWithSwish && attempts === 10 && paymentStatus === PAYMENT_STATUS.CREATED) {
-          console.log(`[${sessionId}] Midway polling - requesting server to check with Swish directly`);
-          hasCheckedWithSwish = true;
-          
-          try {
-            // Use forceCheck=true to force a direct check with Swish
-            const forcedCheckResponse = await fetch(`/api/payments/status/${currentReference}?forceCheck=true`);
-            const forcedCheckData = await forcedCheckResponse.json();
-            
-            console.log(`[${sessionId}] Forced Swish status check response:`, forcedCheckData);
-            
-            if (forcedCheckData.success && forcedCheckData.data?.payment?.status === PAYMENT_STATUS.PAID) {
-              console.log(`[${sessionId}] Forced check returned PAID status. Updating and redirecting.`);
-              setPaymentStatus(PAYMENT_STATUS.PAID);
-              
-              clearInterval(intervalId);
-              
-              redirectTimeout = setTimeout(() => {
-                console.log(`[${sessionId}] Redirecting after successful payment (from forced check)`);
-                if (onSuccess) {
-                  onSuccess();
-                } else {
-                  const redirectUrl = getRedirectPath();
-                  console.log(`[${sessionId}] Redirecting to:`, redirectUrl);
-                  router.push(redirectUrl);
-                }
-              }, 1500);
-              
-              return;
-            }
-          } catch (forcedCheckError) {
-            console.error(`[${sessionId}] Error in forced Swish status check:`, forcedCheckError);
-          }
-        }
-        
         // Regular status check
         const status = await checkPaymentStatus(currentReference);
         console.log(`[${sessionId}] Poll received status:`, status);
@@ -207,7 +183,10 @@ export const useSwishPaymentStatus = ({
         
         if (status === PAYMENT_STATUS.PAID) {
           console.log(`[${sessionId}] Payment is PAID, clearing interval and preparing redirect`);
-          clearInterval(intervalId);
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
           
           redirectTimeout = setTimeout(() => {
             console.log(`[${sessionId}] Redirecting after successful payment`);
@@ -221,22 +200,26 @@ export const useSwishPaymentStatus = ({
           }, 1500);
         } else if (status === PAYMENT_STATUS.DECLINED || status === PAYMENT_STATUS.ERROR) {
           console.log(`[${sessionId}] Payment failed or declined, clearing interval`);
-          clearInterval(intervalId);
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
         }
       } catch (error) {
         console.error(`[${sessionId}] Error in pollStatus:`, error);
       }
     };
 
-    if (showPaymentDialog && (paymentReference || getPaymentReference())) {
+    if (showPaymentDialog && (paymentReference || getPaymentReference()) && !isCancelledRef.current) {
       console.log(`[${sessionId}] Starting payment status polling`);
       pollStatus();
-      intervalId = setInterval(pollStatus, 2000);
+      pollingRef.current = setInterval(pollStatus, 2000);
     }
 
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
       if (redirectTimeout) {
         clearTimeout(redirectTimeout);

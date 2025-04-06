@@ -217,40 +217,34 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
   };
 
   const handleCancelPayment = async () => {
-    try {
-      if (!paymentReference) {
-        console.error('No payment reference available for cancellation');
-        setPaymentStatus(PaymentStatus.ERROR);
-        setShowPaymentDialog(false);
-        onPaymentComplete(false);
-        return;
-      }
+    if (!paymentReference) {
+      console.error('No payment reference available for cancellation');
+      return;
+    }
 
-      // Call API to cancel the payment
-      const response = await fetch(`/api/payments/swish/cancel`, {
+    try {
+      const response = await fetch('/api/payments/swish/cancel', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ paymentReference }),
+        body: JSON.stringify({ paymentReference })
       });
 
       if (!response.ok) {
-        console.error('Failed to cancel payment:', await response.json());
-        setPaymentStatus(PaymentStatus.ERROR);
-      } else {
-        // Only update status to DECLINED if cancel was successful
-        setPaymentStatus(PaymentStatus.DECLINED);
+        throw new Error('Failed to cancel payment');
       }
 
-      // Always close dialog and notify parent
-      setShowPaymentDialog(false);
-      onPaymentComplete(false);
+      const data = await response.json();
+      if (data.success) {
+        setPaymentStatus(PaymentStatus.DECLINED);
+        setShowPaymentDialog(false);
+        onPaymentComplete(false);
+      } else {
+        console.error('Payment cancellation failed:', data.error);
+      }
     } catch (error) {
       console.error('Error cancelling payment:', error);
-      setPaymentStatus(PaymentStatus.ERROR);
-      setShowPaymentDialog(false);
-      onPaymentComplete(false);
     }
   };
 

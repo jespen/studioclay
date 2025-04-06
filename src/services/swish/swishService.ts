@@ -428,4 +428,58 @@ export class SwishService {
       };
     }
   }
+
+  /**
+   * Cancels a Swish payment request
+   * @param paymentId The Swish payment ID to cancel
+   */
+  async cancelPayment(paymentId: string): Promise<void> {
+    const isTestMode = process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true';
+    const baseUrl = isTestMode 
+      ? (process.env.SWISH_TEST_API_URL || 'https://mss.cpc.getswish.net/swish-cpcapi/api/v1')
+      : (process.env.SWISH_PROD_API_URL || 'https://cpc.getswish.net/swish-cpcapi/api/v1');
+
+    const url = `${baseUrl}/paymentrequests/${paymentId}`;
+
+    try {
+      const agent = this.getHttpsAgent();
+      const response = await fetch(url, {
+        method: 'PATCH',
+        agent,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: 'cancelled' })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to cancel payment: ${response.status} ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Error cancelling Swish payment:', error);
+      throw error;
+    }
+  }
+
+  private getHttpsAgent(): https.Agent {
+    try {
+      const resolvedCertPath = path.resolve(process.cwd(), this.config.certPath);
+      const resolvedKeyPath = path.resolve(process.cwd(), this.config.keyPath);
+      const resolvedCaPath = path.resolve(process.cwd(), this.config.caPath);
+
+      if (!fs.existsSync(resolvedCertPath) || !fs.existsSync(resolvedKeyPath) || !fs.existsSync(resolvedCaPath)) {
+        throw new Error('Missing required certificate files');
+      }
+
+      return new https.Agent({
+        cert: fs.readFileSync(resolvedCertPath),
+        key: fs.readFileSync(resolvedKeyPath),
+        ca: fs.readFileSync(resolvedCaPath),
+        minVersion: 'TLSv1.2'
+      });
+    } catch (error) {
+      logError('Error creating HTTPS agent:', error);
+      throw error;
+    }
+  }
 } 
