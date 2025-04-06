@@ -136,15 +136,35 @@ export class SwishService {
       const isCancellation = options.isCancellation === true;
       const requestMethod = options.method || 'POST';
       
-      // För status requests eller cancellations använder vi den URL som skickats in
-      const url = (isStatusRequest || isCancellation) ? options.url : this.config.getEndpointUrl('createPayment');
+      // Special logic for different request types
+      let url;
+      if (isStatusRequest) {
+        // For status requests, use the URL as provided
+        url = options.url;
+      } else if (isCancellation) {
+        // For cancellations, make sure URL format is correct
+        url = options.url;
+        logDebug('Preparing cancellation request', {
+          url,
+          method: requestMethod,
+          isCancellation
+        });
+      } else {
+        // For payment creation, use the createPayment endpoint
+        url = this.config.getEndpointUrl('createPayment');
+      }
+      
       const isTestMode = this.config.isTest;
       
       logDebug('Swish API request:', {
         url,
         method: requestMethod,
         isStatusRequest,
-        isCancellation
+        isCancellation,
+        headers: options.headers || {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       });
 
       logDebug('Swish config info:', {
@@ -247,18 +267,33 @@ export class SwishService {
       
       // Add body only for POST or PATCH requests
       if ((requestMethod === 'POST' || requestMethod === 'PATCH') && !isStatusRequest) {
+        // For cancellations, ensure proper formatting of the body
+        if (isCancellation && requestMethod === 'PATCH') {
+          logDebug('Preparing cancellation request body:', options.body || JSON.stringify({ status: 'cancelled' }));
+        }
+        
         // Redact sensitive information for logging
         const logData = { ...options };
         if (logData.payerAlias) {
           logData.payerAlias = logData.payerAlias.substring(0, 4) + '****' + logData.payerAlias.slice(-2);
         }
         
-        logDebug('Sending request to Swish API with data:', { url, method: requestMethod, ...logData });
+        logDebug('Sending request to Swish API with data:', { 
+          url, 
+          method: requestMethod, 
+          body: options.body || JSON.stringify(options),
+          ...logData 
+        });
+        
         fetchOptions.body = options.body || JSON.stringify(options);
       } else {
         logDebug('Sending request to Swish API:', { url, method: requestMethod });
       }
 
+      // Log complete URL and method for debugging
+      logDebug(`Complete Swish API request: ${requestMethod} ${url}`);
+      
+      // Perform the actual request
       const response = await fetch(url, fetchOptions);
 
       logDebug('Swish API response received:', {
@@ -266,6 +301,38 @@ export class SwishService {
         statusText: response.statusText,
         headers: Object.fromEntries(response.headers)
       });
+
+      // Handle special case for cancellations
+      if (isCancellation) {
+        if (response.status >= 200 && response.status < 300) {
+          logDebug('Cancellation request successful');
+          return { success: true };
+        } else {
+          let errorData;
+          try {
+            const responseText = await response.text();
+            try {
+              errorData = JSON.parse(responseText);
+            } catch {
+              errorData = responseText;
+            }
+          } catch (textError) {
+            errorData = 'Could not read response text';
+          }
+          
+          logError('Cancellation request failed', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData
+          });
+          
+          return {
+            success: false,
+            error: `Swish API error: ${response.status} ${response.statusText}`,
+            data: errorData
+          };
+        }
+      }
 
       // Handle status check response
       if (isStatusRequest) {
@@ -444,6 +511,15 @@ export class SwishService {
     const timeout = options.timeout || 10000; // Default 10 second timeout
     let swishPaymentId = paymentIdOrReference;
     
+    // Utförlig loggning vid start
+    logDebug('cancelPayment called', {
+      paymentIdOrReference,
+      options,
+      certPath: this.config.certPath,
+      apiUrl: this.config.apiUrl,
+      isTestMode: this.config.isTest
+    });
+    
     // If the input looks like a payment reference (e.g. SC-123456-789), try to get the Swish payment ID
     if (paymentIdOrReference.includes('-') && !options.skipIdCheck) {
       try {
@@ -471,7 +547,12 @@ export class SwishService {
           hasData: !!data.data,
           hasPayment: !!data.data?.payment,
           hasSwishId: !!data.data?.payment?.swish_payment_id,
-          duration: Date.now() - startTime
+          duration: Date.now() - startTime,
+          paymentData: data.data?.payment ? {
+            id: data.data.payment.id,
+            status: data.data.payment.status,
+            swishId: data.data.payment.swish_payment_id
+          } : null
         });
         
         if (!data.success || !data.data?.payment?.swish_payment_id) {
@@ -499,15 +580,44 @@ export class SwishService {
       originalInput: paymentIdOrReference,
       resolvedSwishId: swishPaymentId,
       url,
-      timeout
+      timeout,
+      requestBody: { status: 'cancelled' }
     });
 
     try {
+      // Testa om vi kan nå Swish API:et först för att verifiera att HTTPS-agent är korrekt
+      const testStart = Date.now();
+      try {
+        // Försök göra ett HEAD-anrop till API:et
+        const testUrl = this.config.apiUrl;
+        logDebug(`Testing connection to Swish API at ${testUrl}`);
+
+        // Använd makeSwishRequest för att testa
+        const testResult = await this.makeSwishRequest({
+          method: 'GET',
+          url: this.config.getEndpointUrl('paymentStatus').replace('{id}', swishPaymentId),
+          isStatusCheck: true
+        });
+        
+        logDebug('Swish API connectivity test result', {
+          success: testResult.success,
+          duration: Date.now() - testStart,
+          error: testResult.error,
+          data: testResult.data ? { summary: 'Data received' } : 'No data'
+        });
+      } catch (testError) {
+        logError('Error testing Swish API connectivity', {
+          error: testError instanceof Error ? testError.message : 'Unknown error',
+          duration: Date.now() - testStart
+        });
+      }
+
       // Use makeSwishRequest to ensure proper certificate handling
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error(`Swish cancellation timed out after ${timeout/1000} seconds`)), timeout);
       });
       
+      logDebug('Starting cancellation request to Swish');
       const result = await Promise.race([
         this.makeSwishRequest({
           method: 'PATCH',
@@ -517,6 +627,12 @@ export class SwishService {
         }),
         timeoutPromise
       ]) as { success: boolean; error?: string; data?: any };
+
+      logDebug('Cancellation request result', {
+        success: result.success,
+        error: result.error,
+        data: result.data
+      });
 
       if (!result.success) {
         throw new Error(`Failed to cancel payment: ${result.error}`);
@@ -529,6 +645,7 @@ export class SwishService {
     } catch (error) {
       logError('Error cancelling Swish payment', {
         error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
         originalInput: paymentIdOrReference,
         swishPaymentId,
         url
