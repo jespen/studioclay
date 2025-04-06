@@ -161,22 +161,52 @@ export async function POST(request: Request) {
       logDebug(`[${requestId}] No Swish payment ID available, skipping Swish cancellation`);
     }
 
-    // Prepare metadata for update
-    const metadataUpdate = {
-      ...payment.metadata,
-      cancellation: {
-        cancelled_at: new Date().toISOString(),
-        cancelled_by: cancelledBy,
-        cancelled_from: cancelledFrom,
-        previous_status: payment.status,
-        swish_cancelled: swishCancelled,
-        swish_error: swishError ? {
-          message: swishError instanceof Error ? swishError.message : 'Unknown error',
-          name: swishError instanceof Error ? swishError.name : 'UnknownError',
-          time: new Date().toISOString()
-        } : null
-      }
+    // Prepare metadata for update - safely handle null/undefined values
+    let cleanMetadata = payment.metadata || {};
+    // Ensure metadata is a valid object
+    if (typeof cleanMetadata !== 'object' || cleanMetadata === null) {
+      cleanMetadata = {};
+    }
+    
+    // Create cancellation info object
+    interface CancellationInfo {
+      cancelled_at: string;
+      cancelled_by: string;
+      cancelled_from: string;
+      previous_status: string;
+      swish_cancelled: boolean;
+      swish_error?: {
+        message: string;
+        name: string;
+        time: string;
+      };
+    }
+    
+    const cancellationInfo: CancellationInfo = {
+      cancelled_at: new Date().toISOString(),
+      cancelled_by: cancelledBy || 'unknown',
+      cancelled_from: cancelledFrom || 'unknown',
+      previous_status: payment.status,
+      swish_cancelled: swishCancelled,
     };
+    
+    // Add error info only if it exists
+    if (swishError) {
+      cancellationInfo.swish_error = {
+        message: swishError instanceof Error ? swishError.message : 'Unknown error',
+        name: swishError instanceof Error ? swishError.name : 'UnknownError',
+        time: new Date().toISOString()
+      };
+    }
+
+    // Try to safely merge with existing metadata
+    try {
+      cleanMetadata.cancellation = cancellationInfo;
+    } catch (metadataError) {
+      logError(`[${requestId}] Error updating metadata:`, metadataError);
+      // If merging fails, just use the cancellation info
+      cleanMetadata = { cancellation: cancellationInfo };
+    }
 
     // Update payment status in database
     logDebug(`[${requestId}] Updating payment status in database`, { 
@@ -185,25 +215,60 @@ export async function POST(request: Request) {
       toStatus: 'DECLINED'
     });
     
+    // First attempt: Try with just the essential fields
     const updateStart = Date.now();
     const { error: updateError } = await supabase
       .from('payments')
       .update({ 
         status: 'DECLINED',
-        updated_at: new Date().toISOString(),
-        cancelled_by: cancelledBy,
-        cancelled_from: cancelledFrom,
-        metadata: metadataUpdate
+        updated_at: new Date().toISOString()
       })
       .eq('id', payment.id);  // Using the ID instead of payment_reference for more precise matching
+    
     const updateDuration = Date.now() - updateStart;
 
+    // Detailed logging of the update attempt
     logDebug(`[${requestId}] Update payment status result in ${updateDuration}ms`, { 
       success: !updateError,
       errorCode: updateError?.code,
       errorMessage: updateError?.message,
-      paymentReference
+      paymentId: payment.id,
+      paymentReference,
+      fullQuery: {
+        table: 'payments',
+        updateFields: ['status', 'updated_at'],
+        condition: `id = ${payment.id}`
+      }
     });
+
+    // If the minimal update succeeds, try to update metadata in a separate call
+    let metadataUpdateError = null;
+    if (!updateError) {
+      try {
+        const metadataStart = Date.now();
+        const { error: metadataError } = await supabase
+          .from('payments')
+          .update({ 
+            metadata: cleanMetadata,
+            cancelled_by: cancelledBy || null,
+            cancelled_from: cancelledFrom || null
+          })
+          .eq('id', payment.id);
+          
+        const metadataDuration = Date.now() - metadataStart;
+        
+        logDebug(`[${requestId}] Metadata update result in ${metadataDuration}ms`, {
+          success: !metadataError,
+          errorCode: metadataError?.code,
+          errorMessage: metadataError?.message
+        });
+        
+        metadataUpdateError = metadataError;
+      } catch (error) {
+        logError(`[${requestId}] Exception during metadata update:`, error);
+        metadataUpdateError = error;
+      }
+    }
 
     if (updateError) {
       logError(`[${requestId}] Error updating payment status:`, updateError);
