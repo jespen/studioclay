@@ -31,10 +31,11 @@ export interface GiftCardData {
   recipientEmail?: string;
   message?: string;
   senderName: string;
-  senderEmail: string;
+  senderEmail?: string;
   senderPhone?: string;
-  createdAt: string;
-  expiresAt: string;
+  createdAt?: string;
+  expiresAt?: string;
+  expiryDate?: string; // Alternativt format för utgångsdatum, redan formaterat som string
 }
 
 // Function to generate gift card PDF

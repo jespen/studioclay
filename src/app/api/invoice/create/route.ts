@@ -13,14 +13,22 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(request: Request) {
   console.log('=== /api/invoice/create POST handler called ===');
+  console.log('Environment:', process.env.NODE_ENV || 'unknown');
+  console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'Not set');
+  console.log('Supabase Key:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Set' : 'Not set');
+  
+  const startTime = Date.now();
   
   try {
     const data = await request.json();
     const { courseId, userInfo, paymentDetails, amount, product_type } = data;
     
     console.log('Creating invoice for product:', courseId);
-    console.log('User info:', userInfo);
-    console.log('Payment details:', paymentDetails);
+    console.log('Product type:', product_type);
+    console.log('Payment method:', paymentDetails.method);
+    console.log('Amount:', amount);
+    console.log('User info:', JSON.stringify(userInfo));
+    console.log('Payment details:', JSON.stringify(paymentDetails));
     
     if (!courseId || !userInfo || !paymentDetails) {
       console.error('Missing required data for invoice');
@@ -58,575 +66,639 @@ export async function POST(request: Request) {
     
     // Check product type first
     if (product_type === 'art_product') {
-      // Get product details from products table
-      console.log('Fetching art product details from Supabase');
-      const { data: productData, error: productError } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', courseId)
-        .single();
+      console.log('=== START ART PRODUCT INVOICE FLOW ===');
       
-      if (productError || !productData) {
-        console.error('Error fetching product:', productError);
-        return NextResponse.json(
-          { success: false, error: 'Product not found' },
-          { status: 404 }
-        );
-      }
-
-      // Generate invoice PDF for art product
-      console.log('Generating invoice PDF for art product');
-      const invoiceData = {
-        customerInfo: userInfo,
-        courseDetails: {
-          title: productData.title,
-          description: productData.description,
-          start_date: new Date().toISOString(),
-          location: "Studio Clay",
-          price: productData.price
-        },
-        invoiceDetails: paymentDetails.invoiceDetails || {
-          address: '',
-          postalCode: '',
-          city: ''
-        },
-        invoiceNumber,
-        dueDate: formattedDueDate
-      };
-
-      const pdfBlob = await generateInvoicePDF(invoiceData);
-      const pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
-
-      // Save PDF to Supabase storage
-      console.log('Saving art product invoice PDF to Supabase storage');
-      const { error: storageError } = await supabase
-        .storage
-        .from('invoices')
-        .upload(`${invoiceNumber}.pdf`, pdfBuffer, {
-          contentType: 'application/pdf',
-          upsert: true
-        });
-
-      if (storageError) {
-        console.error('Error saving PDF to storage:', storageError);
-        return NextResponse.json(
-          { success: false, error: 'Failed to save invoice PDF' },
-          { status: 500 }
-        );
-      }
-
-      // Send invoice email
-      console.log('Sending art product invoice email');
-      const emailResult = await sendServerInvoiceEmail({
-        userInfo: userInfo as UserInfo,
-        paymentDetails: paymentDetails as PaymentDetails,
-        courseDetails: {
-          id: productData.id,
-          title: productData.title,
-          description: productData.description,
-          start_date: new Date().toISOString(),
-          location: "Studio Clay",
-          price: productData.price
-        },
-        invoiceNumber,
-        pdfBuffer,
-        isProduct: true
-      });
-
-      console.log('Art product invoice email sending result:', emailResult);
-
-      // Create art order record
-      const { data: orderData, error: orderError } = await supabase
-        .from('art_orders')
-        .insert({
-          product_id: productData.id,
-          customer_name: userInfo.firstName + ' ' + userInfo.lastName,
-          customer_email: userInfo.email,
-          customer_phone: userInfo.phone,
-          payment_method: 'invoice',
-          order_reference: bookingReference,
-          invoice_number: invoiceNumber,
-          unit_price: amount,
-          total_price: amount,
-          status: 'confirmed',
-          metadata: {
-            user_info: userInfo
-          }
-        })
-        .select()
-        .single();
-
-      if (orderError) {
-        console.error('Error creating art order:', orderError);
-        throw new Error('Failed to create art order');
-      }
-
-      console.log('Created art order:', orderData);
-
-      // Update product stock quantity
       try {
-        // First get the current product to check stock_quantity
-        const { data: productStockData, error: productFetchError } = await supabase
-          .from('products')
-          .select('stock_quantity, in_stock')
-          .eq('id', productData.id)
-          .single();
-          
-        if (productFetchError) {
-          console.error('Error fetching product for stock update:', productFetchError);
-          // Continue execution - stock update is not critical for payment process
-        } else if (productStockData) {
-          // Calculate new stock quantity
-          const newQuantity = Math.max(0, (productStockData.stock_quantity || 1) - 1);
-          
-          // Update the product with new stock quantity
-          const { error: updateError } = await supabase
+        // Get product details from products table
+        console.log('1. Fetching art product details from Supabase');
+        let productData;
+        try {
+          const { data, error } = await supabase
             .from('products')
-            .update({ 
-              stock_quantity: newQuantity,
-              in_stock: newQuantity > 0
-            })
-            .eq('id', productData.id);
+            .select('*')
+            .eq('id', courseId)
+            .single();
             
-          if (updateError) {
-            console.error('Error updating product stock:', updateError);
-          } else {
-            console.log(`Updated product ${productData.id} stock to ${newQuantity}`);
+          if (error) {
+            console.error('Error fetching product:', error);
+            throw error;
           }
+          
+          if (!data) {
+            console.error('Product not found with ID:', courseId);
+            throw new Error('Product not found');
+          }
+          
+          productData = data;
+          console.log('2. Successfully fetched product data:', JSON.stringify(productData));
+        } catch (fetchError) {
+          console.error('3. Failed to fetch product data:', fetchError);
+          return NextResponse.json(
+            { success: false, error: 'Product not found or database error' },
+            { status: 404 }
+          );
         }
-      } catch (stockError) {
-        console.error('Error in stock quantity update:', stockError);
-        // Continue - don't fail the transaction for stock update issues
-      }
 
-      return NextResponse.json({
-        success: true,
-        invoiceNumber,
-        bookingReference,
-        emailSent: emailResult.success,
-        emailMessage: emailResult.message
-      });
-    } else if (courseId === 'gift-card') {
-      console.log('Processing gift card invoice');
-      
-      // Extract gift card details from localStorage or session data
-      const itemDetails = data.itemDetails || {};
-      
-      console.log('Processing gift card with itemDetails:', itemDetails);
-      
-      // Generate a unique code for the gift card
-      const generateUniqueCode = () => {
-        const random = Math.random().toString(36).substring(2, 10).toUpperCase();
-        return `GC-${random}`;
-      };
-      
-      // Create gift card data
-      const giftCardData = {
-        code: generateUniqueCode(),
-        amount: Number(amount) || Number(itemDetails.amount) || 0,
-        type: itemDetails.type || 'digital',
-        sender_name: `${userInfo.firstName} ${userInfo.lastName}`,
-        sender_email: userInfo.email,
-        sender_phone: userInfo.phone || null,
-        recipient_name: itemDetails.recipientName || '',
-        recipient_email: itemDetails.recipientEmail || null,
-        message: itemDetails.message || null,
-        invoice_address: paymentDetails.invoiceDetails?.address || null,
-        invoice_postal_code: paymentDetails.invoiceDetails?.postalCode || null,
-        invoice_city: paymentDetails.invoiceDetails?.city || null,
-        invoice_reference: paymentDetails.invoiceDetails?.reference || null,
-        payment_reference: invoiceNumber,
-        payment_status: 'CREATED',
-        status: 'active',
-        remaining_balance: Number(amount) || Number(itemDetails.amount) || 0,
-        is_emailed: false,
-        is_printed: false,
-        is_paid: false,
-        expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
-        payment_method: 'invoice',
-        invoice_number: invoiceNumber
-      };
-      
-      console.log('Creating gift card with data:', {
-        amount: giftCardData.amount,
-        recipient_name: giftCardData.recipient_name,
-        recipient_email: giftCardData.recipient_email,
-        message: giftCardData.message,
-        payment_reference: giftCardData.payment_reference,
-        invoice_reference: giftCardData.invoice_reference
-      });
-      
-      // Insert gift card into database
-      const { data: giftCardResult, error: giftCardError } = await supabase
-        .from('gift_cards')
-        .insert([giftCardData])
-        .select()
-        .single();
-      
-      if (giftCardError) {
-        console.error('Error creating gift card:', giftCardError);
-        return NextResponse.json(
-          { success: false, error: 'Failed to create gift card' },
-          { status: 500 }
-        );
-      }
-      
-      console.log('Gift card created successfully:', giftCardResult);
-      
-      // Deklarera giftCardPdfBuffer utanför try-catch
-      let giftCardPdfBuffer: Buffer | undefined = undefined;
-      
-      // Automatiskt generera presentkorts-PDF
-      console.log('Automatically generating gift card PDF');
-      try {
-        // Förbered data för PDF-generering
-        const pdfGiftCardData: GiftCardData = {
-          code: giftCardResult.code,
-          amount: giftCardResult.amount,
-          recipientName: giftCardResult.recipient_name,
-          recipientEmail: giftCardResult.recipient_email,
-          message: giftCardResult.message,
-          senderName: giftCardResult.sender_name,
-          senderEmail: giftCardResult.sender_email,
-          senderPhone: giftCardResult.sender_phone,
-          createdAt: giftCardResult.created_at,
-          expiresAt: giftCardResult.expires_at
-        };
-        
-        // Generera PDF
-        console.log('Generating gift card PDF document...');
-        const giftCardPdfBlob = await generateGiftCardPDF(pdfGiftCardData);
-        giftCardPdfBuffer = Buffer.from(await giftCardPdfBlob.arrayBuffer());
-        
-        // Spara PDF i Supabase storage (giftcards bucket)
-        const bucketName = 'giftcards';
-        
-        // Generera statiskt filnamn baserat på presentkortskoden
-        const giftCardFileName = `gift-card-${giftCardResult.code}.pdf`;
-        
-        // Kontrollera om giftcards bucket finns
-        const { data: buckets, error: bucketError } = await supabase
-          .storage
-          .listBuckets();
-          
-        if (bucketError) {
-          console.error('Error listing buckets for gift card PDF:', bucketError);
-          // Continue execution - PDF storage is not critical for payment process
-        } else {
-          const bucketExists = buckets.some(bucket => bucket.name === bucketName);
-          
-          if (!bucketExists) {
-            try {
-              const { error: createError } = await supabase
-                .storage
-                .createBucket(bucketName, {
-                  public: true,
-                  fileSizeLimit: 5242880, // 5MB
-                });
-                
-              if (createError) {
-                console.error(`Error creating ${bucketName} bucket:`, createError);
-                // Continue execution
-              }
-            } catch (createError) {
-              console.error('Unexpected error creating bucket:', createError);
-              // Continue execution
-            }
-          }
-          
-          // Spara PDF i storage
-          const { error: uploadError } = await supabase
+        // Generate invoice PDF for art product
+        console.log('4. Generating invoice PDF');
+        let pdfBlob, pdfBuffer;
+        try {
+          const invoiceData = {
+            customerInfo: userInfo,
+            courseDetails: {
+              title: productData.title,
+              description: productData.description,
+              start_date: new Date().toISOString(),
+              location: "Studio Clay",
+              price: productData.price
+            },
+            invoiceDetails: paymentDetails.invoiceDetails || {
+              address: '',
+              postalCode: '',
+              city: ''
+            },
+            invoiceNumber,
+            dueDate: formattedDueDate
+          };
+
+          pdfBlob = await generateInvoicePDF(invoiceData);
+          pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
+          console.log('5. Successfully generated PDF of size:', pdfBuffer.length, 'bytes');
+        } catch (pdfError) {
+          console.error('6. Error generating PDF:', pdfError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to generate invoice PDF' },
+            { status: 500 }
+          );
+        }
+
+        // Save PDF to Supabase storage
+        console.log('7. Saving art product invoice PDF to Supabase storage');
+        try {
+          const { error: storageError } = await supabase
             .storage
-            .from(bucketName)
-            .upload(giftCardFileName, giftCardPdfBuffer, {
+            .from('invoices')
+            .upload(`${invoiceNumber}.pdf`, pdfBuffer, {
               contentType: 'application/pdf',
               upsert: true
             });
+
+          if (storageError) {
+            console.error('8. Error saving PDF to storage:', storageError);
+            throw storageError;
+          }
+          
+          console.log('9. Successfully saved PDF to storage');
+        } catch (storageError) {
+          console.error('10. Failed to save PDF to storage:', storageError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to save invoice PDF' },
+            { status: 500 }
+          );
+        }
+
+        // Send invoice email
+        console.log('11. Sending art product invoice email');
+        let emailResult;
+        try {
+          emailResult = await sendServerInvoiceEmail({
+            userInfo: userInfo as UserInfo,
+            paymentDetails: paymentDetails as PaymentDetails,
+            courseDetails: {
+              id: productData.id,
+              title: productData.title,
+              description: productData.description,
+              start_date: new Date().toISOString(),
+              location: "Studio Clay",
+              price: productData.price
+            },
+            invoiceNumber,
+            pdfBuffer,
+            isProduct: true
+          });
+          
+          console.log('12. Email result:', JSON.stringify(emailResult));
+        } catch (emailError) {
+          console.error('13. Error sending email:', emailError);
+          // Continue even if email fails - we'll still create the order
+        }
+
+        // Create art order record
+        console.log('14. Creating art order record');
+        let orderData;
+        try {
+          const insertData = {
+            product_id: productData.id,
+            customer_name: userInfo.firstName + ' ' + userInfo.lastName,
+            customer_email: userInfo.email,
+            customer_phone: userInfo.phone,
+            payment_method: 'invoice',
+            order_reference: bookingReference,
+            invoice_number: invoiceNumber,
+            unit_price: amount,
+            total_price: amount,
+            status: 'confirmed',
+            metadata: {
+              user_info: userInfo
+            }
+          };
+          
+          console.log('15. Insert data for art_orders:', JSON.stringify(insertData));
+          
+          const { data, error } = await supabase
+            .from('art_orders')
+            .insert(insertData)
+            .select()
+            .single();
+
+          if (error) {
+            console.error('16. Error creating art order:', error);
+            throw error;
+          }
+          
+          orderData = data;
+          console.log('17. Successfully created art order:', JSON.stringify(orderData));
+        } catch (orderError) {
+          console.error('18. Failed to create art order:', orderError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to create art order' },
+            { status: 500 }
+          );
+        }
+
+        console.log('19. Art product invoice process completed successfully');
+        console.log(`=== END ART PRODUCT INVOICE FLOW (${Date.now() - startTime}ms) ===`);
+        
+        // Return success response
+        return NextResponse.json({
+          success: true,
+          orderId: orderData.id,
+          invoiceNumber,
+          bookingReference,
+          emailSent: emailResult?.success || false,
+          emailMessage: emailResult?.message || 'No email sent'
+        });
+      } catch (error) {
+        console.error('20. Uncaught error in art product flow:', error);
+        console.log(`=== END ART PRODUCT INVOICE FLOW WITH ERROR (${Date.now() - startTime}ms) ===`);
+        return NextResponse.json(
+          { success: false, error: 'Failed to process art product invoice' },
+          { status: 500 }
+        );
+      }
+    }
+    else if (courseId === 'gift-card') {
+      console.log('=== START GIFT CARD INVOICE FLOW ===');
+      
+      try {
+        // Extract gift card details from localStorage or session data
+        const itemDetails = data.itemDetails || {};
+        
+        console.log('1. Processing gift card with itemDetails:', JSON.stringify(itemDetails));
+        
+        // Generate a unique code for the gift card
+        const generateUniqueCode = () => {
+          const random = Math.random().toString(36).substring(2, 10).toUpperCase();
+          return `GC-${random}`;
+        };
+        
+        // Create gift card data
+        const giftCardCode = generateUniqueCode();
+        console.log('2. Generated gift card code:', giftCardCode);
+        
+        const giftCardData = {
+          code: giftCardCode,
+          amount: Number(amount) || Number(itemDetails.amount) || 0,
+          type: itemDetails.type || 'digital',
+          sender_name: `${userInfo.firstName} ${userInfo.lastName}`,
+          sender_email: userInfo.email,
+          sender_phone: userInfo.phone || null,
+          recipient_name: itemDetails.recipientName || '',
+          recipient_email: itemDetails.recipientEmail || null,
+          message: itemDetails.message || null,
+          invoice_address: paymentDetails.invoiceDetails?.address || null,
+          invoice_postal_code: paymentDetails.invoiceDetails?.postalCode || null,
+          invoice_city: paymentDetails.invoiceDetails?.city || null,
+          invoice_reference: paymentDetails.invoiceDetails?.reference || null,
+          payment_reference: invoiceNumber,
+          payment_status: 'CREATED',
+          status: 'active',
+          remaining_balance: Number(amount) || Number(itemDetails.amount) || 0,
+          is_emailed: false,
+          is_printed: false,
+          is_paid: false,
+          expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
+          payment_method: 'invoice',
+          invoice_number: invoiceNumber
+        };
+        
+        console.log('3. Gift card data prepared:', JSON.stringify(giftCardData));
+        
+        // Generate the gift card PDF
+        console.log('4. Generating gift card PDF');
+        let giftCardPdfBlob, giftCardPdfBuffer;
+        try {
+          // Prepare gift card data for PDF generation
+          const pdfGiftCardData = {
+            code: giftCardData.code,
+            amount: giftCardData.amount,
+            recipientName: giftCardData.recipient_name,
+            senderName: giftCardData.sender_name,
+            message: giftCardData.message || '',
+            expiryDate: new Date(giftCardData.expires_at).toLocaleDateString('sv-SE'),
+          };
+          
+          // Generate the gift card PDF
+          giftCardPdfBlob = await generateGiftCardPDF(pdfGiftCardData);
+          giftCardPdfBuffer = Buffer.from(await giftCardPdfBlob.arrayBuffer());
+          console.log('5. Successfully generated gift card PDF of size:', giftCardPdfBuffer.length, 'bytes');
+        } catch (pdfError) {
+          console.error('6. Error generating gift card PDF:', pdfError);
+          // We'll continue even if PDF generation fails
+        }
+        
+        // Generate the invoice PDF
+        console.log('7. Generating invoice PDF for gift card');
+        let invoicePdfBlob, invoicePdfBuffer;
+        try {
+          const invoiceData = {
+            customerInfo: userInfo,
+            courseDetails: {
+              title: "Presentkort",
+              description: `Presentkort på ${giftCardData.amount} kr`,
+              start_date: new Date().toISOString(),
+              location: "Studio Clay",
+              price: giftCardData.amount
+            },
+            invoiceDetails: paymentDetails.invoiceDetails || {
+              address: '',
+              postalCode: '',
+              city: ''
+            },
+            invoiceNumber,
+            dueDate: formattedDueDate
+          };
+          
+          invoicePdfBlob = await generateInvoicePDF(invoiceData);
+          invoicePdfBuffer = Buffer.from(await invoicePdfBlob.arrayBuffer());
+          console.log('8. Successfully generated invoice PDF of size:', invoicePdfBuffer.length, 'bytes');
+        } catch (pdfError) {
+          console.error('9. Error generating invoice PDF:', pdfError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to generate invoice PDF' },
+            { status: 500 }
+          );
+        }
+        
+        // Save PDF to Supabase storage
+        console.log('10. Saving gift card invoice PDF to Supabase storage');
+        try {
+          const { error: storageError } = await supabase
+            .storage
+            .from('invoices')
+            .upload(`${invoiceNumber}.pdf`, invoicePdfBuffer, {
+              contentType: 'application/pdf',
+              upsert: true
+            });
+          
+          if (storageError) {
+            console.error('11. Error saving invoice PDF to storage:', storageError);
+            throw storageError;
+          }
+          
+          console.log('12. Successfully saved invoice PDF to storage');
+        } catch (storageError) {
+          console.error('13. Failed to save invoice PDF to storage:', storageError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to save invoice PDF' },
+            { status: 500 }
+          );
+        }
+        
+        // Save gift card PDF if available
+        if (giftCardPdfBuffer) {
+          console.log('14. Saving gift card PDF to Supabase storage');
+          try {
+            const { error: giftCardStorageError } = await supabase
+              .storage
+              .from('gift-cards')
+              .upload(`${giftCardCode}.pdf`, giftCardPdfBuffer, {
+                contentType: 'application/pdf',
+                upsert: true
+              });
             
-          if (uploadError) {
-            console.error('Error saving gift card PDF to storage:', uploadError);
-            // Continue execution - PDF storage is not critical
-          } else {
-            console.log('Gift card PDF saved successfully to storage');
-            
-            // Uppdatera presentkortet med PDF URL (om det finns en kolumn för detta senare)
-            // Här skulle eventuell uppdatering av gift_cards med pdf_url ske
+            if (giftCardStorageError) {
+              console.error('15. Error saving gift card PDF to storage:', giftCardStorageError);
+              // We'll continue even if this fails
+            } else {
+              console.log('16. Successfully saved gift card PDF to storage');
+            }
+          } catch (storageError) {
+            console.error('17. Failed to save gift card PDF to storage:', storageError);
+            // We'll continue even if this fails
           }
         }
-      } catch (pdfError) {
-        console.error('Error generating gift card PDF:', pdfError);
-        // Continue execution - PDF generation is not critical for payment process
-      }
-      
-      // Generate invoice PDF for gift card
-      console.log('Generating invoice PDF for gift card');
-      const invoiceData = {
-        customerInfo: userInfo,
-        courseDetails: {
-          title: "Presentkort",
-          description: `Presentkort på ${giftCardData.amount} kr`,
-          start_date: new Date().toISOString(),
-          location: "Studio Clay",
-          price: giftCardData.amount
-        },
-        invoiceDetails: paymentDetails.invoiceDetails || {
-          address: '',
-          postalCode: '',
-          city: ''
-        },
-        invoiceNumber,
-        dueDate: formattedDueDate
-      };
-      
-      const pdfBlob = await generateInvoicePDF(invoiceData);
-      
-      // Convert blob to buffer for storage
-      const pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
-      
-      // Save PDF to Supabase storage
-      console.log('Saving gift card invoice PDF to Supabase storage');
-      const { error: storageError } = await supabase
-        .storage
-        .from('invoices')
-        .upload(`${invoiceNumber}.pdf`, pdfBuffer, {
-          contentType: 'application/pdf',
-          upsert: true
+        
+        // Insert gift card record into database
+        console.log('18. Inserting gift card record into database');
+        let giftCardResult;
+        try {
+          console.log('19. Insert data for gift_cards:', JSON.stringify(giftCardData));
+          
+          const { data, error } = await supabase
+            .from('gift_cards')
+            .insert([giftCardData])
+            .select()
+            .single();
+          
+          if (error) {
+            console.error('20. Error creating gift card:', error);
+            throw error;
+          }
+          
+          giftCardResult = data;
+          console.log('21. Successfully created gift card:', JSON.stringify(giftCardResult));
+        } catch (dbError) {
+          console.error('22. Failed to insert gift card into database:', dbError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to create gift card' },
+            { status: 500 }
+          );
+        }
+        
+        // Send invoice email
+        console.log('23. Sending gift card invoice email');
+        let emailResult;
+        try {
+          emailResult = await sendServerInvoiceEmail({
+            userInfo: userInfo as UserInfo,
+            paymentDetails: paymentDetails as PaymentDetails,
+            courseDetails: {
+              id: 'gift-card',
+              title: "Presentkort",
+              description: `Presentkort på ${giftCardData.amount} kr`,
+              start_date: new Date().toISOString(),
+              location: "Studio Clay",
+              price: giftCardData.amount
+            },
+            invoiceNumber,
+            pdfBuffer: invoicePdfBuffer,
+            isGiftCard: true,
+            giftCardCode: giftCardResult.code,
+            giftCardPdfBuffer: giftCardPdfBuffer
+          });
+          
+          console.log('24. Email result:', JSON.stringify(emailResult));
+        } catch (emailError) {
+          console.error('25. Error sending email:', emailError);
+          // Continue even if email fails
+        }
+        
+        console.log('26. Gift card invoice process completed successfully');
+        console.log(`=== END GIFT CARD INVOICE FLOW (${Date.now() - startTime}ms) ===`);
+        
+        return NextResponse.json({
+          success: true,
+          giftCardId: giftCardResult.id,
+          giftCardCode: giftCardResult.code,
+          invoiceNumber,
+          bookingReference,
+          emailSent: emailResult?.success || false,
+          emailMessage: emailResult?.message || 'No email sent'
         });
-      
-      if (storageError) {
-        console.error('Error saving PDF to storage:', storageError);
+      } catch (error) {
+        console.error('27. Uncaught error in gift card flow:', error);
+        console.log(`=== END GIFT CARD INVOICE FLOW WITH ERROR (${Date.now() - startTime}ms) ===`);
         return NextResponse.json(
-          { success: false, error: 'Failed to save invoice PDF' },
+          { success: false, error: 'Failed to process gift card invoice' },
           { status: 500 }
         );
       }
-      
-      // Send invoice email
-      console.log('Sending gift card invoice email');
-      const emailResult = await sendServerInvoiceEmail({
-        userInfo: userInfo as UserInfo,
-        paymentDetails: paymentDetails as PaymentDetails,
-        courseDetails: {
-          id: 'gift-card',
-          title: "Presentkort",
-          description: `Presentkort på ${giftCardData.amount} kr`,
-          start_date: new Date().toISOString(),
-          location: "Studio Clay",
-          price: giftCardData.amount
-        },
-        invoiceNumber,
-        pdfBuffer,
-        isGiftCard: true,
-        giftCardCode: giftCardResult.code,
-        giftCardPdfBuffer: giftCardPdfBuffer
-      });
-      
-      console.log('Gift card invoice email sending result:', emailResult);
-      
-      return NextResponse.json({
-        success: true,
-        giftCardId: giftCardResult.id,
-        giftCardCode: giftCardResult.code,
-        invoiceNumber,
-        bookingReference,
-        emailSent: emailResult.success,
-        emailMessage: emailResult.message
-      });
     } else {
       // Original course booking flow
-      // Get course details from database
-      console.log('Fetching course details from Supabase');
-      const { data: courseData, error: courseError } = await supabase
-        .from('course_instances')
-        .select('*')
-        .eq('id', courseId)
-        .single();
+      console.log('=== START COURSE BOOKING INVOICE FLOW ===');
       
-      if (courseError || !courseData) {
-        console.error('Error fetching course:', courseError);
-        return NextResponse.json(
-          { success: false, error: 'Course not found' },
-          { status: 404 }
-        );
-      }
-      
-      // Generate invoice PDF
-      console.log('Generating invoice PDF');
-      const invoiceData = {
-        customerInfo: userInfo,
-        courseDetails: {
-          title: courseData.title,
-          description: courseData.description,
-          start_date: courseData.start_date,
-          location: courseData.location,
-          price: courseData.price
-        },
-        invoiceDetails: paymentDetails.invoiceDetails || {
-          address: '',
-          postalCode: '',
-          city: ''
-        },
-        invoiceNumber,
-        dueDate: formattedDueDate
-      };
-      
-      const pdfBlob = await generateInvoicePDF(invoiceData);
-      
-      // Convert blob to buffer for storage
-      const pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
-      
-      // Save PDF to Supabase storage
-      console.log('Saving PDF to Supabase storage');
-      const { error: storageError } = await supabase
-        .storage
-        .from('invoices')
-        .upload(`${invoiceNumber}.pdf`, pdfBuffer, {
-          contentType: 'application/pdf',
-          upsert: true
-        });
-      
-      if (storageError) {
-        console.error('Error saving PDF to storage:', storageError);
-        return NextResponse.json(
-          { success: false, error: 'Failed to save invoice PDF' },
-          { status: 500 }
-        );
-      }
-      
-      // Create booking record with status 'confirmed'
-      console.log('Creating confirmed booking record for invoice');
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .insert({
-          course_id: courseId,
-          customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
-          customer_email: userInfo.email,
-          customer_phone: userInfo.phone,
-          number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
-          message: userInfo.specialRequirements || null,
-          payment_method: paymentDetails.method,
-          booking_date: new Date().toISOString(),
-          status: 'confirmed',
-          payment_status: paymentDetails.method === 'giftCard' ? 'PAID' : 'CREATED',
-          booking_reference: bookingReference,
-          invoice_number: invoiceNumber,
-          invoice_address: paymentDetails.invoiceDetails?.address,
-          invoice_postal_code: paymentDetails.invoiceDetails?.postalCode,
-          invoice_city: paymentDetails.invoiceDetails?.city,
-          invoice_reference: paymentDetails.invoiceDetails?.reference || null,
-          unit_price: courseData.price,
-          total_price: courseData.price * (parseInt(userInfo.numberOfParticipants) || 1)
-        })
-        .select()
-        .single();
-      
-      if (bookingError) {
-        console.error('Error creating booking:', bookingError);
-        return NextResponse.json(
-          { success: false, error: 'Failed to create booking' },
-          { status: 500 }
-        );
-      }
-      
-      console.log('Booking created successfully:', bookingData);
-      
-      // Update course current_participants count
-      const participantCount = parseInt(userInfo.numberOfParticipants) || 1;
-      console.log(`Updating course ${courseId} participants count by adding ${participantCount}`);
-
       try {
-        // Start a transaction to ensure atomicity
-        // Get current course data with latest participant count
-        const { data: latestCourseData, error: latestCourseError } = await supabase
-          .from('course_instances')
-          .select('current_participants, max_participants')
-          .eq('id', courseId)
-          .single();
+        // Get course details from database
+        console.log('1. Fetching course details from Supabase');
+        let courseData;
+        try {
+          const { data, error } = await supabase
+            .from('course_instances')
+            .select('*')
+            .eq('id', courseId)
+            .single();
           
-        if (latestCourseError) {
-          console.error('Error fetching latest course data:', latestCourseError);
-          throw new Error(`Failed to fetch latest course data: ${latestCourseError.message}`);
-        }
-        
-        if (!latestCourseData) {
-          console.error('Course not found when updating participant count');
-          throw new Error(`Course ${courseId} not found when updating participant count`);
-        }
-        
-        // Calculate new participant count with latest data
-        const currentCount = latestCourseData.current_participants || 0;
-        const newCount = currentCount + participantCount;
-        
-        console.log(`Updating participant count from ${currentCount} to ${newCount}`);
-        
-        // Check if course would be overbooked
-        if (latestCourseData.max_participants && newCount > latestCourseData.max_participants) {
-          console.warn(`Warning: Course may be overbooked. Max: ${latestCourseData.max_participants}, New count: ${newCount}`);
-        }
-        
-        // Update the count in the database with a specific query
-        const { error: participantError } = await supabase
-          .from('course_instances')
-          .update({ 
-            current_participants: newCount,
-            updated_at: new Date().toISOString() 
-          })
-          .eq('id', courseId);
+          if (error) {
+            console.error('2. Error fetching course:', error);
+            throw error;
+          }
           
-        if (participantError) {
-          console.error('Error updating participant count:', participantError);
-          throw participantError;
+          if (!data) {
+            console.error('3. Course not found with ID:', courseId);
+            throw new Error('Course not found');
+          }
+          
+          courseData = data;
+          console.log('4. Successfully fetched course data:', JSON.stringify(courseData));
+        } catch (fetchError) {
+          console.error('5. Failed to fetch course data:', fetchError);
+          return NextResponse.json(
+            { success: false, error: 'Course not found or database error' },
+            { status: 404 }
+          );
         }
         
-        console.log('Successfully updated course participant count from', currentCount, 'to', newCount);
-      } catch (updateError) {
-        console.error('Critical error during participant count update:', updateError);
+        // Generate invoice PDF
+        console.log('6. Generating invoice PDF');
+        let pdfBlob, pdfBuffer;
+        try {
+          const invoiceData = {
+            customerInfo: userInfo,
+            courseDetails: {
+              title: courseData.title,
+              description: courseData.description,
+              start_date: courseData.start_date,
+              location: courseData.location,
+              price: courseData.price
+            },
+            invoiceDetails: paymentDetails.invoiceDetails || {
+              address: '',
+              postalCode: '',
+              city: ''
+            },
+            invoiceNumber,
+            dueDate: formattedDueDate
+          };
+          
+          pdfBlob = await generateInvoicePDF(invoiceData);
+          pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
+          console.log('7. Successfully generated PDF of size:', pdfBuffer.length, 'bytes');
+        } catch (pdfError) {
+          console.error('8. Error generating PDF:', pdfError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to generate invoice PDF' },
+            { status: 500 }
+          );
+        }
         
-        // If booking was created but participant count update failed, we should log this
-        // but not fail completely, as the booking itself succeeded
-        console.log('Booking was created but participant count update failed - manual intervention may be needed');
+        // Save PDF to Supabase storage
+        console.log('9. Saving PDF to Supabase storage');
+        try {
+          const { error: storageError } = await supabase
+            .storage
+            .from('invoices')
+            .upload(`${invoiceNumber}.pdf`, pdfBuffer, {
+              contentType: 'application/pdf',
+              upsert: true
+            });
+          
+          if (storageError) {
+            console.error('10. Error saving PDF to storage:', storageError);
+            throw storageError;
+          }
+          
+          console.log('11. Successfully saved PDF to storage');
+        } catch (storageError) {
+          console.error('12. Failed to save PDF to storage:', storageError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to save invoice PDF' },
+            { status: 500 }
+          );
+        }
         
-        // We'll continue with the email sending and response, but include a warning
+        // Create booking record with status 'confirmed'
+        console.log('13. Creating confirmed booking record for invoice');
+        let bookingData;
+        try {
+          const insertData = {
+            course_id: courseId,
+            customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
+            customer_email: userInfo.email,
+            customer_phone: userInfo.phone,
+            number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
+            message: userInfo.specialRequirements || null,
+            payment_method: paymentDetails.method,
+            booking_date: new Date().toISOString(),
+            status: 'confirmed',
+            payment_status: paymentDetails.method === 'giftCard' ? 'PAID' : 'CREATED',
+            booking_reference: bookingReference,
+            invoice_number: invoiceNumber,
+            invoice_address: paymentDetails.invoiceDetails?.address,
+            invoice_postal_code: paymentDetails.invoiceDetails?.postalCode,
+            invoice_city: paymentDetails.invoiceDetails?.city,
+            invoice_reference: paymentDetails.invoiceDetails?.reference || null,
+            unit_price: courseData.price,
+            total_price: courseData.price * (parseInt(userInfo.numberOfParticipants) || 1)
+          };
+          
+          console.log('14. Insert data for bookings:', JSON.stringify(insertData));
+          
+          const { data, error } = await supabase
+            .from('bookings')
+            .insert(insertData)
+            .select()
+            .single();
+          
+          if (error) {
+            console.error('15. Error creating booking:', error);
+            throw error;
+          }
+          
+          bookingData = data;
+          console.log('16. Successfully created booking:', JSON.stringify(bookingData));
+        } catch (bookingError) {
+          console.error('17. Failed to create booking:', bookingError);
+          return NextResponse.json(
+            { success: false, error: 'Failed to create booking' },
+            { status: 500 }
+          );
+        }
+        
+        // Create booking_participants record if needed
+        if (
+          parseInt(userInfo.numberOfParticipants) > 1 &&
+          data.participantDetails &&
+          Array.isArray(data.participantDetails) &&
+          data.participantDetails.length > 0
+        ) {
+          console.log('18. Creating booking participants records');
+          try {
+            const participantsData = data.participantDetails.map((participant: any) => ({
+              booking_id: bookingData.id,
+              name: participant.name || null,
+              email: participant.email || null,
+              phone: participant.phone || null,
+              age: participant.age || null,
+              special_requirements: participant.specialRequirements || null
+            }));
+            
+            console.log('19. Participants data:', JSON.stringify(participantsData));
+            
+            const { error: participantsError } = await supabase
+              .from('booking_participants')
+              .insert(participantsData);
+            
+            if (participantsError) {
+              console.error('20. Error creating booking participants:', participantsError);
+              // Continue with the booking even if participants creation fails
+            } else {
+              console.log('21. Successfully created booking participants');
+            }
+          } catch (participantsError) {
+            console.error('22. Failed to create booking participants:', participantsError);
+            // Continue with the booking even if participants creation fails
+          }
+        }
+        
+        // Send invoice email
+        console.log('23. Sending course invoice email');
+        let emailResult;
+        try {
+          emailResult = await sendServerInvoiceEmail({
+            userInfo: userInfo as UserInfo,
+            paymentDetails: paymentDetails as PaymentDetails,
+            courseDetails: {
+              id: courseData.id,
+              title: courseData.title,
+              description: courseData.description,
+              start_date: courseData.start_date,
+              location: courseData.location,
+              price: courseData.price
+            },
+            invoiceNumber,
+            pdfBuffer
+          });
+          
+          console.log('24. Email result:', JSON.stringify(emailResult));
+        } catch (emailError) {
+          console.error('25. Error sending email:', emailError);
+          // Continue even if email fails
+        }
+        
+        console.log('26. Course booking invoice process completed successfully');
+        console.log(`=== END COURSE BOOKING INVOICE FLOW (${Date.now() - startTime}ms) ===`);
+        
         return NextResponse.json({
           success: true,
           bookingId: bookingData.id,
           invoiceNumber,
           bookingReference,
-          warning: 'Booking was created but course participant count may not be updated correctly'
+          emailSent: emailResult?.success || false,
+          emailMessage: emailResult?.message || 'No email sent'
         });
+      } catch (error) {
+        console.error('27. Uncaught error in course booking flow:', error);
+        console.log(`=== END COURSE BOOKING INVOICE FLOW WITH ERROR (${Date.now() - startTime}ms) ===`);
+        return NextResponse.json(
+          { success: false, error: 'Failed to process course booking invoice' },
+          { status: 500 }
+        );
       }
-      
-      // Send invoice email
-      console.log('Sending invoice email');
-      const emailResult = await sendServerInvoiceEmail({
-        userInfo: userInfo as UserInfo,
-        paymentDetails: paymentDetails as PaymentDetails,
-        courseDetails: {
-          id: courseData.id,
-          title: courseData.title,
-          description: courseData.description,
-          start_date: courseData.start_date,
-          location: courseData.location,
-          price: courseData.price
-        },
-        invoiceNumber,
-        pdfBuffer
-      });
-      
-      console.log('Invoice email sending result:', emailResult);
-      
-      return NextResponse.json({
-        success: true,
-        bookingId: bookingData.id,
-        invoiceNumber,
-        bookingReference,
-        emailSent: emailResult.success,
-        emailMessage: emailResult.message
-      });
     }
     
   } catch (error) {
-    console.error('Error creating invoice:', error);
+    console.error('General error creating invoice:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to create invoice' },
       { status: 500 }

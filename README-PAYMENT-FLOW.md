@@ -1,428 +1,357 @@
 # Payment System Documentation
 
 ## Overview
-The payment system is designed as a generic solution that works across multiple product types:
-- Course bookings
-- Gift cards
-- Shop items
+Betalningssystemet är designat som en generisk lösning som fungerar över flera produkttyper:
+- Kursbokningar (course_booking)
+- Presentkort (gift_card)
+- Konstprodukter (art_purchase)
 
-## Component Structure
+Systemet stödjer för närvarande två betalningsmetoder:
+- Swish - för direktbetalning via mobiltelefon
+- Faktura - för fakturering via e-post
+
+## Komponentstruktur
 ```
 /src/
 ├── components/
 │   └── booking/
-│       ├── PaymentSelection.tsx        # Main payment coordinator
+│       ├── PaymentSelection.tsx        # Huvudkoordinator för betalningsval
 │       │
 │       ├── Swish Flow/
-│       │   ├── SwishPaymentSection.tsx # Swish coordinator
-│       │   ├── SwishPaymentForm.tsx    # Phone number input
-│       │   └── SwishPaymentDialog.tsx  # Payment status
+│       │   ├── SwishPaymentSection.tsx # Swish-koordinator (telefoninmatning + betalning)
+│       │   ├── SwishPaymentForm.tsx    # Telefoninmatning
+│       │   └── SwishPaymentDialog.tsx  # Dialog för betalningsstatus
 │       │
 │       └── Invoice Flow/
-│           ├── InvoicePaymentSection.tsx # Invoice coordinator
-│           ├── InvoicePaymentForm.tsx    # Address input
-│           └── InvoicePaymentDialog.tsx  # Payment status
+│           ├── InvoicePaymentSection.tsx # Faktura-koordinator
+│           ├── InvoicePaymentForm.tsx    # Adressinmatning
+│           └── InvoicePaymentDialog.tsx  # Dialog för fakturastatus
+│
+├── services/
+│   └── swish/
+│       ├── swishService.ts             # Huvudsaklig Swish-tjänst som hanterar API-anrop
+│       ├── config.ts                   # Konfiguration för Swish API
+│       └── types.ts                    # Typdefinitioner för Swish
+│
+├── hooks/
+│   └── useSwishPaymentStatus.ts        # Custom hook för statushantering
 │
 ├── app/
 │   └── api/
-│       ├── invoice/
-│       │   └── create/
-│       │       └── route.ts           # Invoice creation and PDF generation
-│       └── payments/
-│           └── swish/
-│               └── create/
-│                   └── route.ts       # Swish payment creation
+│       ├── payments/
+│       │   ├── status/
+│       │   │   └── [reference]/
+│       │   │       └── route.ts        # Hämtar betalningsstatus
+│       │   │
+│       │   └── swish/
+│       │       ├── create/
+│       │       │   └── route.ts        # Skapar Swish-betalning
+│       │       ├── cancel/
+│       │       │   └── route.ts        # Avbryter Swish-betalning och uppdaterar databas
+│       │       ├── simple-cancel/
+│       │       │   └── route.ts        # Förenklad avbrytningsprocess (fallback)
+│       │       ├── callback/
+│       │       │   └── route.ts        # Hanterar callbacks från Swish
+│       │       └── debug/
+│       │           └── cancel-test/
+│       │               └── route.ts    # Testendpoint för avbrytningar
+│       │
+│       └── invoice/
+│           └── create/
+│               └── route.ts            # Skapar faktura och PDF
 │
 ├── utils/
-│   ├── invoicePDF.ts                  # PDF generation
-│   └── confirmationEmail.ts           # Email service
+│   ├── flowStorage.ts                  # Hantering av betalnings- och flödesdata i localStorage
+│   └── flowNavigation.ts               # Navigation mellan steg i bokningsflödet
 │
 └── types/
-    ├── payment.ts                     # Shared payment types
-    └── booking.ts                     # Booking types
+    └── payment.ts                      # Delade betalningstyper
 ```
 
-## Component Responsibilities
+## Komponentansvar
 
-### Payment Coordinator
-- `PaymentSelection.tsx`
-  - Handles payment method selection
-  - Coordinates between payment methods
-  - Manages overall payment flow
-  - Provides unified interface
+### 1. Huvudkoordinator för betalningsval
+**PaymentSelection.tsx**
+- Generisk komponent som används för alla produkttyper
+- Ansvarar för:
+  - Val av betalningsmetod (Swish/Faktura)
+  - Validering av vald metod
+  - Koordination mellan betalningsmetoder via refs
+  - Hantering av betalningsstatus och omdirigering
+  - Återanvänder bokningsdata från tidigare steg
+  - Beräkning av pris baserat på produkt och antal
+  
+### 2. Swish-flödet
+**SwishPaymentSection.tsx**
+- Specifik för Swish-betalningar
+- Ansvarar för:
+  - Validering av telefonnummer
+  - Formatering av telefonnummer för Swish-API
+  - Skapande av betalningsreferens
+  - Hantering av betalningsstatus
+  - Kontrollerar betalningsprocessen
+  - Avbrytning av betalning
+  - Exponerar `handleCreatePayment` via ref
 
-### Swish Flow
-1. User selects Swish
-2. Enters phone number (SwishPaymentForm)
-3. System validates phone number format
-4. SwishPaymentSection creates payment:
-   - Generates unique reference
-   - Sends request to Swish API
-   - Stores payment details in database
-5. SwishPaymentDialog opens and shows status:
-   - Displays clear instructions
-   - Shows real-time status updates
-   - Handles various payment states
-6. Status polling begins:
-   - Checks every 2 seconds
-   - Maximum 60 seconds duration
-   - Direct Swish check after 20 seconds
-7. Payment completion:
-   - Success: Redirects to confirmation
-   - Declined: Shows cancellation message
-   - Error: Displays user-friendly error
+**SwishPaymentForm.tsx**
+- Inmatningsformulär för telefonnummer
+- Ansvarar för:
+  - Inmatning av telefonnummer
+  - Validering av format
+  - Visuell feedback vid fel
 
-### Invoice Flow
-1. `InvoicePaymentSection.tsx`
-   - Coordinates invoice payment flow
-   - Manages invoice generation
-   - Handles PDF creation
+**SwishPaymentDialog.tsx**
+- Modal som visar betalningsstatus
+- Ansvarar för:
+  - Visar instruktioner till användaren
+  - Visar realtidsuppdateringar av status
+  - Visar olika tillstånd: CREATED, PAID, DECLINED, ERROR
+  - Hanterar tidtagning för förväntad process
+  - Ger användaren möjlighet att avbryta betalningen
 
-2. `InvoicePaymentForm.tsx` (To be created)
-   - Address input and validation
-   - Invoice-specific form logic
+**useSwishPaymentStatus.tsx**
+- Custom hook för statushantering
+- Ansvarar för:
+  - Polling av betalningsstatus
+  - Hantering av dialog-tillstånd
+  - Hantering av framgång/misslyckande
+  - Omdirigerar till rätt bekräftelsesida baserat på produkttyp
 
-3. `InvoicePaymentDialog.tsx`
-   - Shows invoice status
-   - Provides download options
-   - Handles success/error states
+### 3. Backend-tjänster
 
-### API Routes
-1. `/api/invoice/create`
-   - Genererar fakturanummer och bokningsreferens
-   - Skapar PDF-faktura
-   - Sparar PDF i Supabase storage
-   - Skapar bokningspost i databasen
-   - Uppdaterar kursens deltagarantal
-   - Skickar faktura via e-post
+**SwishService (services/swish/swishService.ts)**
+- Singleton-tjänst för Swish API-anrop
+- Ansvarar för:
+  - Skapande av betalningar
+  - Kontroll av betalningsstatus
+  - Avbrytning av betalningar
+  - Certifikathantering
+  - Formatering av telefonnummer
+  - Felhantering
+  - Loggning
 
-2. `/api/payments/swish/create`
-   - Skapar Swish-betalning
-   - Hanterar callbacks från Swish
-   - Uppdaterar betalningsstatus
+**API-routes**
+- `/api/payments/swish/create` - Skapar Swish-betalning
+- `/api/payments/swish/cancel` - Avbryter betalning och uppdaterar databas
+- `/api/payments/swish/simple-cancel` - Förenklad avbrytning (fallback)
+- `/api/payments/swish/callback` - Webhook för Swish-API callbacks
+- `/api/payments/status/[reference]` - Hämtar betalningsstatus
+- `/api/invoice/create` - Skapar fakturabetalning
 
-## Data Flow
+## Dataflöden
 
-### Swish Payment Flow
-1. User selects Swish
-2. Enters phone number (SwishPaymentForm)
-3. System validates phone number format
-4. SwishPaymentSection creates payment:
-   - Generates unique reference
-   - Sends request to Swish API
-   - Stores payment details in database
-5. SwishPaymentDialog opens and shows status:
-   - Displays clear instructions
-   - Shows real-time status updates
-   - Handles various payment states
-6. Status polling begins:
-   - Checks every 2 seconds
-   - Maximum 60 seconds duration
-   - Direct Swish check after 20 seconds
-7. Payment completion:
-   - Success: Redirects to confirmation
-   - Declined: Shows cancellation message
-   - Error: Displays user-friendly error
+### Swish-betalningsflöde (Happy Path)
 
-### Invoice Payment Flow
-1. User selects Invoice
-2. Enters address (InvoicePaymentForm)
-3. Section generates invoice (InvoicePaymentService)
-4. Creates PDF and sends email
-5. Dialog shows confirmation
+1. **Initering av betalning**
+   - User väljer "Swish" i PaymentSelection
+   - Fyller i telefonnummer i SwishPaymentForm
+   - PaymentSelection anropar SwishPaymentSection.handleCreatePayment via ref
+   - SwishPaymentSection validerar telefonnummer
+   - SwishPaymentSection uppdaterar UI-staten till "CREATED"
+   - SwishPaymentDialog öppnas
 
-## Key Components
+2. **Betalningsförfrågan**
+   - SwishPaymentSection gör API-anrop till `/api/payments/swish/create`
+   - API-routen:
+     - Validerar indata
+     - Skapar betalningsreferens (SC-XXXXXX-XXX)
+     - Anropar SwishService.createPayment
+     - SwishService använder certifikat för säker kommunikation
+     - Swish API returnerar betalnings-ID och URL
+     - API-routen sparar betalningsinformation i databasen
+     - Returnerar betalningsreferens till frontendet
 
-### 1. PaymentSelection
-The main component for payment method selection that:
-- Handles both Swish and invoice payments
-- Manages form state and validation
-- Coordinates between different payment methods
-- Provides a unified interface for payment processing
+3. **Statusövervakning**
+   - useSwishPaymentStatus startar polling mot `/api/payments/status/[reference]`
+   - API-routen kontrollerar status i databasen
+   - Efter 20 sekunder görs även direktkontroll mot Swish API
+   - SwishPaymentDialog uppdateras baserat på status
 
-### 2. SwishPaymentSection
-Handles all Swish-specific payment logic:
-- Manages phone number validation
-- Creates and monitors Swish payments
-- Exposes payment creation via ref
-- Handles payment status updates
+4. **Betalningsbekräftelse**
+   - Användaren godkänner betalningen i Swish-appen
+   - Swish skickar callback till `/api/payments/swish/callback`
+   - Callback-routen uppdaterar betalningsstatus i databasen till "PAID"
+   - Polling upptäcker statusändringen
+   - SwishPaymentDialog visar framgångsmeddelande
+   - Användaren omdirigeras till bekräftelsesidan
 
-### 3. InvoicePaymentSection
-Handles all invoice-specific payment logic:
-- Manages address validation
-- Creates and stores invoice PDFs
-- Generates invoice numbers
-- Handles invoice status updates
-- Exposes payment creation via ref
-- Integrates with PDF generation service
+### Avbrytningsflöde (Användaren avbryter)
 
-### 4. useSwishPaymentStatus
-Custom hook for managing Swish payment status:
-- Handles polling and status updates
-- Manages payment dialog state
-- Handles success/failure redirects
+1. **Användaren avbryter i gränssnittet**
+   - Användaren klickar på "Avbryt betalning" i SwishPaymentDialog
+   - SwishPaymentDialog anropar `onCancel`-funktionen
+   - SwishPaymentSection.handleCancelPayment anropas:
+     - Uppdaterar UI-staten till "DECLINED"
+     - Stänger dialogen omedelbart
+     - Gör asynkront API-anrop till `/api/payments/swish/cancel`
 
-## Payment Flow
+2. **Avbrytning i backend**
+   - `/api/payments/swish/cancel` tar emot betalningsreferensen
+   - Hämtar full betalningsinformation inklusive Swish-ID från databasen
+   - Anropar SwishService.cancelPayment med Swish-ID
+   - SwishService gör PUT-anrop till Swish API:s avbrytningsendpoint
+   - Uppdaterar betalningsstatus i databasen till "DECLINED"
 
-### 1. Payment Creation
-```typescript
-// In SwishPaymentSection
-const handleCreatePayment = async (): Promise<boolean> => {
-  // Validate phone number
-  // Create payment via SwishPaymentService
-  // Show payment dialog
-  // Start status polling
-};
+3. **Fallback-mekanism**
+   - Om `/api/payments/swish/cancel` misslyckas, prövar frontend `/api/payments/swish/simple-cancel`
+   - simple-cancel returnerar alltid framgång utan att uppdatera databas eller Swish
 
-// In InvoicePaymentSection
-const handleCreatePayment = async (): Promise<boolean> => {
-  // Validate address
-  // Generate invoice number
-  // Create invoice PDF
-  // Store PDF in storage
-  // Create booking with invoice details
-};
-```
+### Felhanteringsflöde (Unhappy Path)
 
-### 2. Status Monitoring
-```typescript
-// In useSwishPaymentStatus
-useEffect(() => {
-  // Poll status every 2 seconds
-  // Update dialog state
-  // Handle success/failure
-}, [paymentReference]);
-```
+1. **Tekniskt fel vid betalningsskapande**
+   - SwishPaymentSection kan inte skapa betalning (nätverksfel/serverfel)
+   - Visar felmeddelande och låter användaren försöka igen
 
-### 3. Payment Completion
-- Swish:
-  - User approves in Swish app
-  - Status updates via polling
-  - Redirect to confirmation on success
-- Invoice:
-  - PDF generated and stored
-  - Booking created with invoice details
-  - Email sent with invoice PDF
-  - Redirect to confirmation
+2. **Användaren avbryter i Swish-appen**
+   - Användaren nekar betalningen i Swish-appen
+   - Swish skickar callback med "DECLINED"
+   - Status uppdateras i databasen
+   - Polling upptäcker statusändringen
+   - SwishPaymentDialog visar avbrytningsmeddelande
 
-## API Endpoints
+3. **Timeout-hantering**
+   - Om användaren inte svarar inom 60 sekunder
+   - SwishPaymentDialog visar timeout-meddelande
+   - Betalning kan fortfarande slutföras om användarens interaktion är sen
 
-```typescript
-// Create Swish payment
-POST /api/payments/swish/create
-Body: {
-  phone_number: string;
-  payment_method: "swish";
-  product_type: "course";
-  product_id: string;
-  amount: number;
-  quantity: number;
-  user_info: UserInfo;
-}
+4. **Certifikatfel**
+   - Om Swish-API-anrop misslyckas p.g.a. certifikatfel
+   - SwishService kastar SwishCertificateError
+   - Felloggas med detaljerad information
+   - API-routen returnerar 500-fel
+   - Frontend visar användarvänligt felmeddelande
 
-// Create Invoice payment
-POST /api/invoice/create
-Body: {
-  payment_method: "invoice";
-  product_type: "course";
-  product_id: string;
-  amount: number;
-  quantity: number;
-  user_info: UserInfo;
-  invoice_details: {
-    address: string;
-    postalCode: string;
-    city: string;
-    reference?: string;
-  };
-}
+## Certifikathantering
 
-// Check payment status
-GET /api/payments/status/[reference]
-Response: {
-  success: boolean;
-  data: {
-    payment: {
-      reference: string;
-      status: "CREATED" | "PAID" | "ERROR" | "DECLINED";
-      amount: number;
-    };
-    booking: BookingData | null;
-  }
-}
+Systemet använder Swish-certifikat för säker kommunikation med Swish API. Följande hantering finns implementerad:
 
-// Get invoice PDF
-GET /api/invoice/[id]
-Response: {
-  success: boolean;
-  data: {
-    pdf: string; // Base64 encoded PDF
-  };
-}
-```
+### Certifikatfiler
+- **Test-miljö**:
+  - `SWISH_TEST_CERT_PATH`: Sökväg till certifikatfil
+  - `SWISH_TEST_KEY_PATH`: Sökväg till privat nyckel
+  - `SWISH_TEST_CA_PATH`: Sökväg till CA-certifikat
 
-## Environment Variables and Certificates
+- **Produktions-miljö**:
+  - `SWISH_PROD_CERT_PATH`: Sökväg till certifikatfil
+  - `SWISH_PROD_KEY_PATH`: Sökväg till privat nyckel
+  - `SWISH_PROD_CA_PATH`: Sökväg till CA-certifikat
 
-### Production Environment
-```bash
-# Swish Production Configuration
-NEXT_PUBLIC_SWISH_PROD_MODE=true
-SWISH_PROD_API_URL=https://cpc.getswish.net/swish-cpcapi/api/v1
-SWISH_PROD_PAYEE_ALIAS=1234567890
-SWISH_PROD_CERT_PATH=certs/swish/prod/Swish_Merchant_Certificate.pem
-SWISH_PROD_KEY_PATH=certs/swish/prod/Swish_Merchant_Certificate.key
-SWISH_PROD_CA_PATH=certs/swish/prod/Swish_TLS_RootCA.pem
-```
+### SwishService certifikathantering
+- Singleton-mönster som skapar en instance med rätt konfiguration
+- Validerar att alla certifikatfiler existerar vid start
+- Använder HTTPS-agent med korrekt certifikatkonfiguration för alla anrop
+- makeSwishRequest-metoden säkerställer att alla anrop använder samma certifikathantering
+- Felhantering med speciella SwishCertificateError-exceptions
 
-### Certificate Setup
-1. **Production Certificates**
-   - Located in `/certs/swish/prod/`
-   - Required files:
-     - Merchant Certificate (`.pem`)
-     - Private Key (`.key`)
-     - Root CA Certificate (`.pem`)
-   - File permissions: 600
-   - Directory permissions: 700
+## Statushantering
 
-2. **Certificate Management**
-   - Keep certificates in secure location
-   - Monitor expiration dates
-   - Maintain backup copies
-   - Regular permission checks
+Betalningsstatusar följer ett standardiserat flöde:
 
-3. **Security Notes**
-   - Never commit certificates to version control
-   - Use environment variables for paths
-   - Restrict access to certificate files
-   - Regular security audits
+1. **CREATED**: Initial status när betalning skapas
+2. **PAID**: Betalning har godkänts och genomförts
+3. **DECLINED**: Betalning har nekats eller avbrutits
+4. **ERROR**: Tekniskt fel har uppstått
 
-### Testing Notes
-- Test environment (MSS) currently not operational
-- Use production environment with 1 kr payments for testing
-- Monitor all test transactions in admin interface
-- Document all test cases and results
+### Statusöverföring mellan komponenter
 
-## Database Schema
-```sql
-CREATE TABLE payments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    status TEXT NOT NULL DEFAULT 'CREATED',
-    payment_method TEXT NOT NULL,
-    amount INTEGER NOT NULL,
-    currency TEXT NOT NULL DEFAULT 'SEK',
-    payment_reference TEXT NOT NULL,
-    product_type TEXT NOT NULL,
-    product_id UUID NOT NULL,
-    user_info JSONB NOT NULL,
-    metadata JSONB,
-    phone_number TEXT NOT NULL
-);
+1. **Frontend till Backend**:
+   - Använder API-anrop för att uppdatera status
+   - Skickar betalningsreferens för identifiering
 
-CREATE TABLE bookings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    course_id UUID NOT NULL,
-    customer_name TEXT NOT NULL,
-    customer_email TEXT NOT NULL,
-    customer_phone TEXT NOT NULL,
-    number_of_participants INTEGER NOT NULL,
-    booking_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    payment_status TEXT NOT NULL DEFAULT 'CREATED',
-    message TEXT,
-    invoice_number TEXT,
-    invoice_address TEXT,
-    invoice_postal_code TEXT,
-    invoice_city TEXT,
-    invoice_reference TEXT,
-    payment_method TEXT NOT NULL,
-    booking_reference TEXT NOT NULL,
-    unit_price INTEGER,
-    total_price INTEGER,
-    currency TEXT NOT NULL DEFAULT 'SEK'
-);
-```
+2. **Backend till Frontend**:
+   - Använder polling via `/api/payments/status/[reference]`
+   - API-svar innehåller aktuell status från databasen
 
-## Recent Changes
-1. **Component Refactoring**
-   - Extracted Swish payment logic to dedicated components
-   - Extracted Invoice payment logic to dedicated components
-   - Implemented ref-based communication
-   - Improved error handling and validation
+3. **Swish till Backend**:
+   - Använder callbacks till `/api/payments/swish/callback`
+   - Callback-body innehåller status och betalningsreferens
 
-2. **Code Organization**
-   - Separated concerns between components
-   - Created custom hook for payment status
-   - Improved type safety
-   - Added PDF generation service
+4. **Mellan Frontend-komponenter**:
+   - useSwishPaymentStatus hook hanterar statusuppdateringar
+   - SwishPaymentDialog visar status visuellt för användaren
+   - PaymentSelection hanterar slutgiltig framgång/misslyckande
 
-3. **Payment Flow**
-   - Streamlined payment creation process
-   - Enhanced status monitoring
-   - Better error handling and user feedback
-   - Added invoice PDF generation and storage
+## Felhantering och Debugging
 
-4. **Gift Card Handling**
-   - Implemented proper storage of gift card fields in database:
-     - `amount`: Numeric amount of the gift card
-     - `recipient_name`: Name of the gift card recipient
-     - `recipient_email`: Email address of the recipient
-     - `message`: Personal message for the gift card
-     - `invoice_reference`: Reference for invoice payments
-     - `payment_reference`: Unique payment reference
-   - Payment status handling:
-     - For Swish payments: Status is set to `PAID` immediately upon success
-     - For Invoice payments: Status is set to `CREATED` initially, changes to `PAID` when paid
-   - Implemented consistent status display in confirmation page:
-     - `PAID` status shows as "Genomförd"
-     - `CREATED` and `pending` status shows as "Ej betald"
-     - Other statuses show as "Väntar på verifiering"
+### HTTP-felkoder
+- **400 Bad Request**: Validerings- eller formatfel
+  - Felaktigt telefonnummer
+  - Saknad betalningsreferens
+  - Felaktigt produkttyp (databasens CHECK-constraint)
+  
+- **401 Unauthorized**: Autentiseringsfel mot Swish API
+  - Ogiltiga eller utgångna certifikat
+  
+- **404 Not Found**: Resurs hittades inte
+  - Ogiltig betalningsreferens
+  
+- **500 Internal Server Error**: Serverfel
+  - Certifikatfel eller cert-sökvägsfel
+  - Databasfel
+  - Swish API-fel
 
-5. **Storage Improvements**
-   - Enhanced data storage with multiple fallback mechanisms
-   - Implemented centralized `saveGiftCardDetails` function that stores data in multiple locations
-   - Improved compatibility with both legacy and new storage patterns
+### Loggning
+- Utförlig loggning via `logDebug` och `logError` metoder
+- Kritiska operationer loggas med kontext:
+  - Betalningsreferenser
+  - API-svar
+  - Certifikatinformation
+  - Tidsstämplar och durationer
+  
+### Debug-endpoints
+- `/api/payments/swish/debug/cancel-test`: Testar avbrytning av specifik betalning
+- `/api/debug/supabase-test`: Testar databaskoppling och behörigheter
 
-## Test Environment
-- Uses Swish MSS (Merchant Swish Simulator)
-- Test phone numbers:
-  - `0739000001`: Returns PAID
-  - `0739000002`: Returns DECLINED
-  - `0739000003`: Returns ERROR
-- Invoice testing:
-  - PDF generation in test environment
-  - Storage in test bucket
-  - Email sending disabled
+## Viktiga Edge Cases
 
-## Security Considerations
-1. **Certificate Handling**
-   - Certificates stored in `/certs/swish/[test|prod]`
-   - Restricted file permissions (600)
-   - Restricted directory permissions (700)
+### Avbrytning och Återupptagen Betalning
+- **Problem**: Om en användare avbryter en betalning och försöker igen, kan det uppstå tillståndskonflikter.
+- **Lösning**: 
+  - Betalningsstatusen uppdateras omedelbart i UI till "DECLINED" när användaren avbryter.
+  - Frontend uppdaterar databasen asynkront.
+  - Frontend genererar en ny betalningsreferens vid ny betalning.
 
-2. **Request Validation**
-   - Idempotency key required
-   - Rate limiting on endpoints
-   - Signature validation for callbacks
-   - PDF storage access control
+### Certifikathantering på Servern
+- **Problem**: Certifikatfiler kan saknas eller vara otillgängliga i produktionsmiljön.
+- **Lösning**:
+  - Valideringscheck vid startup.
+  - Fallback-mekanismer som simple-cancel.
+  - Robust felhantering som prioriterar användarupplevelsen.
 
-## Next Steps
-1. **Code Cleanup**
-   - Remove unused Swish code from PaymentSelection
-   - Simplify validation logic
-   - Improve error messages
-   - Add invoice-specific error handling
+### Tidssynkronisering
+- **Problem**: Frontend-tid och Swish-backendets tid kan vara osynkroniserade.
+- **Lösning**:
+  - Generösa timeouts i frontend (60 sekunder).
+  - Databaspersistens av betalningsinformation.
+  - Direktkontroll mot Swish API efter 20 sekunder.
 
-2. **Testing**
-   - Add unit tests for components
-   - Add integration tests for payment flow
-   - Test error scenarios
-   - Add PDF generation tests
+## To-Do: Framtida Förbättringar
 
-3. **Documentation**
-   - Add JSDoc comments
-   - Create component documentation
-   - Update API documentation
-   - Add invoice flow diagrams
+### 1. Förbättrad Avbrytningshantering
+- Implementera en lösning för att stänga Swish-appen när användaren avbryter betalning från vår sida.
+- Utforska möjligheten att använda deep links eller appintents för att återta fokus till webbappen.
+- Testa olika enheter och versioner av Swish-appen för korrekt beteende.
+
+### 2. Hantering av Edge Case: Avbrytning följt av Ny Betalning
+- Implement flöde för att hantera tillståndet där en användare:
+  1. Initierar betalning
+  2. Avbryter betalning från vårt gränssnitt
+  3. Klickar på "Slutför bokning" igen
+- Säkerställ att alla gamla referenser rensas korrekt.
+- Lägg till validering som kontrollerar tidigare avbrutna betalningar.
+
+### 3. Förbättrad Certifikathantering
+- Lägg till automatisk kontroll att certifikaten är giltiga innan anrop.
+- Skapa ett enkelt administratörsgränssnitt för att ladda upp nya certifikat.
+- Implementera automatiska påminnelser när certifikat närmar sig utgångsdatum.
+
+### 4. Debuggning och Övervakning
+- Lägg till mer detaljerad loggning för feldiagnostik.
+- Implementera automatiska larm vid onormalt höga felantal.
+- Skapa en dashboard för att övervaka betalningsstatistik.
+
+## Slutsats
+
+Betalningssystemet är en kritisk komponent för användare att slutföra bokningar och köp. Genom att implementera robusta flöden med tydlig felhantering, certifikatsäkerhet och användarvänliga gränssnitt har vi skapat en pålitlig betalningsprocess som kan hantera olika produkttyper och betalningsmetoder.
+
+Genom fortsatt förbättring av avbrytningshantering och edge cases kan vi ytterligare förbättra användarupplevelsen och minska risken för förvirring eller förlorade köp.
