@@ -228,33 +228,44 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
 
     console.log('Initiating payment cancellation for reference:', paymentReference);
 
+    // Immediately show user that we're processing the cancellation
+    setPaymentStatus(PaymentStatus.DECLINED);
+
     try {
-      // Use the simplified cancel endpoint that doesn't try to update the database
-      const cancelResponse = await fetch('/api/payments/swish/simple-cancel', {
+      // First, cancel the payment via our API
+      const cancelResponse = await fetch('/api/payments/swish/cancel', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ 
           paymentReference,
-          // Add additional info for logging
           cancelledBy: 'user',
           cancelledFrom: 'payment_dialog'
         })
       });
 
-      if (!cancelResponse.ok) {
-        console.error('Failed to cancel Swish payment:', {
-          status: cancelResponse.status,
-          statusText: cancelResponse.statusText
-        });
+      // Parse the response
+      let responseData;
+      try {
+        responseData = await cancelResponse.json();
+      } catch (parseError) {
+        console.error('Failed to parse cancel response:', parseError);
+        responseData = { success: false, error: 'Invalid response format' };
+      }
+
+      // Log the result for debugging
+      console.log('Cancellation API response:', {
+        status: cancelResponse.status,
+        ok: cancelResponse.ok,
+        data: responseData
+      });
+
+      // Handle response based on success status
+      if (cancelResponse.ok && responseData.success) {
+        console.log('Payment successfully cancelled via API');
         
-        // Even if the cancel request fails, we'll handle it as if it worked
-        // because Swish will eventually update the status through the callback
-        console.log('Continuing with payment cancellation flow despite request error');
-        
-        // Show declined status to user
-        setPaymentStatus(PaymentStatus.DECLINED);
+        // Close dialog and complete cancellation flow
         setShowPaymentDialog(false);
         
         if (onPaymentCancelled) {
@@ -262,34 +273,29 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         } else {
           onPaymentComplete(false);
         }
+      } else {
+        console.warn('Cancellation API returned error:', responseData.error || 'Unknown error');
         
-        return;
+        // Even if API returns error, we should still close the dialog
+        // The status will be updated by Swish callback eventually
+        console.log('Continuing with cancellation flow despite API error');
+        setShowPaymentDialog(false);
+        
+        if (onPaymentCancelled) {
+          onPaymentCancelled();
+        } else {
+          onPaymentComplete(false);
+        }
       }
-
-      const cancelData = await cancelResponse.json();
-      console.log('Swish cancellation response:', cancelData);
-
-      // Always proceed as if cancellation was successful
-      // The actual status will be updated by the Swish callback
-      console.log('Payment cancellation request acknowledged');
-      setPaymentStatus(PaymentStatus.DECLINED);
+    } catch (error) {
+      console.error('Error during payment cancellation API call:', error);
+      
+      // Even if there's a network error, we should still close the dialog
+      // The payment may still be cancelled on the server side
       setShowPaymentDialog(false);
       
       if (onPaymentCancelled) {
         onPaymentCancelled();
-      } else {
-        onPaymentComplete(false);
-      }
-    } catch (error) {
-      console.error('Error during payment cancellation:', error);
-      
-      // Handle any errors as if cancellation was successful
-      // The actual status update will come from Swish callback
-      setPaymentStatus(PaymentStatus.DECLINED);
-      setShowPaymentDialog(false);
-      
-      if (onPaymentFailure) {
-        onPaymentFailure('ERROR');
       } else {
         onPaymentComplete(false);
       }

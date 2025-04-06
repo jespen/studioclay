@@ -40,7 +40,7 @@ export async function GET() {
     const readStart = Date.now();
     const { data: readData, error: readError } = await supabase
       .from('payments')
-      .select('id, status, payment_method')
+      .select('id, status, payment_method, product_type')
       .limit(1);
     const readDuration = Date.now() - readStart;
 
@@ -48,22 +48,30 @@ export async function GET() {
       success: !readError,
       hasData: !!readData && readData.length > 0,
       errorCode: readError?.code,
-      errorMessage: readError?.message
+      errorMessage: readError?.message,
+      validProductTypes: readData && readData.length > 0 ? readData.map(p => p.product_type) : []
     });
 
+    // Get valid product_types from existing data
+    const validProductTypes = ['course', 'gift_card', 'art_product']; // Default valid types
+    if (readData && readData.length > 0 && readData[0].product_type) {
+      // Use the existing product_type if available
+      validProductTypes.unshift(readData[0].product_type);
+    }
+
     // Test 2: Insert temporary record
-    logDebug(`[${testId}] Testing INSERT access to payments table`);
+    logDebug(`[${testId}] Testing INSERT access to payments table with valid product_type: ${validProductTypes[0]}`);
     const insertStart = Date.now();
     const testPayment = {
-      payment_method: 'test',
+      payment_method: 'swish',
       amount: 1,
       currency: 'SEK',
       payment_reference: `TEST-${Date.now()}`,
-      product_type: 'test',
+      product_type: validProductTypes[0], // Use valid product_type
       product_id: '00000000-0000-0000-0000-000000000000',
       phone_number: '0700000000',
       user_info: { test: true },
-      status: 'TEST'
+      status: 'CREATED'
     };
 
     const { data: insertData, error: insertError } = await supabase
@@ -77,7 +85,8 @@ export async function GET() {
       success: !insertError,
       insertedId: insertData?.id,
       errorCode: insertError?.code,
-      errorMessage: insertError?.message
+      errorMessage: insertError?.message,
+      productTypeUsed: validProductTypes[0]
     });
 
     let updateResult = null;
@@ -91,7 +100,7 @@ export async function GET() {
       const { data: updateData, error } = await supabase
         .from('payments')
         .update({ 
-          status: 'TEST_UPDATED',
+          status: 'DECLINED',
           metadata: { test_update: true }
         })
         .eq('id', insertData.id)
@@ -125,6 +134,40 @@ export async function GET() {
       });
     }
 
+    // If the insert failed but we weren't able to get valid product_types,
+    // let's try again with some manual product types
+    if (insertError && insertError.code === '23514') {
+      const manualProductTypes = ['course', 'gift_card', 'art_product'];
+      const manualResults = [];
+      
+      for (const productType of manualProductTypes) {
+        logDebug(`[${testId}] Retrying INSERT with product_type: ${productType}`);
+        const { data, error } = await supabase
+          .from('payments')
+          .insert({
+            ...testPayment,
+            product_type: productType
+          })
+          .select('id')
+          .single();
+          
+        manualResults.push({
+          productType,
+          success: !error,
+          id: data?.id,
+          errorCode: error?.code,
+          errorMessage: error?.message
+        });
+        
+        // Clean up if successful
+        if (data?.id) {
+          await supabase.from('payments').delete().eq('id', data.id);
+        }
+      }
+      
+      logDebug(`[${testId}] Manual product_type tests results:`, manualResults);
+    }
+
     return NextResponse.json({
       success: true,
       environment: {
@@ -140,7 +183,8 @@ export async function GET() {
           error: readError ? {
             code: readError.code,
             message: readError.message
-          } : null
+          } : null,
+          validProductTypes: validProductTypes
         },
         insert: {
           success: !insertError,
@@ -149,7 +193,8 @@ export async function GET() {
           error: insertError ? {
             code: insertError.code,
             message: insertError.message
-          } : null
+          } : null,
+          productTypeUsed: validProductTypes[0]
         },
         update: {
           success: !updateError,

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, PostgrestError } from '@supabase/supabase-js';
 import { SwishService } from '@/services/swish/swishService';
 import { logDebug, logError } from '@/lib/logging';
 
@@ -24,6 +24,11 @@ if (!supabaseUrl || !supabaseServiceKey) {
 // Create Supabase client and log its creation
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 logDebug('Supabase client created in cancel endpoint');
+
+// Helper function to detect specific database constraint errors
+function isConstraintError(error: PostgrestError, constraintName: string): boolean {
+  return error.code === '23514' && error.message.includes(constraintName);
+}
 
 export async function POST(request: Request) {
   const requestId = `cancel-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -96,7 +101,8 @@ export async function POST(request: Request) {
       status: payment.status,
       method: payment.payment_method,
       hasSwishId: !!payment.swish_payment_id,
-      swishId: payment.swish_payment_id
+      swishId: payment.swish_payment_id,
+      productType: payment.product_type
     });
 
     // Only allow cancellation if payment is in CREATED state
@@ -116,6 +122,7 @@ export async function POST(request: Request) {
     }
 
     // Try to cancel in Swish first if we have a Swish payment ID
+    let swishCancelled = false;
     if (payment.swish_payment_id) {
       try {
         logDebug(`[${requestId}] Attempting to cancel payment in Swish`, {
@@ -131,12 +138,24 @@ export async function POST(request: Request) {
           paymentReference,
           swishPaymentId: payment.swish_payment_id 
         });
+        swishCancelled = true;
       } catch (swishError) {
         logError(`[${requestId}] Error cancelling payment in Swish:`, swishError);
-        // We continue to update our database even if Swish call fails
-        // The callback from Swish will eventually update the status if needed
+        // Continue to update our database even if Swish call fails
       }
     }
+
+    // Prepare metadata for update
+    const metadataUpdate = {
+      ...payment.metadata,
+      cancellation: {
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: cancelledBy,
+        cancelled_from: cancelledFrom,
+        previous_status: payment.status,
+        swish_cancelled: swishCancelled
+      }
+    };
 
     // Update payment status in database
     logDebug(`[${requestId}] Updating payment status in database`, { 
@@ -153,17 +172,9 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
         cancelled_by: cancelledBy,
         cancelled_from: cancelledFrom,
-        metadata: {
-          ...payment.metadata,
-          cancellation: {
-            cancelled_at: new Date().toISOString(),
-            cancelled_by: cancelledBy,
-            cancelled_from: cancelledFrom,
-            previous_status: payment.status
-          }
-        }
+        metadata: metadataUpdate
       })
-      .eq('payment_reference', paymentReference);
+      .eq('id', payment.id);  // Using the ID instead of payment_reference for more precise matching
     const updateDuration = Date.now() - updateStart;
 
     logDebug(`[${requestId}] Update payment status result in ${updateDuration}ms`, { 
@@ -175,6 +186,26 @@ export async function POST(request: Request) {
 
     if (updateError) {
       logError(`[${requestId}] Error updating payment status:`, updateError);
+      
+      // If there's an error but the Swish cancellation succeeded,
+      // we should still return success to the client
+      if (swishCancelled) {
+        logDebug(`[${requestId}] Returning success despite database error because Swish cancellation succeeded`);
+        return NextResponse.json({ 
+          success: true,
+          message: 'Payment was cancelled in Swish, but database update failed',
+          details: {
+            swishCancelled: true,
+            databaseUpdated: false,
+            error: updateError.message
+          },
+          data: { 
+            paymentReference,
+            status: 'DECLINED'
+          }
+        });
+      }
+      
       return NextResponse.json(
         { 
           success: false, 
@@ -189,12 +220,17 @@ export async function POST(request: Request) {
 
     logDebug(`[${requestId}] Payment cancelled successfully`, { 
       paymentReference,
-      newStatus: 'DECLINED'
+      newStatus: 'DECLINED',
+      swishCancelled
     });
 
     return NextResponse.json({ 
       success: true,
       message: 'Payment cancelled successfully',
+      details: {
+        swishCancelled,
+        databaseUpdated: true
+      },
       data: { 
         paymentReference,
         status: 'DECLINED'
