@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { PaymentStatus } from '@/types/payment';
 import { z } from 'zod';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 const CancelPaymentSchema = z.object({
   paymentReference: z.string(),
@@ -9,7 +15,6 @@ const CancelPaymentSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient();
     const body = await request.json();
     
     // Validate request body
