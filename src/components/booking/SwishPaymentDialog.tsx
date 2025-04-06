@@ -17,12 +17,14 @@ import { FaSpinner } from 'react-icons/fa';
 interface SwishPaymentDialogProps {
   open: boolean;
   onClose: () => void;
+  onCancel: () => void;  // New prop for handling cancellation
   paymentStatus: PaymentStatus | null;
 }
 
 const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
   open,
   onClose,
+  onCancel,
   paymentStatus,
 }) => {
   const [processingTime, setProcessingTime] = useState(0);
@@ -71,10 +73,17 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
   
+  // Handle user-initiated cancellation
+  const handleCancel = () => {
+    if (window.confirm('Är du säker på att du vill avbryta betalningen?')) {
+      onCancel();
+    }
+  };
+  
   return (
     <Dialog 
       open={open} 
-      onClose={onClose}
+      onClose={paymentStatus !== PAYMENT_STATUS.CREATED ? onClose : undefined}  // Only allow closing if not in CREATED state
       maxWidth="sm"
       fullWidth
     >
@@ -87,12 +96,12 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
             <FaSpinner className="animate-spin text-primary text-2xl mb-4" />
             <h3 className="text-lg font-semibold mb-2">Betalning behandlas</h3>
             <p className="text-center mb-4">
-              Din betalning behandlas för närvarande. 
+              {/* Din betalning behandlas för närvarande.  */}
               <br />
-              <strong>Se till att godkänna betalningen i Swish-appen!</strong>
+              <strong>Öppna Swish-appen och godkänn betalningen.</strong>
             </p>
             <p className="text-center text-sm text-gray-500">
-              Lämna inte sidan. Statusen uppdateras automatiskt när betalningen är klar.
+              Stanna kvar på sidan till betalningen är genomförd. 
               <br />
               <span className="font-semibold">Behandlar: {formatTime(processingTime)}</span>
             </p>
@@ -137,10 +146,10 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
             <CancelIcon color="error" sx={{ fontSize: 48, mb: 2 }} />
             <Typography variant="body1" gutterBottom>
-              Betalningen avbröts
+              Betalningen avbröts i Swish-appen
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Du kan stänga detta fönster och försöka igen
+              Du kan stänga detta fönster och försöka igen eller välja en annan betalningsmetod
             </Typography>
           </Box>
         )}
@@ -158,8 +167,22 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
         )}
       </DialogContent>
       <DialogActions>
-        {((paymentStatus === PAYMENT_STATUS.DECLINED || paymentStatus === PAYMENT_STATUS.ERROR) && showError) && (
-          <Button onClick={onClose}>Stäng</Button>
+        {paymentStatus === PAYMENT_STATUS.CREATED && (
+          <Button 
+            onClick={handleCancel}
+            color="error"
+            variant="outlined"
+          >
+            Avbryt betalning
+          </Button>
+        )}
+        {(paymentStatus === PAYMENT_STATUS.DECLINED || paymentStatus === PAYMENT_STATUS.ERROR || paymentStatus === PAYMENT_STATUS.PAID) && (
+          <Button 
+            onClick={onClose}
+            variant="contained"
+          >
+            {paymentStatus === PAYMENT_STATUS.PAID ? 'Fortsätt' : 'Stäng'}
+          </Button>
         )}
       </DialogActions>
     </Dialog>

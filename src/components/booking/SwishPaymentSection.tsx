@@ -209,6 +209,31 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     }
   };
 
+  const handleCancelPayment = async () => {
+    try {
+      // Call API to cancel the payment
+      const response = await fetch(`/api/payments/swish/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paymentReference }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to cancel payment:', await response.json());
+      }
+
+      // Update local state
+      setPaymentStatus(PaymentStatus.DECLINED);
+      setShowPaymentDialog(false);
+      onPaymentComplete(false);
+    } catch (error) {
+      console.error('Error cancelling payment:', error);
+      setPaymentStatus(PaymentStatus.ERROR);
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     handleCreatePayment
   }));
@@ -225,6 +250,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       <SwishPaymentDialog
         open={showPaymentDialog}
         onClose={handleClosePaymentDialog}
+        onCancel={handleCancelPayment}
         paymentStatus={paymentStatus}
       />
     </Box>
