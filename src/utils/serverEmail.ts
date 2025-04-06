@@ -1,6 +1,11 @@
 import nodemailer from 'nodemailer';
 import { UserInfo, PaymentDetails } from '@/types/booking';
 import { buildConfirmationEmail } from '@/utils/emailBuilder';
+import { promisify } from 'util';
+import { readFile } from 'fs';
+import path from 'path';
+import SMTPTransport from 'nodemailer/lib/smtp-transport';
+import Mail from 'nodemailer/lib/mailer';
 
 // Email configuration for server-side sending
 const emailConfig = {
@@ -18,25 +23,49 @@ const emailConfig = {
   bccEmail: process.env.BCC_EMAIL || ''
 };
 
-// Function to log detailed SMTP errors
+// Longer keep-alive timer for email sending (30 seconds instead of 15)
+const EMAIL_KEEP_ALIVE_MS = 30000;
+
+// Simple format price helper function to avoid import dependency
+function formatPrice(price: number): string {
+  return price.toLocaleString('sv-SE');
+}
+
+// Helper function to create a keep-alive promise
+const createKeepAlivePromise = (timeInMs = EMAIL_KEEP_ALIVE_MS): Promise<void> => {
+  console.log(`📧 KEEP-ALIVE: Creating email keep-alive timer for ${timeInMs}ms`);
+  return new Promise(resolve => {
+    const timerId = setTimeout(() => {
+      console.log('📧 KEEP-ALIVE: Email timer finished, resolving promise');
+      resolve();
+    }, timeInMs);
+    
+    // Ensure timer isn't lost to garbage collection - fix TypeScript errors
+    const globalAny = global as any;
+    globalAny.setTimeout = globalAny.setTimeout || setTimeout;
+    if (!globalAny.keepAliveTimers) {
+      globalAny.keepAliveTimers = [];
+    }
+    globalAny.keepAliveTimers.push(timerId);
+  });
+};
+
+// Function to log SMTP errors in detail
 function logSMTPError(error: any) {
-  console.error('📧 SMTP ERROR DETAILS:');
-  
-  if (error && typeof error === 'object') {
-    console.error(`📧 Error code: ${error.code || 'Unknown'}`);
-    console.error(`📧 Server response: ${error.response || 'No response'}`);
-    console.error(`📧 Response code: ${error.responseCode || 'No code'}`);
-    console.error(`📧 Failed command: ${error.command || 'Unknown command'}`);
-    console.error(`📧 Error number: ${error.errno || 'Unknown'}`);
-    console.error(`📧 System call: ${error.syscall || 'Unknown'}`);
-    console.error(`📧 Hostname: ${error.hostname || 'Unknown'}`);
-    console.error(`📧 Port: ${error.port || 'Unknown'}`);
-    console.error(`📧 Auth user: ${error.source?.options?.auth?.user || 'Unknown'}`);
-    console.error(`📧 Auth method: ${error.source?.options?.auth?.method || 'Unknown'}`);
-    console.error(`📧 Stack trace: ${error.stack || 'No stack trace'}`);
-  } else {
-    console.error(`📧 Unknown error type: ${error}`);
-  }
+  console.error('📧 SMTP ERROR:', {
+    name: error?.name,
+    message: error?.message,
+    code: error?.code,
+    command: error?.command,
+    responseCode: error?.responseCode,
+    response: error?.response,
+    source: error?.source,
+    hostname: error?.address,
+    port: error?.port,
+    username: error?.username ? '[set]' : '[not set]',
+    method: error?.method,
+    tlsError: error?.cert || error?.tls || null,
+  });
 }
 
 // Create a reusable transporter
@@ -366,6 +395,9 @@ export async function sendServerInvoiceEmail(params: {
     console.log(`📧 Number of attachments: ${attachments.length}`);
     console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
+    // Create a keep-alive timer to keep the function running while nodemailer does its work
+    const keepAlivePromise = createKeepAlivePromise();
+    
     try {
       const info = await transporter.sendMail(mailOptions);
       
@@ -383,6 +415,9 @@ export async function sendServerInvoiceEmail(params: {
       
       console.log(`📧 Total email processing time: ${Date.now() - startTime}ms`);
       console.log('📧 ===========================================');
+      
+      // Wait for keep-alive timer to ensure email has time to be delivered
+      await keepAlivePromise;
       
       return {
         success: true,
@@ -505,6 +540,9 @@ export async function sendServerBookingConfirmationEmail(params: {
     console.log(`📧 Email subject: Bokningsbekräftelse - ${params.courseDetails.title}`);
     console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
+    // Create a keep-alive timer to keep the function running while nodemailer does its work
+    const keepAlivePromise = createKeepAlivePromise();
+    
     try {
       const info = await transporter.sendMail(mailOptions);
       
@@ -522,6 +560,9 @@ export async function sendServerBookingConfirmationEmail(params: {
       
       console.log(`📧 Total email processing time: ${Date.now() - startTime}ms`);
       console.log('📧 ===========================================');
+      
+      // Wait for keep-alive timer to ensure email has time to be delivered
+      await keepAlivePromise;
       
       return {
         success: true,
@@ -666,6 +707,9 @@ export async function sendServerGiftCardEmail(params: {
     console.log(`📧 Has attachment: ${params.pdfBuffer ? 'Yes' : 'No'}`);
     console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
+    // Create a keep-alive timer to keep the function running while nodemailer does its work
+    const keepAlivePromise = createKeepAlivePromise();
+    
     try {
       const info = await transporter.sendMail(mailOptions);
       
@@ -683,6 +727,9 @@ export async function sendServerGiftCardEmail(params: {
       
       console.log(`📧 Total email processing time: ${Date.now() - startTime}ms`);
       console.log('📧 ===========================================');
+      
+      // Wait for keep-alive timer to ensure email has time to be delivered
+      await keepAlivePromise;
       
       return {
         success: true,
@@ -820,6 +867,9 @@ export async function sendServerProductOrderConfirmationEmail(params: {
     console.log(`📧 Email subject: Orderbekräftelse - Studio Clay`);
     console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
+    // Create a keep-alive timer to keep the function running while nodemailer does its work
+    const keepAlivePromise = createKeepAlivePromise();
+    
     try {
       const info = await transporter.sendMail(mailOptions);
       
@@ -837,6 +887,9 @@ export async function sendServerProductOrderConfirmationEmail(params: {
       
       console.log(`📧 Total email processing time: ${Date.now() - startTime}ms`);
       console.log('📧 ===========================================');
+      
+      // Wait for keep-alive timer to ensure email has time to be delivered
+      await keepAlivePromise;
       
       return {
         success: true,
