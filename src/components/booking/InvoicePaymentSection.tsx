@@ -80,20 +80,24 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
 
   const handleCreatePayment = async (): Promise<boolean> => {
     if (!validateFields()) {
+      console.log('InvoicePaymentSection: Field validation failed');
       return false;
     }
 
     try {
+      console.log('InvoicePaymentSection: Starting payment creation process');
       setShowDialog(true);
       setStatus('loading');
 
       // Check if this is a gift card payment
       const isGiftCard = courseId === 'gift-card';
+      console.log('InvoicePaymentSection: Is gift card payment:', isGiftCard);
       
       // If this is a gift card, get the item details from localStorage
       let itemDetails = null;
       if (isGiftCard) {
         try {
+          console.log('InvoicePaymentSection: Attempting to get gift card details');
           // Try to get gift card details using both storage helpers
           const giftCardDetails = await import('@/utils/flowStorage').then(module => 
             module.getGiftCardDetails()
@@ -101,60 +105,100 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
           
           if (giftCardDetails) {
             itemDetails = giftCardDetails;
-            console.log('INVOICE-1: Using gift card details from flowStorage:', itemDetails);
+            console.log('INVOICE-1: Using gift card details from flowStorage:', JSON.stringify(itemDetails));
           } else {
             // Fallback to general item details
+            console.log('InvoicePaymentSection: Gift card details not found, trying general item details');
             const generalItemDetails = await import('@/utils/flowStorage').then(module => 
               module.getItemDetails()
             );
             
             if (generalItemDetails) {
               itemDetails = generalItemDetails;
-              console.log('INVOICE-2: Using item details from flowStorage:', itemDetails);
+              console.log('INVOICE-2: Using item details from flowStorage:', JSON.stringify(itemDetails));
             } else {
               // Last resort: try legacy localStorage directly
+              console.log('InvoicePaymentSection: No item details in flowStorage, trying localStorage directly');
               const storedItemDetails = localStorage.getItem('itemDetails');
               if (storedItemDetails) {
-                itemDetails = JSON.parse(storedItemDetails);
-                console.log('INVOICE-3: Using item details from direct localStorage:', itemDetails);
+                try {
+                  itemDetails = JSON.parse(storedItemDetails);
+                  console.log('INVOICE-3: Using item details from direct localStorage:', JSON.stringify(itemDetails));
+                } catch (parseError) {
+                  console.error('InvoicePaymentSection: Error parsing item details from localStorage:', parseError);
+                }
+              } else {
+                console.log('InvoicePaymentSection: No item details found in any storage');
               }
             }
           }
         } catch (e) {
-          console.error('Error getting gift card details:', e);
+          console.error('InvoicePaymentSection: Error getting gift card details:', e);
         }
       }
 
+      console.log('InvoicePaymentSection: Preparing payment request data');
+      const requestData = {
+        courseId,
+        userInfo,
+        paymentDetails: {
+          method: 'invoice',
+          invoiceDetails: {
+            address,
+            postalCode: postalCode.replace(/\s/g, ''),
+            city,
+            reference: reference.trim() || undefined,
+          }
+        },
+        amount,
+        product_type,
+        numberOfParticipants: parseInt(userInfo.numberOfParticipants) || 1,
+        itemDetails, // Include item details for gift cards
+      };
+      
+      console.log('InvoicePaymentSection: Payment request data:', JSON.stringify({
+        ...requestData,
+        userInfo: {
+          ...requestData.userInfo,
+          email: requestData.userInfo.email ? '***@***.***' : undefined,
+          phone: requestData.userInfo.phone ? '***' : undefined
+        }
+      }));
+
+      console.log('InvoicePaymentSection: Sending request to /api/invoice/create');
       const response = await fetch('/api/invoice/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          courseId,
-          userInfo,
-          paymentDetails: {
-            method: 'invoice',
-            invoiceDetails: {
-              address,
-              postalCode: postalCode.replace(/\s/g, ''),
-              city,
-              reference: reference.trim() || undefined,
-            }
-          },
-          amount,
-          product_type,
-          numberOfParticipants: parseInt(userInfo.numberOfParticipants) || 1,
-          itemDetails, // Include item details for gift cards
-        }),
+        body: JSON.stringify(requestData),
       });
+      
+      console.log('InvoicePaymentSection: Response status:', response.status);
 
-      const data = await response.json();
+      let data;
+      try {
+        const responseText = await response.text();
+        console.log('InvoicePaymentSection: Raw response:', responseText);
+        
+        try {
+          data = JSON.parse(responseText);
+          console.log('InvoicePaymentSection: Parsed response data:', data);
+        } catch (parseError) {
+          console.error('InvoicePaymentSection: Error parsing response JSON:', parseError);
+          throw new Error(`Failed to parse response: ${responseText}`);
+        }
+      } catch (textError) {
+        console.error('InvoicePaymentSection: Error getting response text:', textError);
+        throw new Error('Failed to read response');
+      }
 
       if (!data.success) {
+        console.error('InvoicePaymentSection: API returned error:', data.error);
         throw new Error(data.error || 'Failed to create invoice');
       }
 
+      console.log('InvoicePaymentSection: Payment creation successful:', data);
       setInvoiceNumber(data.invoiceNumber);
       setBookingReference(data.bookingReference);
       setStatus('success');
@@ -180,7 +224,7 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
               code: data.giftCardCode // Save code if available
             };
             
-            console.log('INVOICE-5: Updating gift card details with ID:', updatedGiftCardDetails);
+            console.log('INVOICE-5: Updating gift card details with ID:', JSON.stringify(updatedGiftCardDetails));
             setGiftCardDetails(updatedGiftCardDetails);
           }
           
@@ -192,7 +236,7 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
               id: cardId,
               code: data.giftCardCode
             };
-            console.log('INVOICE-6: Updating item details with ID:', updatedItemDetails);
+            console.log('INVOICE-6: Updating item details with ID:', JSON.stringify(updatedItemDetails));
             setItemDetails(updatedItemDetails);
           }
           
@@ -228,7 +272,7 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
       
       return true;
     } catch (error) {
-      console.error('Error creating invoice:', error);
+      console.error('InvoicePaymentSection: Error creating invoice:', error);
       setStatus('error');
       onValidationError?.('Det gick inte att skapa fakturan. Försök igen senare.');
       return false;

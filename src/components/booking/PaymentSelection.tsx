@@ -194,6 +194,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('PaymentSelection.handleSubmit called');
     
     // Prevent double-submits
     if (isSubmitting) {
@@ -202,31 +203,39 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     }
     
     if (!validateForm()) {
+      console.log('Form validation failed');
       return;
     }
 
+    console.log('Setting isSubmitting to true');
     setIsSubmitting(true);
     setSubmitError(null);
 
     try {
+      console.log('Processing payment with method:', paymentDetails.method);
       let success = false;
       
       if (paymentDetails.method === 'swish') {
         // For Swish, we trigger the payment creation
+        console.log('Starting Swish payment flow');
         // The dialog and status handling is managed by SwishPaymentSection
         success = await swishPaymentRef.current?.handleCreatePayment() || false;
+        console.log('Swish payment creation result:', success);
         
         // Important: We don't immediately redirect for Swish
         // The SwishPaymentSection will handle the payment status and redirect
         // through its onPaymentComplete callback when payment is confirmed
         if (!success) {
+          console.log('Swish payment creation failed');
           setSubmitError('Det gick inte att skapa Swish-betalningen. Försök igen senare.');
         }
         // Don't call handlePaymentComplete here - it will be called from SwishPaymentSection
       } else if (paymentDetails.method === 'invoice') {
         // For Invoice, we trigger the payment creation and wait for success
+        console.log('Starting Invoice payment flow');
         // The InvoicePaymentSection handles the validation and creation
         success = await invoicePaymentRef.current?.handleCreatePayment() || false;
+        console.log('Invoice payment creation result:', success);
         
         if (success) {
           // Store payment info and redirect for invoice payments
@@ -237,20 +246,19 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             payment_date: new Date().toISOString(),
             reference: uuidv4()
           };
+          console.log('Invoice payment successful, storing payment info:', paymentInfo);
           handlePaymentSuccess(paymentInfo);
         } else {
+          console.log('Invoice payment creation failed');
           setSubmitError('Det gick inte att skapa fakturan. Försök igen senare.');
         }
       }
     } catch (error) {
-      console.error('Payment error:', error);
-      setSubmitError('Det gick inte att skapa betalningen. Försök igen senare.');
+      console.error('Error in payment processing:', error);
+      setSubmitError('Ett oväntat fel uppstod. Försök igen senare.');
     } finally {
-      // Add a small delay before enabling the button again
-      // to prevent accidental double-clicks
-      setTimeout(() => {
-        setIsSubmitting(false);
-      }, 1000);
+      console.log('Setting isSubmitting to false');
+      setIsSubmitting(false);
     }
   };
 
@@ -835,7 +843,11 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             // Disable the button immediately when clicked
             if (!isSubmitting) {
               console.log('Submit button clicked');
+              console.log('Current payment method:', paymentDetails.method);
+              console.log('Current form state:', { userInfo, courseId, paymentDetails, isSubmitting });
               handleSubmit(e);
+            } else {
+              console.log('Button clicked but submission already in progress');
             }
           }}
           disabled={isSubmitting}
