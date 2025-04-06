@@ -285,30 +285,98 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const handlePaymentSuccess = (paymentData: any) => {
     console.log('Payment success handler called with data:', paymentData);
     
+    // If paymentData is false, it means payment was cancelled or failed
+    if (paymentData === false) {
+        return handlePaymentFailure('DECLINED');
+    }
+
     // Create the payment info with correct status
     const paymentInfo = {
-      reference: typeof paymentData === 'string' ? paymentData : paymentData.reference || uuidv4(),
-      status: paymentDetails.method === 'invoice' ? 'CREATED' : 'PAID',
-      payment_method: paymentDetails.method,
-      payment_date: new Date().toISOString(),
-      amount: calculatePrice(),
+        reference: typeof paymentData === 'string' ? paymentData : paymentData.reference || uuidv4(),
+        status: paymentDetails.method === 'invoice' ? 'CREATED' : 'PAID',
+        payment_method: paymentDetails.method,
+        payment_date: new Date().toISOString(),
+        amount: calculatePrice(),
     };
     
-    console.log('Saving payment info with status:', paymentInfo.status);
+    console.log('Saving successful payment info:', paymentInfo);
     
     // Save payment info to flowStorage
     setPaymentInfo(paymentInfo);
     
-    // Navigate to confirmation page
+    // Navigate to confirmation page only for successful payments
     if (onNext) {
-      onNext(paymentInfo);
+        onNext(paymentInfo);
     } else {
-      // Legacy navigation as fallback
-      const nextUrl = getNextStepUrl(GenericStep.PAYMENT, flowType === FlowType.GIFT_CARD ? FlowType.GIFT_CARD : FlowType.COURSE_BOOKING, courseId);
-      if (nextUrl) {
-        router.push(nextUrl);
-      }
+        const nextUrl = getNextStepUrl(
+            GenericStep.PAYMENT, 
+            flowType === FlowType.GIFT_CARD ? FlowType.GIFT_CARD : FlowType.COURSE_BOOKING, 
+            courseId
+        );
+        if (nextUrl) {
+            router.push(nextUrl);
+        }
     }
+  };
+
+  // New handler for failed payments
+  const handlePaymentFailure = (status: 'DECLINED' | 'ERROR') => {
+    console.log('Payment failure handler called with status:', status);
+    
+    const paymentInfo = {
+        reference: getPaymentReference() || uuidv4(),
+        status: status,
+        payment_method: paymentDetails.method,
+        payment_date: new Date().toISOString(),
+        amount: calculatePrice(),
+        error: status === 'ERROR' ? 'Payment processing error' : 'Payment declined'
+    };
+    
+    console.log('Saving failed payment info:', paymentInfo);
+    
+    // Save the failed status
+    setPaymentInfo(paymentInfo);
+    
+    // Show error message to user
+    setSubmitError(
+        status === 'ERROR' 
+            ? 'Ett fel uppstod vid betalningen. Försök igen senare.' 
+            : 'Betalningen avbröts.'
+    );
+    
+    // Reset payment state
+    setPaymentDetails(prev => ({
+        ...prev,
+        status: null
+    }));
+  };
+
+  // New handler for cancelled payments
+  const handlePaymentCancellation = () => {
+    console.log('Payment cancellation handler called');
+    
+    const paymentInfo = {
+        reference: getPaymentReference() || uuidv4(),
+        status: 'DECLINED',
+        payment_method: paymentDetails.method,
+        payment_date: new Date().toISOString(),
+        amount: calculatePrice(),
+        cancelled_by_user: true
+    };
+    
+    console.log('Saving cancelled payment info:', paymentInfo);
+    
+    // Save the cancelled status
+    setPaymentInfo(paymentInfo);
+    
+    // Reset payment state
+    setPaymentDetails(prev => ({
+        ...prev,
+        status: null
+    }));
+    
+    // Show message to user
+    setSubmitError('Betalningen avbröts. Du kan välja en annan betalningsmetod eller försöka igen.');
   };
 
   // Helper function to get gift card amount from localStorage
@@ -418,6 +486,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                         ? (flowData?.itemDetails?.amount || getGiftCardAmount())
                         : calculatePrice()}
                       onPaymentComplete={handlePaymentSuccess}
+                      onPaymentFailure={handlePaymentFailure}
+                      onPaymentCancelled={handlePaymentCancellation}
                       disabled={isSubmitting}
                     />
                   )}

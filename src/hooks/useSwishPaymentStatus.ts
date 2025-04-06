@@ -99,16 +99,25 @@ export const useSwishPaymentStatus = ({
 
   // Handle closing the payment dialog
   const handleClosePaymentDialog = () => {
-    if (paymentStatus === PAYMENT_STATUS.ERROR || paymentStatus === PAYMENT_STATUS.DECLINED) {
-      // Stop polling
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
+    // Always stop polling when dialog is closed
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    
+    // Set cancelled flag if payment was not completed
+    if (paymentStatus === PAYMENT_STATUS.ERROR || 
+        paymentStatus === PAYMENT_STATUS.DECLINED || 
+        paymentStatus === PAYMENT_STATUS.CREATED) {
       isCancelledRef.current = true;
-      setShowPaymentDialog(false);
-      setPaymentStatus(null);
-      // Clear the payment reference from flowStorage
+    }
+    
+    // Reset state
+    setShowPaymentDialog(false);
+    setPaymentStatus(null);
+    
+    // Clear the payment reference from flowStorage only if payment was not successful
+    if (paymentStatus !== PAYMENT_STATUS.PAID) {
       setPaymentReference("");
     }
   };
@@ -146,7 +155,11 @@ export const useSwishPaymentStatus = ({
     let redirectTimeout: NodeJS.Timeout;
 
     const pollStatus = async () => {
-      if (!showPaymentDialog || isCancelledRef.current) return;
+      // Don't poll if dialog is closed or payment is cancelled
+      if (!showPaymentDialog || isCancelledRef.current) {
+        console.log(`[${sessionId}] Polling stopped - Dialog closed or payment cancelled`);
+        return;
+      }
       
       if (attempts >= maxAttempts) {
         console.log(`[${sessionId}] Status check reached max attempts (${maxAttempts}). Stopping polling.`);

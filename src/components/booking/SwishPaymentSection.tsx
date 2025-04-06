@@ -28,6 +28,8 @@ interface SwishPaymentSectionProps {
   courseId: string;
   amount: number;
   onPaymentComplete: (success: boolean) => void;
+  onPaymentFailure?: (status: 'DECLINED' | 'ERROR') => void;
+  onPaymentCancelled?: () => void;
   onValidationError?: (error: string) => void;
   disabled?: boolean;
 }
@@ -39,6 +41,8 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
   courseId,
   amount,
   onPaymentComplete,
+  onPaymentFailure,
+  onPaymentCancelled,
   onValidationError,
   disabled = false,
 }, ref) => {
@@ -239,12 +243,26 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       if (data.success) {
         setPaymentStatus(PaymentStatus.DECLINED);
         setShowPaymentDialog(false);
-        onPaymentComplete(false);
+        if (onPaymentCancelled) {
+          onPaymentCancelled();
+        } else {
+          onPaymentComplete(false);
+        }
       } else {
         console.error('Payment cancellation failed:', data.error);
+        if (onPaymentFailure) {
+          onPaymentFailure('ERROR');
+        } else {
+          onPaymentComplete(false);
+        }
       }
     } catch (error) {
       console.error('Error cancelling payment:', error);
+      if (onPaymentFailure) {
+        onPaymentFailure('ERROR');
+      } else {
+        onPaymentComplete(false);
+      }
     }
   };
 
