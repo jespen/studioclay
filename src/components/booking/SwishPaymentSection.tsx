@@ -151,7 +151,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
 
       console.log('Sending payment request with data:', {
         ...requestData,
-        phone_number: '******' + requestData.phone_number.slice(-4), // Mask phone number for privacy
+        phone_number: '******' + requestData.phone_number.slice(-4),
         user_info: {
           ...requestData.user_info,
           phone: '******' + requestData.user_info.phone.slice(-4)
@@ -187,6 +187,13 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       }
 
       const data = await response.json();
+      if (!data.paymentReference) {
+        console.error('No payment reference received:', data);
+        setPaymentStatus(PaymentStatus.ERROR);
+        setError('Ett fel uppstod vid skapande av betalning (ingen referens)');
+        return false;
+      }
+
       console.log('Payment created successfully:', {
         paymentReference: data.paymentReference,
         flowType,
@@ -211,6 +218,14 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
 
   const handleCancelPayment = async () => {
     try {
+      if (!paymentReference) {
+        console.error('No payment reference available for cancellation');
+        setPaymentStatus(PaymentStatus.ERROR);
+        setShowPaymentDialog(false);
+        onPaymentComplete(false);
+        return;
+      }
+
       // Call API to cancel the payment
       const response = await fetch(`/api/payments/swish/cancel`, {
         method: 'POST',
@@ -222,15 +237,20 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
 
       if (!response.ok) {
         console.error('Failed to cancel payment:', await response.json());
+        setPaymentStatus(PaymentStatus.ERROR);
+      } else {
+        // Only update status to DECLINED if cancel was successful
+        setPaymentStatus(PaymentStatus.DECLINED);
       }
 
-      // Update local state
-      setPaymentStatus(PaymentStatus.DECLINED);
+      // Always close dialog and notify parent
       setShowPaymentDialog(false);
       onPaymentComplete(false);
     } catch (error) {
       console.error('Error cancelling payment:', error);
       setPaymentStatus(PaymentStatus.ERROR);
+      setShowPaymentDialog(false);
+      onPaymentComplete(false);
     }
   };
 

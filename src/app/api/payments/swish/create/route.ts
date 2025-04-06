@@ -420,8 +420,12 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
           success: true,
+          paymentReference: paymentData.payment_reference,
           data: {
-            reference: paymentReference
+            id: paymentData.id,
+            status: paymentData.status,
+            amount: paymentData.amount,
+            currency: paymentData.currency
           }
         });
 
