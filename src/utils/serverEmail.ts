@@ -31,26 +31,24 @@ function formatPrice(price: number): string {
   return price.toLocaleString('sv-SE');
 }
 
-// Helper function to create a keep-alive promise with a timer
-function createKeepAlivePromise(seconds: number, requestId?: string): Promise<void> {
-  console.log(`📧 KEEP-ALIVE: Creating keep-alive timer for ${seconds} seconds${requestId ? ` [${requestId}]` : ''}`);
-  
+// Helper function to create a keep-alive promise
+const createKeepAlivePromise = (timeInMs = EMAIL_KEEP_ALIVE_MS): Promise<void> => {
+  console.log(`📧 KEEP-ALIVE: Creating email keep-alive timer for ${timeInMs}ms`);
   return new Promise(resolve => {
     const timerId = setTimeout(() => {
-      console.log(`📧 KEEP-ALIVE: Timer completed after ${seconds} seconds${requestId ? ` [${requestId}]` : ''}`);
+      console.log('📧 KEEP-ALIVE: Email timer finished, resolving promise');
       resolve();
-    }, seconds * 1000);
+    }, timeInMs);
     
-    // Ensure the timer is not garbage collected
-    // We store a reference to it in the global object
-    if (typeof globalThis !== 'undefined') {
-      // @ts-ignore - Ignore the type checking for this global variable
-      globalThis.keepAliveTimers = globalThis.keepAliveTimers || [];
-      // @ts-ignore - Ignore the type checking for this global variable
-      globalThis.keepAliveTimers.push(timerId);
+    // Ensure timer isn't lost to garbage collection - fix TypeScript errors
+    const globalAny = global as any;
+    globalAny.setTimeout = globalAny.setTimeout || setTimeout;
+    if (!globalAny.keepAliveTimers) {
+      globalAny.keepAliveTimers = [];
     }
+    globalAny.keepAliveTimers.push(timerId);
   });
-}
+};
 
 // Function to log SMTP errors in detail
 function logSMTPError(error: any) {
@@ -398,7 +396,7 @@ export async function sendServerInvoiceEmail(params: {
     console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
     // Create a keep-alive timer to keep the function running while nodemailer does its work
-    const keepAlivePromise = createKeepAlivePromise(60);
+    const keepAlivePromise = createKeepAlivePromise();
     
     try {
       const info = await transporter.sendMail(mailOptions);
@@ -543,7 +541,7 @@ export async function sendServerBookingConfirmationEmail(params: {
     console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
     // Create a keep-alive timer to keep the function running while nodemailer does its work
-    const keepAlivePromise = createKeepAlivePromise(60);
+    const keepAlivePromise = createKeepAlivePromise();
     
     try {
       const info = await transporter.sendMail(mailOptions);
@@ -710,7 +708,7 @@ export async function sendServerGiftCardEmail(params: {
     console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
     // Create a keep-alive timer to keep the function running while nodemailer does its work
-    const keepAlivePromise = createKeepAlivePromise(60);
+    const keepAlivePromise = createKeepAlivePromise();
     
     try {
       const info = await transporter.sendMail(mailOptions);
@@ -870,7 +868,7 @@ export async function sendServerProductOrderConfirmationEmail(params: {
     console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
     // Create a keep-alive timer to keep the function running while nodemailer does its work
-    const keepAlivePromise = createKeepAlivePromise(60);
+    const keepAlivePromise = createKeepAlivePromise();
     
     try {
       const info = await transporter.sendMail(mailOptions);
@@ -918,403 +916,6 @@ export async function sendServerProductOrderConfirmationEmail(params: {
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Unknown error sending product order confirmation email'
-    };
-  }
-}
-
-export function createTransporter() {
-  console.log('📧 TRANSPORTER DIAGNOSTIC 1: Function createTransporter called');
-  
-  // Log process environment information for debugging
-  const processInfo = {
-    nodeEnv: process.env.NODE_ENV,
-    vercelEnv: process.env.VERCEL_ENV,
-    region: process.env.VERCEL_REGION,
-    isProduction: process.env.NODE_ENV === 'production'
-  };
-  
-  console.log('📧 TRANSPORTER DIAGNOSTIC 2: Process info:', processInfo);
-  
-  // Get email configuration from environment variables
-  const host = process.env.EMAIL_SMTP_HOST || 'smtp.office365.com';
-  const port = parseInt(process.env.EMAIL_SMTP_PORT || '587', 10);
-  const secure = process.env.EMAIL_SMTP_SECURE === 'true';
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
-  const defaultFrom = process.env.EMAIL_FROM || 'eva@studioclay.se';
-  const bcc = process.env.EMAIL_BCC;
-  
-  console.log('📧 =========== EMAIL CONFIGURATION DETAILS ===========');
-  console.log(`📧 Running in environment: ${process.env.NODE_ENV}`);
-  console.log(`📧 VERCEL_ENV: ${process.env.VERCEL_ENV}`);
-  console.log(`📧 SMTP Host: ${host}`);
-  console.log(`📧 SMTP Port: ${port}`);
-  console.log(`📧 SMTP Secure: ${secure}`);
-  console.log(`📧 Email User: ${user}`);
-  console.log(`📧 Email Pass: ${pass ? '[set]' : '[not set]'}`);
-  console.log(`📧 Email Pass Length: ${pass ? pass.length : 0}`);
-  console.log(`📧 Studio Clay Email: default: ${defaultFrom}`);
-  console.log(`📧 BCC Email: ${bcc ? bcc : '[not set]'}`);
-  console.log(`📧 DISABLE_ETHEREAL: default: ${process.env.DISABLE_ETHEREAL}`);
-  console.log('📧 ================================================');
-  
-  if (!user || !pass) {
-    console.error('📧 ERROR: Missing email credentials - user or password not set');
-    console.error(`📧 EMAIL_USER: ${user ? 'set' : 'missing'}`);
-    console.error(`📧 EMAIL_PASS: ${pass ? 'set' : 'missing'}`);
-    throw new Error('Email credentials are missing. Please check environment variables.');
-  }
-  
-  // In production/preview we use the real SMTP server
-  // In development we can use Ethereal for testing unless explicitly disabled
-  const isDevMode = process.env.NODE_ENV === 'development' && process.env.DISABLE_ETHEREAL !== 'true';
-  
-  if (isDevMode) {
-    console.log('📧 Using Ethereal for email testing (development mode)');
-    // For development, we'll create an Ethereal test account in the actual send function
-    return null;
-  } else {
-    console.log('📧 Using real SMTP server for email delivery (production mode)');
-    console.log(`📧 SMTP Configuration: ${host}:${port} (secure: ${secure})`);
-    console.log(`📧 Auth User: ${user}`);
-    
-    // For production, create an actual SMTP transport
-    // When secure is false, we'll use STARTTLS which happens after connecting
-    if (!secure) {
-      console.log('📧 Creating SMTP transport with TLS');
-    } else {
-      console.log('📧 Creating direct secure SMTP transport (SSL/TLS)');
-    }
-    
-    const transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure, // true for 465, false for 587 (STARTTLS)
-      auth: {
-        user,
-        pass
-      },
-      debug: true, // Enable verbose logging
-      logger: true, // Log SMTP traffic
-      connectionTimeout: 30000, // 30 seconds connection timeout 
-      greetingTimeout: 30000, // 30 seconds greeting timeout
-      socketTimeout: 60000, // 60 seconds socket timeout
-    });
-    
-    // Verify the connection configuration
-    // We're doing this here so we can catch configuration errors early
-    console.log('📧 Verifying SMTP connection...');
-    
-    return transporter;
-  }
-}
-
-// Server-side function to send an email with generic structure
-export async function sendServerEmail(options: any): Promise<{ success: boolean; message: string }> {
-  console.log('📧 =========== GENERIC EMAIL SENDING ATTEMPT ===========');
-  console.log(`📧 Time: ${new Date().toISOString()}`);
-  console.log(`📧 To: ${options.to}`);
-  console.log(`📧 Subject: ${options.subject}`);
-  
-  // Create a keep-alive promise to prevent the serverless function from terminating
-  const keepAlivePromise = createKeepAlivePromise(60);
-  
-  try {
-    // Setup email 
-    console.log('📧 Creating email transporter...');
-    const transporter = createTransporter();
-    
-    // Send the email
-    console.log('📧 SMTP SEND STARTING: Attempting to send email via SMTP...');
-    const info = await transporter.sendMail(options);
-    console.log('📧 SMTP SEND SUCCESS: Email sent successfully');
-    console.log('📧 Email delivery info:', info);
-    
-    // Wait for the keep-alive promise to resolve to ensure background processing completes
-    console.log('📧 Waiting for keep-alive timer to complete...');
-    await keepAlivePromise;
-    console.log('📧 Keep-alive timer completed, email process finished');
-    
-    return {
-      success: true,
-      message: 'Email sent successfully'
-    };
-  } catch (error) {
-    console.error('📧 SMTP ERROR:', error);
-    
-    // Specific error handling for authentication errors
-    if (error.message && error.message.includes('authentication')) {
-      console.error('📧 EMAIL AUTHENTICATION ERROR: Check username and password');
-    } else if (error.message && error.message.includes('timed out')) {
-      console.error('📧 EMAIL TIMEOUT ERROR: Connection to SMTP server timed out');
-    }
-    
-    // Wait for the keep-alive promise to resolve before returning
-    await keepAlivePromise;
-    
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : 'Unknown error sending email'
-    };
-  }
-}
-
-// Server-side function to send a booking confirmation email
-export async function sendServerBookingConfirmationEmail(params: any): Promise<{ success: boolean; message: string }> {
-  console.log('📧 =========== BOOKING EMAIL SENDING ATTEMPT ===========');
-  console.log(`📧 Time: ${new Date().toISOString()}`);
-  console.log(`📧 Booking Reference: ${params.bookingReference}`);
-  console.log(`📧 Course: ${params.courseDetails.title}`);
-  console.log(`📧 Date: ${params.courseDetails.start_date}`);
-  console.log(`📧 Recipient: ${params.userInfo.email}`);
-  
-  // Create a keep-alive promise to prevent the serverless function from terminating
-  const keepAlivePromise = createKeepAlivePromise(60);
-  
-  try {
-    // Build the email HTML
-    console.log('📧 Building booking confirmation email HTML...');
-    
-    // Format the date in a nicer way: "Måndag 12 april 2025, 18:00"
-    let formattedDate = 'TBD';
-    try {
-      const date = new Date(params.courseDetails.start_date);
-      formattedDate = date.toLocaleDateString('sv-SE', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-      const time = date.toLocaleTimeString('sv-SE', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      formattedDate = `${formattedDate}, ${time}`;
-    } catch (e) {
-      console.error('📧 Error formatting date:', e);
-    }
-    
-    const emailHtml = `<div style="font-family: Arial, sans-serif; max-width: 600px;">
-      <h2>Bokningsbekräftelse - ${params.courseDetails.title}</h2>
-      <p>Hej ${params.userInfo.firstName}!</p>
-      <p>Tack för din bokning. Vi bekräftar att din plats på kursen är reserverad.</p>
-      
-      <div style="margin: 20px 0; padding: 15px; border: 1px solid #eee; border-radius: 5px;">
-        <h3>Kursinformation</h3>
-        <p><strong>Kurs:</strong> ${params.courseDetails.title}</p>
-        <p><strong>Datum:</strong> ${formattedDate}</p>
-        <p><strong>Plats:</strong> ${params.courseDetails.location || 'Studio Clay, Norrtullsgatan 65, Stockholm'}</p>
-        <p><strong>Bokningsreferens:</strong> ${params.bookingReference}</p>
-        <p><strong>Antal deltagare:</strong> ${params.userInfo.numberOfParticipants || 1}</p>
-        ${params.paymentDetails ? `<p><strong>Betalningsmetod:</strong> ${params.paymentDetails.method === 'swish' ? 'Swish' : 'Faktura'}</p>` : ''}
-        ${params.paymentDetails ? `<p><strong>Status:</strong> ${params.paymentDetails.status === 'PAID' ? 'Betald' : 'Väntande'}</p>` : ''}
-      </div>
-      
-      <div style="margin: 20px 0; padding: 15px; background-color: #f9f9f9; border-radius: 5px;">
-        <h3>Viktig information</h3>
-        <p>Vänligen kom några minuter innan kursstart.</p>
-        <p>Ta med bekväma kläder som tål lera.</p>
-        <p>Allt kursmaterial ingår i priset.</p>
-        ${params.userInfo.specialRequirements ? `<p><strong>Dina specialönskemål:</strong> ${params.userInfo.specialRequirements}</p>` : ''}
-      </div>
-      
-      <p>Om du har några frågor eller behöver ändra din bokning, kontakta oss på <a href="mailto:eva@studioclay.se">eva@studioclay.se</a>.</p>
-      
-      <p>Vänliga hälsningar,<br/>Eva & Studio Clay-teamet</p>
-    </div>`;
-    
-    console.log('📧 Email HTML built successfully');
-    
-    // Setup email 
-    console.log('📧 Creating email transporter...');
-    const transporter = createTransporter();
-    
-    // Email content
-    const mailOptions = {
-      from: `"Studio Clay" <${process.env.EMAIL_FROM || 'eva@studioclay.se'}>`,
-      to: params.userInfo.email,
-      subject: `Bokningsbekräftelse - ${params.courseDetails.title}`,
-      text: `Hej ${params.userInfo.firstName}!\n\nTack för din bokning. Vi bekräftar att din plats på kursen är reserverad.\n\nKursinformation:\nKurs: ${params.courseDetails.title}\nDatum: ${formattedDate}\nPlats: ${params.courseDetails.location || 'Studio Clay, Norrtullsgatan 65, Stockholm'}\nBokningsreferens: ${params.bookingReference}\nAntal deltagare: ${params.userInfo.numberOfParticipants || 1}\n${params.paymentDetails ? `Betalningsmetod: ${params.paymentDetails.method === 'swish' ? 'Swish' : 'Faktura'}\nStatus: ${params.paymentDetails.status === 'PAID' ? 'Betald' : 'Väntande'}` : ''}\n\nViktig information:\nVänligen kom några minuter innan kursstart.\nTa med bekväma kläder som tål lera.\nAllt kursmaterial ingår i priset.\n${params.userInfo.specialRequirements ? `Dina specialönskemål: ${params.userInfo.specialRequirements}` : ''}\n\nOm du har några frågor eller behöver ändra din bokning, kontakta oss på eva@studioclay.se.\n\nVänliga hälsningar,\nEva & Studio Clay-teamet`,
-      html: emailHtml
-    };
-    
-    console.log('📧 Sending booking confirmation email...');
-    console.log(`📧 Email options: From: ${mailOptions.from}, To: ${mailOptions.to}, Subject: ${mailOptions.subject}`);
-    
-    try {
-      console.log('📧 SMTP SEND STARTING: Attempting to send email via SMTP...');
-      const info = await transporter.sendMail(mailOptions);
-      console.log('📧 SMTP SEND SUCCESS: Email sent successfully');
-      console.log('📧 Email delivery info:', info);
-      
-      // Wait for the keep-alive promise to resolve to ensure background processing completes
-      console.log('📧 Waiting for keep-alive timer to complete...');
-      await keepAlivePromise;
-      console.log('📧 Keep-alive timer completed, email process finished');
-      
-      return {
-        success: true,
-        message: 'Booking confirmation email sent successfully'
-      };
-    } catch (smtpError) {
-      console.error('📧 SMTP ERROR:', smtpError);
-      
-      // Specific error handling for authentication errors
-      if (smtpError.message && smtpError.message.includes('authentication')) {
-        console.error('📧 EMAIL AUTHENTICATION ERROR: Check username and password');
-      } else if (smtpError.message && smtpError.message.includes('timed out')) {
-        console.error('📧 EMAIL TIMEOUT ERROR: Connection to SMTP server timed out');
-      }
-      
-      // Wait for the keep-alive promise to resolve before returning
-      await keepAlivePromise;
-      
-      throw smtpError;
-    }
-  } catch (error) {
-    console.error('📧 Error sending booking confirmation email:', error);
-    
-    // Wait for the keep-alive promise to resolve before returning
-    await keepAlivePromise;
-    
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : 'Unknown error sending booking confirmation email'
-    };
-  }
-}
-
-// Server-side function to send a gift card email
-export async function sendServerGiftCardEmail(params: any): Promise<{ success: boolean; message: string }> {
-  console.log('📧 =========== GIFT CARD EMAIL SENDING ATTEMPT ===========');
-  console.log(`📧 Time: ${new Date().toISOString()}`);
-  console.log(`📧 Gift Card Code: ${params.giftCardData.code}`);
-  console.log(`📧 Amount: ${params.giftCardData.amount}`);
-  console.log(`📧 Recipient: ${params.giftCardData.recipient_email}`);
-  console.log(`📧 Sender: ${params.senderInfo.name} (${params.senderInfo.email})`);
-  
-  // Create a keep-alive promise to prevent the serverless function from terminating
-  const keepAlivePromise = createKeepAlivePromise(60);
-  
-  try {
-    // Build the email HTML
-    console.log('📧 Building gift card email HTML...');
-    
-    // Format the expiry date nicely
-    let expiryDate = 'Ett år från utfärdandedatum';
-    try {
-      if (params.giftCardData.expires_at) {
-        const date = new Date(params.giftCardData.expires_at);
-        expiryDate = date.toLocaleDateString('sv-SE', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
-      }
-    } catch (e) {
-      console.error('📧 Error formatting expiry date:', e);
-    }
-    
-    const emailHtml = `<div style="font-family: Arial, sans-serif; max-width: 600px;">
-      <h2>Presentkort - Studio Clay</h2>
-      <p>Hej ${params.giftCardData.recipient_name}!</p>
-      <p>Du har fått ett presentkort från ${params.senderInfo.name}.</p>
-      
-      <div style="margin: 20px 0; padding: 15px; border: 1px solid #eee; background-color: #f9f9f9; border-radius: 5px; text-align: center;">
-        <h3>Presentkort</h3>
-        <p style="font-size: 24px; font-weight: bold;">${params.giftCardData.amount} kr</p>
-        <p style="font-size: 16px;">Kod: <strong>${params.giftCardData.code}</strong></p>
-        <p>Giltigt till: ${expiryDate}</p>
-      </div>
-      
-      ${params.giftCardData.message ? `<div style="margin: 20px 0; padding: 15px; border: 1px solid #eee; border-radius: 5px;">
-        <h3>Personligt meddelande</h3>
-        <p style="font-style: italic;">"${params.giftCardData.message}"</p>
-      </div>` : ''}
-      
-      <div style="margin: 20px 0;">
-        <h3>Hur du använder ditt presentkort</h3>
-        <p>Presentkortet kan användas för alla kurser och produkter på Studio Clay.</p>
-        <p>Besök <a href="https://studioclay.se">studioclay.se</a> för att se vårt utbud av kurser och produkter.</p>
-        <p>Vid bokning av kurs eller köp av produkt, ange presentkortskoden i kassan.</p>
-      </div>
-      
-      <p>Om du har några frågor, kontakta oss på <a href="mailto:eva@studioclay.se">eva@studioclay.se</a>.</p>
-      
-      <p>Vänliga hälsningar,<br/>Eva & Studio Clay-teamet</p>
-    </div>`;
-    
-    console.log('📧 Email HTML built successfully');
-    
-    // Setup email 
-    console.log('📧 Creating email transporter...');
-    const transporter = createTransporter();
-    
-    // Email content with PDF attachment
-    const mailOptions = {
-      from: `"Studio Clay" <${process.env.EMAIL_FROM || 'eva@studioclay.se'}>`,
-      to: params.giftCardData.recipient_email,
-      subject: `Presentkort från ${params.senderInfo.name} - Studio Clay`,
-      text: `Hej ${params.giftCardData.recipient_name}!\n\nDu har fått ett presentkort från ${params.senderInfo.name}.\n\nPresentkort\nBelopp: ${params.giftCardData.amount} kr\nKod: ${params.giftCardData.code}\nGiltigt till: ${expiryDate}\n\n${params.giftCardData.message ? `Personligt meddelande:\n"${params.giftCardData.message}"\n\n` : ''}Hur du använder ditt presentkort:\nPresentkortet kan användas för alla kurser och produkter på Studio Clay.\nBesök studioclay.se för att se vårt utbud av kurser och produkter.\nVid bokning av kurs eller köp av produkt, ange presentkortskoden i kassan.\n\nOm du har några frågor, kontakta oss på eva@studioclay.se.\n\nVänliga hälsningar,\nEva & Studio Clay-teamet`,
-      html: emailHtml,
-      attachments: params.pdfBuffer ? [
-        {
-          filename: `Presentkort-${params.giftCardData.code}.pdf`,
-          content: params.pdfBuffer,
-          contentType: 'application/pdf'
-        }
-      ] : []
-    };
-    
-    // Also send a copy to the sender if their email is available
-    if (params.senderInfo.email) {
-      mailOptions.bcc = params.senderInfo.email;
-      console.log(`📧 Adding BCC to sender: ${params.senderInfo.email}`);
-    }
-    
-    console.log('📧 Sending gift card email...');
-    console.log(`📧 Email options: From: ${mailOptions.from}, To: ${mailOptions.to}, Subject: ${mailOptions.subject}`);
-    console.log(`📧 Attachment included: ${mailOptions.attachments.length > 0 ? 'Yes' : 'No'}`);
-    
-    try {
-      console.log('📧 SMTP SEND STARTING: Attempting to send email via SMTP...');
-      const info = await transporter.sendMail(mailOptions);
-      console.log('📧 SMTP SEND SUCCESS: Email sent successfully');
-      console.log('📧 Email delivery info:', info);
-      
-      // Wait for the keep-alive promise to resolve to ensure background processing completes
-      console.log('📧 Waiting for keep-alive timer to complete...');
-      await keepAlivePromise;
-      console.log('📧 Keep-alive timer completed, email process finished');
-      
-      return {
-        success: true,
-        message: 'Gift card email sent successfully'
-      };
-    } catch (smtpError) {
-      console.error('📧 SMTP ERROR:', smtpError);
-      
-      // Specific error handling for authentication errors
-      if (smtpError.message && smtpError.message.includes('authentication')) {
-        console.error('📧 EMAIL AUTHENTICATION ERROR: Check username and password');
-      } else if (smtpError.message && smtpError.message.includes('timed out')) {
-        console.error('📧 EMAIL TIMEOUT ERROR: Connection to SMTP server timed out');
-      }
-      
-      // Wait for the keep-alive promise to resolve before returning
-      await keepAlivePromise;
-      
-      throw smtpError;
-    }
-  } catch (error) {
-    console.error('📧 Error sending gift card email:', error);
-    
-    // Wait for the keep-alive promise to resolve before returning
-    await keepAlivePromise;
-    
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : 'Unknown error sending gift card email'
     };
   }
 } 
