@@ -204,6 +204,10 @@ export async function POST(request: Request) {
             console.log('10. Starting background PDF generation and email sending');
             const backgroundStartTime = Date.now();
             
+            // Create a keep-alive promise to delay function termination
+            console.log('10a. KEEP-ALIVE: Creating keep-alive promise for 15 seconds');
+            const keepAlivePromise = new Promise(resolve => setTimeout(resolve, 15000)); // 15 seconds
+            
             // Generate invoice PDF for art product
             console.log('11. Generating invoice PDF in background');
             try {
@@ -298,6 +302,12 @@ export async function POST(request: Request) {
             }
             
             console.log('21. Background processing completed, total time:', Date.now() - backgroundStartTime, 'ms');
+            
+            // Wait for the keep-alive promise to resolve before finishing
+            console.log('21a. KEEP-ALIVE: Waiting for keep-alive timer to finish...');
+            await keepAlivePromise;
+            console.log('21b. KEEP-ALIVE: Keep-alive timer finished, ending background process');
+            
           } catch (backgroundError) {
             console.error('Background processing error:', backgroundError);
           }
@@ -393,6 +403,10 @@ export async function POST(request: Request) {
             try {
               console.log('6. Starting background PDF generation and email sending');
               const backgroundStartTime = Date.now();
+              
+              // Create a keep-alive promise to delay function termination
+              console.log('6a. KEEP-ALIVE: Creating keep-alive promise for 15 seconds');
+              const keepAlivePromise = new Promise(resolve => setTimeout(resolve, 15000)); // 15 seconds
               
               // Generate gift card PDF
               console.log('7. Generating gift card PDF in background');
@@ -544,6 +558,12 @@ export async function POST(request: Request) {
               }
               
               console.log('17. Background processing completed, total time:', Date.now() - backgroundStartTime, 'ms');
+              
+              // Wait for the keep-alive promise to resolve before finishing
+              console.log('17a. KEEP-ALIVE: Waiting for keep-alive timer to finish...');
+              await keepAlivePromise;
+              console.log('17b. KEEP-ALIVE: Keep-alive timer finished, ending background process');
+              
             } catch (backgroundError) {
               console.error('Background processing error:', backgroundError);
             }
@@ -745,6 +765,10 @@ export async function POST(request: Request) {
             console.log('17. Starting background PDF generation and email sending');
             const backgroundStartTime = Date.now();
             
+            // Create a keep-alive promise to delay function termination
+            console.log('17a. KEEP-ALIVE: Creating keep-alive promise for 15 seconds');
+            const keepAlivePromise = new Promise(resolve => setTimeout(resolve, 15000)); // 15 seconds
+            
             // Generate invoice PDF
             console.log('18. Generating invoice PDF in background');
             let pdfBlob = null;
@@ -841,6 +865,12 @@ export async function POST(request: Request) {
             }
             
             console.log('28. Background processing completed, total time:', Date.now() - backgroundStartTime, 'ms');
+            
+            // Wait for the keep-alive promise to resolve before finishing
+            console.log('28a. KEEP-ALIVE: Waiting for keep-alive timer to finish...');
+            await keepAlivePromise;
+            console.log('28b. KEEP-ALIVE: Keep-alive timer finished, ending background process');
+            
           } catch (backgroundError) {
             console.error('Background processing error:', backgroundError);
           }
