@@ -6,6 +6,11 @@ import { logDebug, logError } from '@/lib/logging';
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  logError('Missing required environment variables for Supabase');
+}
+
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function POST(request: Request) {
@@ -28,8 +33,15 @@ export async function POST(request: Request) {
       .eq('payment_reference', paymentReference)
       .single();
 
-    if (fetchError || !payment) {
+    if (fetchError) {
       logError('Error fetching payment:', fetchError);
+      return NextResponse.json(
+        { success: false, error: 'Database error when fetching payment', details: fetchError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!payment) {
       return NextResponse.json(
         { success: false, error: 'Payment not found' },
         { status: 404 }
@@ -52,26 +64,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update payment status in database first
-    const { error: updateError } = await supabase
-      .from('payments')
-      .update({ 
-        status: 'DECLINED',
-        updated_at: new Date().toISOString(),
-        cancelled_by: cancelledBy,
-        cancelled_from: cancelledFrom
-      })
-      .eq('payment_reference', paymentReference);
-
-    if (updateError) {
-      logError('Error updating payment status:', updateError);
-      return NextResponse.json(
-        { success: false, error: 'Failed to update payment status' },
-        { status: 500 }
-      );
-    }
-
-    // Cancel payment in Swish if we have a Swish payment ID
+    // Try to cancel in Swish first if we have a Swish payment ID
     if (payment.swish_payment_id) {
       try {
         const swishService = SwishService.getInstance();
@@ -82,9 +75,41 @@ export async function POST(request: Request) {
         });
       } catch (swishError) {
         logError('Error cancelling payment in Swish:', swishError);
-        // We don't fail the request here since we've already updated our database
-        // Just log the error and continue
+        // We continue to update our database even if Swish call fails
+        // The callback from Swish will eventually update the status if needed
       }
+    }
+
+    // Update payment status in database
+    const { error: updateError } = await supabase
+      .from('payments')
+      .update({ 
+        status: 'DECLINED',
+        updated_at: new Date().toISOString(),
+        cancelled_by: cancelledBy,
+        cancelled_from: cancelledFrom,
+        metadata: {
+          ...payment.metadata,
+          cancellation: {
+            cancelled_at: new Date().toISOString(),
+            cancelled_by: cancelledBy,
+            cancelled_from: cancelledFrom,
+            previous_status: payment.status
+          }
+        }
+      })
+      .eq('payment_reference', paymentReference);
+
+    if (updateError) {
+      logError('Error updating payment status:', updateError);
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Database error when updating payment',
+          details: updateError.message
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ 
@@ -99,7 +124,11 @@ export async function POST(request: Request) {
   } catch (error) {
     logError('Unexpected error in cancel payment endpoint:', error);
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      { 
+        success: false, 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
