@@ -31,6 +31,8 @@ function logSMTPError(error: any) {
     console.error(`📧 System call: ${error.syscall || 'Unknown'}`);
     console.error(`📧 Hostname: ${error.hostname || 'Unknown'}`);
     console.error(`📧 Port: ${error.port || 'Unknown'}`);
+    console.error(`📧 Auth user: ${error.source?.options?.auth?.user || 'Unknown'}`);
+    console.error(`📧 Auth method: ${error.source?.options?.auth?.method || 'Unknown'}`);
     console.error(`📧 Stack trace: ${error.stack || 'No stack trace'}`);
   } else {
     console.error(`📧 Unknown error type: ${error}`);
@@ -39,19 +41,25 @@ function logSMTPError(error: any) {
 
 // Create a reusable transporter
 const createTransporter = async () => {
-  // Log environment variables (without sensitive data)
-  console.log('📧 Email Configuration:');
-  console.log(`📧 SMTP Host: ${process.env.EMAIL_SMTP_HOST || 'smtp.office365.com'}`);
-  console.log(`📧 SMTP Port: ${process.env.EMAIL_SMTP_PORT || '587'}`);
-  console.log(`📧 SMTP Secure: ${process.env.EMAIL_SMTP_SECURE || 'false'}`);
-  console.log(`📧 Email User: ${process.env.EMAIL_USER || 'eva@studioclay.se'}`);
-  console.log(`📧 Email Pass: ${process.env.EMAIL_PASS ? '********' : 'Not set'}`);
-  console.log(`📧 BCC Email: ${process.env.BCC_EMAIL || 'Not set'}`);
-  console.log(`📧 Node Environment: ${process.env.NODE_ENV || 'Not set'}`);
+  // PRODUCTION DIAGNOSTIC: Add more detailed environment information
+  console.log('📧 =========== EMAIL CONFIGURATION DETAILS ===========');
+  console.log(`📧 Running in environment: ${process.env.NODE_ENV || 'undefined'}`);
+  console.log(`📧 VERCEL_ENV: ${process.env.VERCEL_ENV || 'undefined'}`);
+  console.log(`📧 SMTP Host: ${process.env.EMAIL_SMTP_HOST || 'default: smtp.office365.com'}`);
+  console.log(`📧 SMTP Port: ${process.env.EMAIL_SMTP_PORT || 'default: 587'}`);
+  console.log(`📧 SMTP Secure: ${process.env.EMAIL_SMTP_SECURE || 'default: false'}`);
+  console.log(`📧 Email User: ${process.env.EMAIL_USER || 'default: eva@studioclay.se'}`);
+  console.log(`📧 Email Pass: ${process.env.EMAIL_PASS ? '[set]' : '[not set]'}`);
+  console.log(`📧 Email Pass Length: ${process.env.EMAIL_PASS ? process.env.EMAIL_PASS.length : 0}`);
+  console.log(`📧 Studio Clay Email: ${process.env.STUDIO_CLAY_EMAIL || 'default: eva@studioclay.se'}`);
+  console.log(`📧 BCC Email: ${process.env.BCC_EMAIL || '[not set]'}`);
+  console.log(`📧 DISABLE_ETHEREAL: ${process.env.DISABLE_ETHEREAL || 'default: undefined'}`);
+  console.log('📧 ================================================');
 
   // Skip Ethereal if disabled or in production
-  if (process.env.DISABLE_ETHEREAL === 'true' || process.env.NODE_ENV === 'production') {
-    console.log('📧 Using Office 365 SMTP server for email delivery');
+  const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+  if (process.env.DISABLE_ETHEREAL === 'true' || isProd) {
+    console.log(`📧 Using real SMTP server for email delivery (${isProd ? 'production' : 'development'} mode)`);
     
     const host = process.env.EMAIL_SMTP_HOST || 'smtp.office365.com';
     const port = parseInt(process.env.EMAIL_SMTP_PORT || '587');
@@ -60,12 +68,17 @@ const createTransporter = async () => {
     const secure = process.env.EMAIL_SMTP_SECURE === 'true';
     
     // Log the SMTP configuration
-    console.log(`📧 SMTP Configuration: ${host}:${port}`);
+    console.log(`📧 SMTP Configuration: ${host}:${port} (secure: ${secure})`);
     console.log(`📧 Auth User: ${user}`);
     
     // Validate email credentials before attempting to create transporter
-    if (!user || !pass) {
-      console.error('📧 ERROR: Missing email credentials. Check your .env.local file.');
+    if (!user) {
+      console.error('📧 ERROR: Missing email username. Check your environment variables.');
+      return null;
+    }
+    
+    if (!pass) {
+      console.error('📧 ERROR: Missing email password. Check your environment variables.');
       return null;
     }
     
@@ -86,15 +99,21 @@ const createTransporter = async () => {
           // Trust any certificate since Office 365 uses valid certs
           rejectUnauthorized: true
         },
-        debug: true
+        debug: true,
+        logger: true // Enable built-in logger
       });
       
       // Verify connection configuration
       console.log('📧 Verifying SMTP connection...');
-      await transport.verify();
-      console.log('📧 SMTP server connection verified successfully');
-      
-      return transport;
+      try {
+        await transport.verify();
+        console.log('📧 SMTP server connection verified successfully ✅');
+        return transport;
+      } catch (verifyError) {
+        console.error('📧 SMTP connection verification failed:', verifyError);
+        logSMTPError(verifyError);
+        throw verifyError; // Re-throw to try alternate config
+      }
     } catch (error) {
       console.error('📧 Error creating SMTP transport:', error);
       logSMTPError(error);
@@ -111,17 +130,28 @@ const createTransporter = async () => {
             user: user,
             pass: pass
           },
-          debug: true
+          debug: true,
+          logger: true // Enable built-in logger
         });
         
         console.log('📧 Verifying SSL connection...');
-        await sslTransport.verify();
-        console.log('📧 SMTP SSL connection verified successfully');
-        
-        return sslTransport;
+        try {
+          await sslTransport.verify();
+          console.log('📧 SMTP SSL connection verified successfully ✅');
+          return sslTransport;
+        } catch (sslVerifyError) {
+          console.error('📧 SMTP SSL connection verification failed:', sslVerifyError);
+          logSMTPError(sslVerifyError);
+          throw sslVerifyError;
+        }
       } catch (sslError) {
         console.error('📧 All SMTP connection attempts failed:', sslError);
         logSMTPError(sslError);
+        
+        if (isProd) {
+          console.error('📧 CRITICAL: Email sending is not available in production! ❌');
+        }
+        
         return null;
       }
     }
@@ -189,6 +219,18 @@ export async function sendServerInvoiceEmail(params: {
   giftCardPdfBuffer?: Buffer; // Optional gift card PDF buffer to attach
   isProduct?: boolean; // Flag to indicate if this is a product purchase
 }): Promise<{ success: boolean; message: string }> {
+  const startTime = Date.now();
+  console.log('📧 =========== EMAIL SENDING ATTEMPT ===========');
+  console.log(`📧 Time: ${new Date().toISOString()}`);
+  console.log(`📧 Invoice Number: ${params.invoiceNumber}`);
+  console.log(`📧 Type: ${params.isGiftCard ? 'Gift Card' : params.isProduct ? 'Product' : 'Course'}`);
+  console.log(`📧 Recipient: ${params.userInfo.email}`);
+  console.log(`📧 Has PDF: ${params.pdfBuffer ? 'Yes' : 'No'}`);
+  if (params.isGiftCard) {
+    console.log(`📧 Gift Card Code: ${params.giftCardCode}`);
+    console.log(`📧 Has Gift Card PDF: ${params.giftCardPdfBuffer ? 'Yes' : 'No'}`);
+  }
+  
   try {
     // Check what type of product this is
     let productType: 'course' | 'gift_card' | 'product' = 'course';
@@ -212,6 +254,7 @@ export async function sendServerInvoiceEmail(params: {
       subjectLine = `Bokningsbekräftelse - ${title}`;
     }
     
+    console.log(`📧 Building email HTML for product type: ${productType}`);
     // Build email HTML using the modular template system
     const htmlContent = buildConfirmationEmail({
       productType: productType,
@@ -233,12 +276,29 @@ export async function sendServerInvoiceEmail(params: {
       },
       reference: params.invoiceNumber
     });
+    console.log(`📧 Email HTML built successfully`);
     
     // Create reusable transporter
+    console.log(`📧 Creating email transporter...`);
     const transporter = await createTransporter();
     
     if (!transporter) {
-      console.log('No transporter available, simulating email send');
+      console.log('📧 No transporter available, simulating email send');
+      
+      // SIMULATION MODE: Generate a test URL if in development mode
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📧 DEV MODE: Email would be sent with subject:', subjectLine);
+        console.log('📧 DEV MODE: Email would be sent to:', params.userInfo.email);
+        console.log('📧 DEV MODE: Email would have', params.pdfBuffer ? '1' : '0', 'PDF attachments');
+        if (params.isGiftCard && params.giftCardPdfBuffer) {
+          console.log('📧 DEV MODE: Email would have 1 additional gift card PDF attachment');
+        }
+      } else {
+        // PRODUCTION ERROR: Email cannot be sent
+        console.error('📧 CRITICAL PRODUCTION ERROR: Cannot send email due to missing transporter ❌');
+        console.error(`📧 Email to ${params.userInfo.email} could not be sent`);
+      }
+      
       return {
         success: false,
         message: 'Email transporter not available'
@@ -246,13 +306,15 @@ export async function sendServerInvoiceEmail(params: {
     }
     
     // For Office 365, use a simplified from address that exactly matches the authenticated user
-    const authenticatedEmail = process.env.EMAIL_USER;
+    const authenticatedEmail = process.env.EMAIL_USER || 'eva@studioclay.se';
+    console.log(`📧 Using authenticated email as sender: ${authenticatedEmail}`);
     
     // Create email attachments array
     const attachments = [];
     
     // Add invoice PDF if available
     if (params.pdfBuffer) {
+      console.log(`📧 Adding invoice PDF attachment (${params.pdfBuffer.length} bytes)`);
       attachments.push({
         filename: `Faktura-${params.invoiceNumber}.pdf`,
         content: params.pdfBuffer,
@@ -262,6 +324,7 @@ export async function sendServerInvoiceEmail(params: {
     
     // Add gift card PDF if this is a gift card purchase and we have the PDF
     if (params.isGiftCard && params.giftCardPdfBuffer && params.giftCardCode) {
+      console.log(`📧 Adding gift card PDF attachment (${params.giftCardPdfBuffer.length} bytes)`);
       attachments.push({
         filename: `Presentkort-${params.giftCardCode}.pdf`,
         content: params.giftCardPdfBuffer,
@@ -280,23 +343,51 @@ export async function sendServerInvoiceEmail(params: {
     };
     
     // Send email
-    console.log('Sending invoice email to:', params.userInfo.email);
-    const info = await transporter.sendMail(mailOptions);
+    console.log(`📧 Sending invoice email to: ${params.userInfo.email}`);
+    console.log(`📧 Email subject: ${subjectLine}`);
+    console.log(`📧 Number of attachments: ${attachments.length}`);
+    console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
-    console.log('Invoice email sent successfully:', info.messageId);
-    
-    // Check if this is a test email from Ethereal
-    if (info.messageId && info.messageId.includes('ethereal')) {
-      console.log('Test email URL:', nodemailer.getTestMessageUrl(info));
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      
+      console.log(`📧 ✅ Email sent successfully!`);
+      console.log(`📧 Message ID: ${info.messageId}`);
+      console.log(`📧 Accepted recipients: ${info.accepted ? info.accepted.join(', ') : 'None'}`);
+      console.log(`📧 Rejected recipients: ${info.rejected ? info.rejected.join(', ') : 'None'}`);
+      console.log(`📧 Response: ${info.response || 'No response'}`);
+      
+      // Check if this is a test email from Ethereal
+      if (info.messageId && info.messageId.includes('ethereal')) {
+        const previewUrl = nodemailer.getTestMessageUrl(info);
+        console.log('📧 Test email URL:', previewUrl);
+      }
+      
+      console.log(`📧 Total email processing time: ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
+      return {
+        success: true,
+        message: 'Invoice email sent successfully'
+      };
+    } catch (sendError: any) {
+      console.error(`📧 ❌ ERROR SENDING EMAIL:`);
+      console.error(`📧 Error type: ${sendError.name}`);
+      console.error(`📧 Error message: ${sendError.message}`);
+      logSMTPError(sendError);
+      
+      console.log(`📧 Total email processing time (failed): ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
+      throw sendError; // Re-throw to be caught by the outer try-catch
     }
-    
-    return {
-      success: true,
-      message: 'Invoice email sent successfully'
-    };
   } catch (error) {
-    console.error('Error sending server invoice email:', error);
+    console.error('📧 Unhandled error in sendServerInvoiceEmail:', error);
     logSMTPError(error);
+    
+    console.log(`📧 Total email processing time (error): ${Date.now() - startTime}ms`);
+    console.log('📧 ===========================================');
+    
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Unknown error sending invoice email'
@@ -320,8 +411,16 @@ export async function sendServerBookingConfirmationEmail(params: {
   };
   bookingReference: string;
 }): Promise<{ success: boolean; message: string }> {
+  const startTime = Date.now();
+  console.log('📧 =========== BOOKING EMAIL SENDING ATTEMPT ===========');
+  console.log(`📧 Time: ${new Date().toISOString()}`);
+  console.log(`📧 Booking Reference: ${params.bookingReference}`);
+  console.log(`📧 Course: ${params.courseDetails.title}`);
+  console.log(`📧 Recipient: ${params.userInfo.email}`);
+  
   try {
     // Build email HTML using the modular template system
+    console.log(`📧 Building booking confirmation email HTML...`);
     const htmlContent = buildConfirmationEmail({
       productType: 'course',
       userInfo: params.userInfo,
@@ -342,12 +441,28 @@ export async function sendServerBookingConfirmationEmail(params: {
       },
       reference: params.bookingReference
     });
+    console.log(`📧 Email HTML built successfully`);
     
     // Create reusable transporter
+    console.log(`📧 Creating email transporter...`);
     const transporter = await createTransporter();
     
     if (!transporter) {
-      console.log('No transporter available, simulating email send');
+      console.log('📧 No transporter available, simulating email send');
+      
+      // SIMULATION MODE: Generate a test URL if in development mode
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📧 DEV MODE: Booking confirmation email would be sent to:', params.userInfo.email);
+        console.log('📧 DEV MODE: Subject would be:', `Bokningsbekräftelse - ${params.courseDetails.title}`);
+      } else {
+        // PRODUCTION ERROR: Email cannot be sent
+        console.error('📧 CRITICAL PRODUCTION ERROR: Cannot send booking confirmation email due to missing transporter ❌');
+        console.error(`📧 Email to ${params.userInfo.email} could not be sent`);
+      }
+      
+      console.log(`📧 Total email processing time (failed): ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
       return {
         success: false,
         message: 'Email transporter not available'
@@ -355,7 +470,8 @@ export async function sendServerBookingConfirmationEmail(params: {
     }
     
     // For Office 365, use a simplified from address that exactly matches the authenticated user
-    const authenticatedEmail = process.env.EMAIL_USER;
+    const authenticatedEmail = process.env.EMAIL_USER || 'eva@studioclay.se';
+    console.log(`📧 Using authenticated email as sender: ${authenticatedEmail}`);
     
     // Create email options
     const mailOptions = {
@@ -367,23 +483,50 @@ export async function sendServerBookingConfirmationEmail(params: {
     };
     
     // Send email
-    console.log('Sending booking confirmation email to:', params.userInfo.email);
-    const info = await transporter.sendMail(mailOptions);
+    console.log(`📧 Sending booking confirmation email to: ${params.userInfo.email}`);
+    console.log(`📧 Email subject: Bokningsbekräftelse - ${params.courseDetails.title}`);
+    console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
-    console.log('Booking confirmation email sent successfully:', info.messageId);
-    
-    // Check if this is a test email from Ethereal
-    if (info.messageId && info.messageId.includes('ethereal')) {
-      console.log('Test email URL:', nodemailer.getTestMessageUrl(info));
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      
+      console.log(`📧 ✅ Booking confirmation email sent successfully!`);
+      console.log(`📧 Message ID: ${info.messageId}`);
+      console.log(`📧 Accepted recipients: ${info.accepted ? info.accepted.join(', ') : 'None'}`);
+      console.log(`📧 Rejected recipients: ${info.rejected ? info.rejected.join(', ') : 'None'}`);
+      console.log(`📧 Response: ${info.response || 'No response'}`);
+      
+      // Check if this is a test email from Ethereal
+      if (info.messageId && info.messageId.includes('ethereal')) {
+        const previewUrl = nodemailer.getTestMessageUrl(info);
+        console.log('📧 Test email URL:', previewUrl);
+      }
+      
+      console.log(`📧 Total email processing time: ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
+      return {
+        success: true,
+        message: 'Booking confirmation email sent successfully'
+      };
+    } catch (sendError: any) {
+      console.error(`📧 ❌ ERROR SENDING BOOKING EMAIL:`);
+      console.error(`📧 Error type: ${sendError.name}`);
+      console.error(`📧 Error message: ${sendError.message}`);
+      logSMTPError(sendError);
+      
+      console.log(`📧 Total email processing time (failed): ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
+      throw sendError; // Re-throw to be caught by the outer try-catch
     }
-    
-    return {
-      success: true,
-      message: 'Booking confirmation email sent successfully'
-    };
   } catch (error) {
-    console.error('Error sending server booking confirmation email:', error);
+    console.error('📧 Unhandled error in sendServerBookingConfirmationEmail:', error);
     logSMTPError(error);
+    
+    console.log(`📧 Total email processing time (error): ${Date.now() - startTime}ms`);
+    console.log('📧 ===========================================');
+    
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Unknown error sending booking confirmation email'
@@ -413,8 +556,19 @@ export async function sendServerGiftCardEmail(params: {
   };
   pdfBuffer?: Buffer; // PDF as a buffer
 }): Promise<{ success: boolean; message: string }> {
+  const startTime = Date.now();
+  console.log('📧 =========== GIFT CARD EMAIL SENDING ATTEMPT ===========');
+  console.log(`📧 Time: ${new Date().toISOString()}`);
+  console.log(`📧 Gift Card Code: ${params.giftCardData.code}`);
+  console.log(`📧 Amount: ${params.giftCardData.amount}`);
+  console.log(`📧 Sender: ${params.senderInfo.email}`);
+  console.log(`📧 Recipient Name: ${params.giftCardData.recipient_name}`);
+  console.log(`📧 Recipient Email: ${params.giftCardData.recipient_email}`);
+  console.log(`📧 Has PDF: ${params.pdfBuffer ? 'Yes' : 'No'}`);
+  
   try {
     // Build email HTML using the modular template system
+    console.log(`📧 Building gift card email HTML...`);
     const htmlContent = buildConfirmationEmail({
       productType: 'gift_card',
       userInfo: {
@@ -439,12 +593,29 @@ export async function sendServerGiftCardEmail(params: {
       },
       reference: params.giftCardData.code
     });
+    console.log(`📧 Email HTML built successfully`);
     
     // Create reusable transporter
+    console.log(`📧 Creating email transporter...`);
     const transporter = await createTransporter();
     
     if (!transporter) {
-      console.log('No transporter available, simulating email send');
+      console.log('📧 No transporter available, simulating email send');
+      
+      // SIMULATION MODE: Generate a test URL if in development mode
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📧 DEV MODE: Gift card email would be sent with subject: Ditt köpta presentkort - Studio Clay');
+        console.log('📧 DEV MODE: Email would be sent to:', params.senderInfo.email);
+        console.log('📧 DEV MODE: Email would have', params.pdfBuffer ? '1' : '0', 'PDF attachments');
+      } else {
+        // PRODUCTION ERROR: Email cannot be sent
+        console.error('📧 CRITICAL PRODUCTION ERROR: Cannot send gift card email due to missing transporter ❌');
+        console.error(`📧 Gift card email to ${params.senderInfo.email} could not be sent`);
+      }
+      
+      console.log(`📧 Total email processing time (failed): ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
       return {
         success: false,
         message: 'Email transporter not available'
@@ -452,7 +623,8 @@ export async function sendServerGiftCardEmail(params: {
     }
     
     // For Office 365, use a simplified from address that exactly matches the authenticated user
-    const authenticatedEmail = process.env.EMAIL_USER;
+    const authenticatedEmail = process.env.EMAIL_USER || 'eva@studioclay.se';
+    console.log(`📧 Using authenticated email as sender: ${authenticatedEmail}`);
     
     // Create email options - now sending to the purchaser/sender
     const mailOptions = {
@@ -471,24 +643,50 @@ export async function sendServerGiftCardEmail(params: {
     };
     
     // Send email
-    console.log('Sending gift card confirmation email to purchaser:', params.senderInfo.email);
-    const info = await transporter.sendMail(mailOptions);
+    console.log(`📧 Sending gift card confirmation email to purchaser: ${params.senderInfo.email}`);
+    console.log(`📧 Email subject: Ditt köpta presentkort - Studio Clay`);
+    console.log(`📧 Has attachment: ${params.pdfBuffer ? 'Yes' : 'No'}`);
+    console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
-    console.log('Gift card confirmation email sent successfully:', info.messageId);
-    
-    // Check if this is a test email from Ethereal
-    if (info.messageId && info.messageId.includes('ethereal')) {
-      console.log('Test email URL:', nodemailer.getTestMessageUrl(info));
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      
+      console.log(`📧 ✅ Gift card confirmation email sent successfully!`);
+      console.log(`📧 Message ID: ${info.messageId}`);
+      console.log(`📧 Accepted recipients: ${info.accepted ? info.accepted.join(', ') : 'None'}`);
+      console.log(`📧 Rejected recipients: ${info.rejected ? info.rejected.join(', ') : 'None'}`);
+      console.log(`📧 Response: ${info.response || 'No response'}`);
+      
+      // Check if this is a test email from Ethereal
+      if (info.messageId && info.messageId.includes('ethereal')) {
+        const previewUrl = nodemailer.getTestMessageUrl(info);
+        console.log('📧 Test email URL:', previewUrl);
+      }
+      
+      console.log(`📧 Total email processing time: ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
+      return {
+        success: true,
+        message: 'Gift card confirmation email sent successfully'
+      };
+    } catch (sendError: any) {
+      console.error(`📧 ❌ ERROR SENDING GIFT CARD EMAIL:`);
+      console.error(`📧 Error type: ${sendError.name}`);
+      console.error(`📧 Error message: ${sendError.message}`);
+      logSMTPError(sendError);
+      
+      console.log(`📧 Total email processing time (failed): ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
+      throw sendError; // Re-throw to be caught by the outer try-catch
     }
-    
-    return {
-      success: true,
-      message: 'Gift card confirmation email sent successfully'
-    };
-    
   } catch (error) {
-    console.error('Error sending gift card confirmation email:', error);
+    console.error('📧 Unhandled error in sendServerGiftCardEmail:', error);
     logSMTPError(error);
+    
+    console.log(`📧 Total email processing time (error): ${Date.now() - startTime}ms`);
+    console.log('📧 ===========================================');
     
     return {
       success: false,
@@ -527,8 +725,18 @@ export async function sendServerProductOrderConfirmationEmail(params: {
   };
   orderReference: string;
 }): Promise<{ success: boolean; message: string }> {
+  const startTime = Date.now();
+  console.log('📧 =========== PRODUCT ORDER EMAIL SENDING ATTEMPT ===========');
+  console.log(`📧 Time: ${new Date().toISOString()}`);
+  console.log(`📧 Order Reference: ${params.orderReference}`);
+  console.log(`📧 Product: ${params.productDetails.title}`);
+  console.log(`📧 Quantity: ${params.productDetails.quantity}`);
+  console.log(`📧 Total Amount: ${params.productDetails.price * params.productDetails.quantity}`);
+  console.log(`📧 Recipient: ${params.userInfo.email}`);
+  
   try {
     // Build email HTML using the modular template system
+    console.log(`📧 Building product order email HTML...`);
     const htmlContent = buildConfirmationEmail({
       productType: 'product',
       userInfo: params.userInfo,
@@ -548,12 +756,28 @@ export async function sendServerProductOrderConfirmationEmail(params: {
       },
       reference: params.orderReference
     });
+    console.log(`📧 Email HTML built successfully`);
     
     // Create reusable transporter
+    console.log(`📧 Creating email transporter...`);
     const transporter = await createTransporter();
     
     if (!transporter) {
-      console.log('No transporter available, simulating email send');
+      console.log('📧 No transporter available, simulating email send');
+      
+      // SIMULATION MODE: Generate a test URL if in development mode
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📧 DEV MODE: Product order email would be sent with subject: Orderbekräftelse - Studio Clay');
+        console.log('📧 DEV MODE: Email would be sent to:', params.userInfo.email);
+      } else {
+        // PRODUCTION ERROR: Email cannot be sent
+        console.error('📧 CRITICAL PRODUCTION ERROR: Cannot send product order email due to missing transporter ❌');
+        console.error(`📧 Email to ${params.userInfo.email} could not be sent`);
+      }
+      
+      console.log(`📧 Total email processing time (failed): ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
       return {
         success: false,
         message: 'Email transporter not available'
@@ -561,7 +785,8 @@ export async function sendServerProductOrderConfirmationEmail(params: {
     }
     
     // For Office 365, use a simplified from address that exactly matches the authenticated user
-    const authenticatedEmail = process.env.EMAIL_USER;
+    const authenticatedEmail = process.env.EMAIL_USER || 'eva@studioclay.se';
+    console.log(`📧 Using authenticated email as sender: ${authenticatedEmail}`);
     
     // Create email options
     const mailOptions = {
@@ -573,23 +798,50 @@ export async function sendServerProductOrderConfirmationEmail(params: {
     };
     
     // Send email
-    console.log('Sending product order confirmation email to:', params.userInfo.email);
-    const info = await transporter.sendMail(mailOptions);
+    console.log(`📧 Sending product order confirmation email to: ${params.userInfo.email}`);
+    console.log(`📧 Email subject: Orderbekräftelse - Studio Clay`);
+    console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
-    console.log('Product order confirmation email sent successfully:', info.messageId);
-    
-    // Check if this is a test email from Ethereal
-    if (info.messageId && info.messageId.includes('ethereal')) {
-      console.log('Test email URL:', nodemailer.getTestMessageUrl(info));
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      
+      console.log(`📧 ✅ Product order email sent successfully!`);
+      console.log(`📧 Message ID: ${info.messageId}`);
+      console.log(`📧 Accepted recipients: ${info.accepted ? info.accepted.join(', ') : 'None'}`);
+      console.log(`📧 Rejected recipients: ${info.rejected ? info.rejected.join(', ') : 'None'}`);
+      console.log(`📧 Response: ${info.response || 'No response'}`);
+      
+      // Check if this is a test email from Ethereal
+      if (info.messageId && info.messageId.includes('ethereal')) {
+        const previewUrl = nodemailer.getTestMessageUrl(info);
+        console.log('📧 Test email URL:', previewUrl);
+      }
+      
+      console.log(`📧 Total email processing time: ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
+      return {
+        success: true,
+        message: 'Product order confirmation email sent successfully'
+      };
+    } catch (sendError: any) {
+      console.error(`📧 ❌ ERROR SENDING PRODUCT ORDER EMAIL:`);
+      console.error(`📧 Error type: ${sendError.name}`);
+      console.error(`📧 Error message: ${sendError.message}`);
+      logSMTPError(sendError);
+      
+      console.log(`📧 Total email processing time (failed): ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
+      throw sendError; // Re-throw to be caught by the outer try-catch
     }
-    
-    return {
-      success: true,
-      message: 'Product order confirmation email sent successfully'
-    };
   } catch (error) {
-    console.error('Error sending product order confirmation email:', error);
+    console.error('📧 Unhandled error in sendServerProductOrderConfirmationEmail:', error);
     logSMTPError(error);
+    
+    console.log(`📧 Total email processing time (error): ${Date.now() - startTime}ms`);
+    console.log('📧 ===========================================');
+    
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Unknown error sending product order confirmation email'
