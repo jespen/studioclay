@@ -709,9 +709,8 @@ export async function POST(request: NextRequest) {
           if (!existingOrder) {
             // Create art order record if it doesn't exist
             // (It should already exist as it's created in the create payment endpoint, but ensuring it here)
-            const { data: orderData, error: orderError } = await supabase
-              .from('art_orders')
-              .upsert({
+            try {
+              const orderPayload = {
                 product_id: productId,
                 customer_name: userInfo.firstName + ' ' + userInfo.lastName,
                 customer_email: userInfo.email,
@@ -726,131 +725,145 @@ export async function POST(request: NextRequest) {
                   payment_id: payment.id,
                   user_info: userInfo
                 }
-              }, { onConflict: 'order_reference' })
-              .select()
-              .single();
-
-            if (orderError) {
-              logError(`[${requestId}] Error creating/updating art order:`, orderError);
-            } else {
-              logDebug(`[${requestId}] Art order created/updated:`, { id: orderData.id, reference: orderData.order_reference });
+              };
               
-              // Update product stock if needed
-              try {
-                // First get the current product
-                const { data: productData, error: productFetchError } = await supabase
-                  .from('products')
-                  .select('title, price, description, image, stock_quantity, in_stock')
-                  .eq('id', productId)
-                  .single();
-                  
-                if (productFetchError) {
-                  logError(`[${requestId}] Error fetching product for stock update:`, productFetchError);
-                } else if (productData) {
-                  // Calculate new stock quantity
-                  const newQuantity = Math.max(0, (productData.stock_quantity || 1) - 1);
-                  
-                  // Update the product with new stock quantity
-                  const { error: updateError } = await supabase
+              logDebug(`[${requestId}] Creating new art order with data:`, { 
+                order_reference: orderPayload.order_reference,
+                product_id: orderPayload.product_id,
+                payment_status: orderPayload.payment_status
+              });
+              
+              // Insert without using onConflict
+              const { data: orderResult, error: orderError } = await supabase
+                .from('art_orders')
+                .insert(orderPayload)
+                .select()
+                .single();
+
+              if (orderError) {
+                logError(`[${requestId}] Error creating art order:`, orderError);
+              } else {
+                logDebug(`[${requestId}] Art order created:`, { id: orderResult?.id, reference: orderResult?.order_reference });
+                
+                // Update product stock if needed
+                try {
+                  // First get the current product
+                  const { data: productData, error: productFetchError } = await supabase
                     .from('products')
-                    .update({ 
-                      stock_quantity: newQuantity,
-                      in_stock: newQuantity > 0
-                    })
-                    .eq('id', productId);
+                    .select('title, price, description, image, stock_quantity, in_stock')
+                    .eq('id', productId)
+                    .single();
                     
-                  if (updateError) {
-                    logError(`[${requestId}] Error updating product stock:`, updateError);
-                  } else {
-                    logDebug(`[${requestId}] Updated product ${productId} stock to ${newQuantity}`);
-                  }
-                  
-                  // CRITICAL DB OPERATIONS COMPLETE
-                  // Now proceed with email sending in background
-                  
-                  // Create a promised-based background process
-                  logDebug(`[${requestId}] Setting up background process for product order email`);
-                  
-                  const runProductEmailBackgroundTask = async () => {
-                    logDebug(`[${requestId}] Starting background product email process`);
-                    const backgroundStartTime = Date.now();
+                  if (productFetchError) {
+                    logError(`[${requestId}] Error fetching product for stock update:`, productFetchError);
+                  } else if (productData) {
+                    // Calculate new stock quantity
+                    const newQuantity = Math.max(0, (productData.stock_quantity || 1) - 1);
                     
-                    // Create a keep-alive promise to delay function termination
-                    logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
-                    const keepAlivePromise = new Promise(resolve => {
-                      const timerId = setTimeout(() => {
-                        logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
-                        resolve(true);
-                      }, 15000);
+                    // Update the product with new stock quantity
+                    const { error: updateError } = await supabase
+                      .from('products')
+                      .update({ 
+                        stock_quantity: newQuantity,
+                        in_stock: newQuantity > 0
+                      })
+                      .eq('id', productId);
                       
-                      // Ensure timer isn't lost to garbage collection
-                      global.setTimeout = global.setTimeout || setTimeout;
-                      if (global.keepAliveTimers === undefined) {
-                        global.keepAliveTimers = [];
-                      }
-                      global.keepAliveTimers.push(timerId);
-                    });
-                    
-                    try {
-                      // Send confirmation email
-                      logDebug(`[${requestId}] Sending product order confirmation email`);
-                      logDebug(`[${requestId}] DIAGNOSTIC: About to attempt email sending for product order`);
-                      logDebug(`[${requestId}] DIAGNOSTIC: Email parameters:`, {
-                        recipientEmail: userInfo.email,
-                        productTitle: productData.title,
-                        orderReference: reference,
-                        amount: payment.amount
-                      });
-                      
-                      const { sendServerProductOrderConfirmationEmail } = await import('@/utils/serverEmail');
-                      
-                      const emailResult = await sendServerProductOrderConfirmationEmail({
-                        userInfo: {
-                          firstName: userInfo.firstName,
-                          lastName: userInfo.lastName,
-                          email: userInfo.email,
-                          phone: userInfo.phone || payment.phone_number
-                        },
-                        paymentDetails: {
-                          method: 'swish',
-                          status: 'PAID',
-                          reference: reference,
-                          amount: payment.amount
-                        },
-                        productDetails: {
-                          id: productId,
-                          title: productData.title,
-                          description: productData.description,
-                          price: payment.amount,
-                          quantity: 1,
-                          image: productData.image
-                        },
-                        orderReference: reference
-                      });
-                      
-                      logDebug(`[${requestId}] Product order email result:`, emailResult);
-                      logDebug(`[${requestId}] Background product email process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
-                    } catch (emailError) {
-                      logError(`[${requestId}] Error sending product order email:`, emailError);
+                    if (updateError) {
+                      logError(`[${requestId}] Error updating product stock:`, updateError);
+                    } else {
+                      logDebug(`[${requestId}] Updated product ${productId} stock to ${newQuantity}`);
                     }
                     
-                    // Wait for the keep-alive promise to resolve before finishing
-                    logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
-                    await keepAlivePromise;
-                    logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
+                    // CRITICAL DB OPERATIONS COMPLETE
+                    // Now proceed with email sending in background
                     
-                    return { success: true };
-                  };
-                  
-                  // Execute the background process with explicit promise handling
-                  Promise.resolve().then(runProductEmailBackgroundTask).catch(err => {
-                    logError(`[${requestId}] Critical error in background product email processing:`, err);
-                  });
+                    // Create a promised-based background process
+                    logDebug(`[${requestId}] Setting up background process for product order email`);
+                    
+                    const runProductEmailBackgroundTask = async () => {
+                      logDebug(`[${requestId}] Starting background product email process`);
+                      const backgroundStartTime = Date.now();
+                      
+                      // Create a keep-alive promise to delay function termination
+                      logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
+                      const keepAlivePromise = new Promise(resolve => {
+                        const timerId = setTimeout(() => {
+                          logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
+                          resolve(true);
+                        }, 15000);
+                        
+                        // Ensure timer isn't lost to garbage collection
+                        global.setTimeout = global.setTimeout || setTimeout;
+                        if (global.keepAliveTimers === undefined) {
+                          global.keepAliveTimers = [];
+                        }
+                        global.keepAliveTimers.push(timerId);
+                      });
+                      
+                      try {
+                        // Send confirmation email
+                        logDebug(`[${requestId}] Sending product order confirmation email`);
+                        logDebug(`[${requestId}] DIAGNOSTIC: About to attempt email sending for product order`);
+                        logDebug(`[${requestId}] DIAGNOSTIC: Email parameters:`, {
+                          recipientEmail: userInfo.email,
+                          productTitle: productData.title,
+                          orderReference: reference,
+                          amount: payment.amount
+                        });
+                        
+                        const { sendServerProductOrderConfirmationEmail } = await import('@/utils/serverEmail');
+                        
+                        const emailResult = await sendServerProductOrderConfirmationEmail({
+                          userInfo: {
+                            firstName: userInfo.firstName,
+                            lastName: userInfo.lastName,
+                            email: userInfo.email,
+                            phone: userInfo.phone || payment.phone_number
+                          },
+                          paymentDetails: {
+                            method: 'swish',
+                            status: 'PAID',
+                            reference: reference,
+                            amount: payment.amount
+                          },
+                          productDetails: {
+                            id: productId,
+                            title: productData.title,
+                            description: productData.description,
+                            price: payment.amount,
+                            quantity: 1,
+                            image: productData.image
+                          },
+                          orderReference: reference
+                        });
+                        
+                        logDebug(`[${requestId}] Product order email result:`, emailResult);
+                        logDebug(`[${requestId}] Background product email process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
+                      } catch (emailError) {
+                        logError(`[${requestId}] Error sending product order email:`, emailError);
+                      }
+                      
+                      // Wait for the keep-alive promise to resolve before finishing
+                      logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
+                      await keepAlivePromise;
+                      logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
+                      
+                      return { success: true };
+                    };
+                    
+                    // Execute the background process with explicit promise handling
+                    Promise.resolve().then(runProductEmailBackgroundTask).catch(err => {
+                      logError(`[${requestId}] Critical error in background product email processing:`, err);
+                    });
+                  }
+                } catch (stockError) {
+                  logError(`[${requestId}] Error updating product stock:`, stockError);
+                  // Continue execution - stock update is not critical
                 }
-              } catch (stockError) {
-                logError(`[${requestId}] Error updating product stock:`, stockError);
-                // Continue execution - stock update is not critical
               }
+            } catch (orderError) {
+              logError(`[${requestId}] Error creating art order:`, orderError);
             }
           } else {
             logDebug(`[${requestId}] Art order already exists:`, existingOrder);
