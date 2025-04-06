@@ -1,5 +1,5 @@
 import { SwishRequestData, SwishApiResponse, SwishValidationError, SwishApiError, SwishCertificateError, SwishError } from './types';
-import { SwishConfig } from './config';
+import { SwishConfig, SWISH_ENDPOINTS } from './config';
 import { formatSwishPhoneNumber } from '@/utils/swish/phoneNumberFormatter';
 import fs from 'fs';
 import path from 'path';
@@ -573,29 +573,30 @@ export class SwishService {
       }
     }
     
-    // Use the configured API URL from the config
-    const url = this.config.getEndpointUrl('cancelPayment') + `/${swishPaymentId}`;
+    // Construct the URL correctly for Swish API
+    // According to Swish API, the URL should be /swish-cpcapi/api/v1/paymentrequests/{id}/cancel
+    // NOT /swish-cpcapi/api/v1/paymentrequests/{id} with PATCH method
+    const url = this.config.getEndpointUrl('cancelPayment').replace('{id}', swishPaymentId);
 
-    logDebug('Cancelling Swish payment', {
+    logDebug('Cancelling Swish payment using correct URL format', {
       originalInput: paymentIdOrReference,
       resolvedSwishId: swishPaymentId,
-      url,
-      timeout,
-      requestBody: { status: 'cancelled' }
+      fullUrl: url,
+      timeout
     });
 
     try {
-      // Testa om vi kan nå Swish API:et först för att verifiera att HTTPS-agent är korrekt
+      // Test connectivity to Swish API first to verify the HTTPS agent is correct
       const testStart = Date.now();
       try {
-        // Försök göra ett HEAD-anrop till API:et
-        const testUrl = this.config.apiUrl;
+        // Try a GET request to the API to verify connectivity
+        const testUrl = this.config.getEndpointUrl('paymentStatus').replace('{id}', swishPaymentId);
         logDebug(`Testing connection to Swish API at ${testUrl}`);
 
-        // Använd makeSwishRequest för att testa
+        // Use makeSwishRequest for the test
         const testResult = await this.makeSwishRequest({
           method: 'GET',
-          url: this.config.getEndpointUrl('paymentStatus').replace('{id}', swishPaymentId),
+          url: testUrl,
           isStatusCheck: true
         });
         
@@ -617,13 +618,19 @@ export class SwishService {
         setTimeout(() => reject(new Error(`Swish cancellation timed out after ${timeout/1000} seconds`)), timeout);
       });
       
-      logDebug('Starting cancellation request to Swish');
+      logDebug('Starting cancellation request to Swish using PUT method with empty body');
+      
+      // According to Swish documentation, cancellation should be a PUT request with empty body
+      // to the /cancel endpoint, not a PATCH with a body
       const result = await Promise.race([
         this.makeSwishRequest({
-          method: 'PATCH',
-          url,
-          body: JSON.stringify({ status: 'cancelled' }),
-          isCancellation: true
+          method: 'PUT',  // Swish API uses PUT for cancellation
+          url: url,
+          isCancellation: true,  // Flag that this is a cancellation request
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: {}  // Empty body for cancellation
         }),
         timeoutPromise
       ]) as { success: boolean; error?: string; data?: any };

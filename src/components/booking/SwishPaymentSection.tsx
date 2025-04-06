@@ -243,99 +243,70 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
   };
 
   const handleCancelPayment = async () => {
-    if (!paymentReference) {
-      console.error('No payment reference available for cancellation');
-      return;
-    }
-
     console.log('Initiating payment cancellation for reference:', paymentReference);
-
-    // Immediately show user that we're processing the cancellation
+    
+    // Immediately update UI state to show cancellation - this improves user experience
     setPaymentStatus(PaymentStatus.DECLINED);
-
-    // Save the cancellation info locally first for UI responsiveness
-    const cancellationInfo = {
-      reference: crypto.randomUUID(),
-      status: 'DECLINED',
-      payment_method: 'swish',
-      payment_date: new Date().toISOString(),
-      amount: amount,
-      cancelled_by: 'user',
-      cancelled_from: 'payment_dialog'
-    };
-    console.log('Saving cancelled payment info:', cancellationInfo);
-
-    // Variables to track our attempts
-    let success = false;
-    let errorMessage = '';
-    let attempts = 0;
-    const maxAttempts = 2;
-
-    // Try the main endpoint first, then fall back to the simple one if needed
-    while (!success && attempts < maxAttempts) {
-      attempts++;
-      try {
-        // Attempt to cancel the payment
-        const endpoint = attempts === 1 ? '/api/payments/swish/cancel' : '/api/payments/swish/simple-cancel';
-        
-        console.log(`Cancellation attempt ${attempts}/${maxAttempts} using endpoint: ${endpoint}`);
-        
-        const cancelResponse = await fetch(endpoint, {
+    
+    // Close the dialog first to improve UX
+    handleClosePaymentDialog();
+    
+    // Now attempt to cancel through the API, but don't block UI on this
+    try {
+      console.log('Cancellation attempt 1/2 using endpoint: /api/payments/swish/cancel');
+      
+      // First try using the regular cancel endpoint that updates the database
+      const response = await fetch('/api/payments/swish/cancel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paymentReference,
+          cancelledBy: 'user',
+          cancelledFrom: 'payment-dialog'
+        }),
+      });
+      
+      // Log the response for debugging
+      console.log('Cancellation API response (attempt 1):', {
+        status: response.status,
+        ok: response.ok,
+        data: await response.json().catch(() => 'Failed to parse JSON')
+      });
+      
+      if (response.ok) {
+        console.log('Payment cancellation succeeded via API');
+      } else {
+        // If first attempt fails, try the simple-cancel endpoint as fallback
+        console.log('Cancellation attempt 2/2 using endpoint: /api/payments/swish/simple-cancel');
+        const fallbackResponse = await fetch('/api/payments/swish/simple-cancel', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             paymentReference,
             cancelledBy: 'user',
-            cancelledFrom: 'payment_dialog'
-          })
+            cancelledFrom: 'payment-dialog'
+          }),
+        }).catch(error => {
+          console.log('Fallback cancellation API error:', error);
+          return null;
         });
-
-        // Parse the response
-        let responseData;
-        try {
-          responseData = await cancelResponse.json();
-        } catch (parseError) {
-          console.error('Failed to parse cancel response:', parseError);
-          responseData = { success: false, error: 'Invalid response format' };
-        }
-
-        // Log the result for debugging
-        console.log(`Cancellation API response (attempt ${attempts}):`, {
-          status: cancelResponse.status,
-          ok: cancelResponse.ok,
-          data: responseData
-        });
-
-        // Handle response based on success status
-        if ((cancelResponse.ok && responseData.success) || attempts === maxAttempts) {
-          success = true;
-          console.log(`Payment cancellation ${responseData.success ? 'succeeded' : 'processing'} via API`);
-        } else {
-          errorMessage = responseData.error || 'Unknown error';
-          console.warn(`Cancellation attempt ${attempts} failed:`, errorMessage);
-          
-          // Only retry if this wasn't our last attempt
-          if (attempts < maxAttempts) {
-            console.log(`Will retry with fallback endpoint`);
-          }
-        }
-      } catch (error) {
-        errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`Error during payment cancellation attempt ${attempts}:`, error);
         
-        // Only retry if this wasn't our last attempt
-        if (attempts < maxAttempts) {
-          console.log(`Will retry with fallback endpoint due to error`);
+        if (fallbackResponse?.ok) {
+          console.log('Payment cancellation succeeded via fallback API');
+        } else {
+          console.log('Both cancellation attempts failed - continuing with UI update only');
         }
       }
+    } catch (error) {
+      // Log error but don't show to user since we already updated the UI
+      console.error('Error cancelling payment:', error);
     }
-
-    // Regardless of API success, continue with the UI flow
-    console.log('Payment cancellation handler called');
-    setShowPaymentDialog(false);
     
+    // Notify parent about cancellation regardless of API success
     if (onPaymentCancelled) {
       onPaymentCancelled();
     } else {
