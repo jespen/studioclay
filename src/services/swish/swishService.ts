@@ -133,16 +133,18 @@ export class SwishService {
   private async makeSwishRequest(options: any): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       const isStatusRequest = options.isStatusCheck === true;
+      const isCancellation = options.isCancellation === true;
       const requestMethod = options.method || 'POST';
       
-      // För status requests använder vi den URL som skickats in
-      const url = isStatusRequest ? options.url : this.config.getEndpointUrl('createPayment');
+      // För status requests eller cancellations använder vi den URL som skickats in
+      const url = (isStatusRequest || isCancellation) ? options.url : this.config.getEndpointUrl('createPayment');
       const isTestMode = this.config.isTest;
       
       logDebug('Swish API request:', {
         url,
         method: requestMethod,
-        isStatusRequest
+        isStatusRequest,
+        isCancellation
       });
 
       logDebug('Swish config info:', {
@@ -243,16 +245,16 @@ export class SwishService {
         }
       };
       
-      // Add body only for POST requests
-      if (requestMethod === 'POST' && !isStatusRequest) {
+      // Add body only for POST or PATCH requests
+      if ((requestMethod === 'POST' || requestMethod === 'PATCH') && !isStatusRequest) {
         // Redact sensitive information for logging
         const logData = { ...options };
         if (logData.payerAlias) {
           logData.payerAlias = logData.payerAlias.substring(0, 4) + '****' + logData.payerAlias.slice(-2);
         }
         
-        logDebug('Sending request to Swish API with data:', { url, ...logData });
-        fetchOptions.body = JSON.stringify(options);
+        logDebug('Sending request to Swish API with data:', { url, method: requestMethod, ...logData });
+        fetchOptions.body = options.body || JSON.stringify(options);
       } else {
         logDebug('Sending request to Swish API:', { url, method: requestMethod });
       }
@@ -435,6 +437,8 @@ export class SwishService {
    */
   async cancelPayment(paymentReference: string): Promise<void> {
     try {
+      logDebug('Cancelling Swish payment:', { paymentReference });
+
       // First, get the payment details from our database
       const response = await fetch(`/api/payments/status/${paymentReference}`);
       if (!response.ok) {
@@ -447,12 +451,9 @@ export class SwishService {
       }
 
       const swishPaymentId = data.data.payment.swish_payment_id;
-      const isTestMode = process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true';
-      const baseUrl = isTestMode 
-        ? (process.env.SWISH_TEST_API_URL || 'https://mss.cpc.getswish.net/swish-cpcapi/api/v1')
-        : (process.env.SWISH_PROD_API_URL || 'https://cpc.getswish.net/swish-cpcapi/api/v1');
-
-      const url = `${baseUrl}/paymentrequests/${swishPaymentId}`;
+      
+      // Use the configured API URL from the config
+      const url = this.config.getEndpointUrl('cancelPayment') + `/${swishPaymentId}`;
 
       logDebug('Cancelling Swish payment:', {
         paymentReference,
@@ -460,18 +461,16 @@ export class SwishService {
         url
       });
 
-      const agent = this.getHttpsAgent();
-      const cancelResponse = await fetch(url, {
+      // Use makeSwishRequest to ensure proper certificate handling
+      const result = await this.makeSwishRequest({
         method: 'PATCH',
-        agent,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ status: 'cancelled' })
+        url,
+        body: JSON.stringify({ status: 'cancelled' }),
+        isCancellation: true
       });
 
-      if (!cancelResponse.ok) {
-        throw new Error(`Failed to cancel payment: ${cancelResponse.status} ${cancelResponse.statusText}`);
+      if (!result.success) {
+        throw new Error(`Failed to cancel payment: ${result.error}`);
       }
 
       logDebug('Successfully cancelled Swish payment:', {
