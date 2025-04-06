@@ -417,10 +417,61 @@ export async function POST(request: Request) {
                   // Continue to next steps even if storage fails
                 }
                 
+                // Generate invoice PDF for the gift card purchase
+                console.log('13a. Generating invoice PDF for gift card purchase');
+                let invoicePdfBlob = null;
+                let invoicePdfBuffer = null;
+                
+                try {
+                  const invoiceData = {
+                    customerInfo: userInfo,
+                    courseDetails: {
+                      title: `Presentkort ${parseFloat(itemDetails.amount || amount)} kr`,
+                      description: itemDetails.message || '',
+                      start_date: new Date().toISOString(),
+                      location: "Studio Clay",
+                      price: parseFloat(itemDetails.amount || amount)
+                    },
+                    invoiceDetails: paymentDetails.invoiceDetails || {
+                      address: '',
+                      postalCode: '',
+                      city: ''
+                    },
+                    invoiceNumber,
+                    dueDate: formattedDueDate
+                  };
+                  
+                  invoicePdfBlob = await generateInvoicePDF(invoiceData);
+                  invoicePdfBuffer = Buffer.from(await invoicePdfBlob.arrayBuffer());
+                  console.log('13b. Successfully generated invoice PDF of size:', invoicePdfBuffer.length, 'bytes, time:', Date.now() - backgroundStartTime, 'ms');
+                  
+                  // Save invoice PDF to Supabase storage
+                  console.log('13c. Saving gift card invoice PDF to Supabase storage');
+                  const { error: invoiceStorageError } = await supabase
+                    .storage
+                    .from('invoices')
+                    .upload(`${invoiceNumber}.pdf`, invoicePdfBuffer, {
+                      contentType: 'application/pdf',
+                      upsert: true
+                    });
+                  
+                  if (invoiceStorageError) {
+                    console.error('13d. Error saving invoice PDF to storage:', invoiceStorageError);
+                  } else {
+                    console.log('13e. Successfully saved invoice PDF to storage, time:', Date.now() - backgroundStartTime, 'ms');
+                  }
+                  
+                } catch (invoicePdfError) {
+                  console.error('13f. Error generating or saving invoice PDF:', invoicePdfError);
+                  // Continue even if invoice PDF generation fails
+                }
+                
                 // Send gift card email with invoice information
                 console.log('14. Sending gift card invoice email in background');
                 try {
-                  const emailResult = await sendServerInvoiceEmail({
+                  // First send email with invoice PDF attachment
+                  console.log('14a. Sending invoice email with invoice PDF');
+                  const invoiceEmailResult = await sendServerInvoiceEmail({
                     userInfo: userInfo as UserInfo,
                     paymentDetails: paymentDetails as PaymentDetails,
                     courseDetails: {
@@ -432,10 +483,13 @@ export async function POST(request: Request) {
                       price: parseFloat(itemDetails.amount || amount)
                     },
                     invoiceNumber,
-                    pdfBuffer,
+                    pdfBuffer: invoicePdfBuffer || undefined, // Use the invoice PDF, handle null case
                     isGiftCard: true,
-                    giftCardCode
+                    giftCardCode,
+                    giftCardPdfBuffer: pdfBuffer || undefined // Pass the gift card PDF, handle null case
                   });
+                  
+                  console.log('14b. Invoice email result:', JSON.stringify(invoiceEmailResult));
                   
                   // If recipient email exists in itemDetails, send another email to them
                   if (itemDetails.recipientEmail) {
@@ -443,7 +497,7 @@ export async function POST(request: Request) {
                     console.log('Recipient email exists, could send additional email to:', itemDetails.recipientEmail);
                   }
                   
-                  console.log('15. Email result:', JSON.stringify(emailResult), 'time:', Date.now() - backgroundStartTime, 'ms');
+                  console.log('15. Email result completed, time:', Date.now() - backgroundStartTime, 'ms');
                 } catch (emailError) {
                   console.error('16. Error sending email in background:', emailError);
                   // Continue even if email fails
