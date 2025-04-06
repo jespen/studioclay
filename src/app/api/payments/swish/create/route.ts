@@ -418,11 +418,6 @@ export async function POST(request: Request) {
             .eq('payment_reference', paymentReference);
         }
 
-        // Handle product-specific logic
-        if (product_type === 'art_product') {
-          await handleArtProduct(product_id, user_info, phone_number, amount, paymentReference, paymentData.id);
-        }
-
         return NextResponse.json({
           success: true,
           data: {
@@ -445,65 +440,5 @@ export async function POST(request: Request) {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
-  }
-}
-
-// Helper function to handle art product specific logic
-async function handleArtProduct(
-  productId: string,
-  userInfo: any,
-  phoneNumber: string,
-  amount: number,
-  paymentReference: string,
-  paymentId: string
-) {
-  try {
-    // Create art order record with CREATED status
-    const { data: orderData, error: orderError } = await supabase
-      .from('art_orders')
-      .insert({
-        product_id: productId,
-        customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
-        customer_email: userInfo.email,
-        customer_phone: phoneNumber,
-        payment_method: 'swish',
-        order_reference: paymentReference,
-        unit_price: amount,
-        total_price: amount,
-        status: 'pending',
-        payment_status: 'CREATED', // Using the standard Swish payment status
-        metadata: {
-          payment_id: paymentId,
-          user_info: userInfo,
-          created_at: new Date().toISOString()
-        }
-      })
-      .select()
-      .single();
-
-    if (orderError) {
-      throw new Error('Failed to create art order');
-    }
-
-    // Only fetch product data to verify it exists and is in stock
-    const { data: productData, error: productFetchError } = await supabase
-      .from('products')
-      .select('stock_quantity, in_stock')
-      .eq('id', productId)
-      .single();
-
-    if (productFetchError || !productData) {
-      throw new Error('Failed to fetch product data');
-    }
-
-    if (!productData.in_stock || productData.stock_quantity < 1) {
-      throw new Error('Product is out of stock');
-    }
-
-    // Note: We don't update stock or send email here
-    // This will be handled in the callback when payment is confirmed
-  } catch (error) {
-    // Log error but don't throw - we don't want to fail the payment process
-    console.error('Error in art product handling:', error);
   }
 } 
