@@ -123,6 +123,8 @@ export async function POST(request: Request) {
 
     // Try to cancel in Swish first if we have a Swish payment ID
     let swishCancelled = false;
+    let swishError = null;
+    
     if (payment.swish_payment_id) {
       try {
         logDebug(`[${requestId}] Attempting to cancel payment in Swish`, {
@@ -131,7 +133,17 @@ export async function POST(request: Request) {
         
         const swishService = SwishService.getInstance();
         const swishStart = Date.now();
-        await swishService.cancelPayment(payment.swish_payment_id);
+        
+        // Wrap the cancelPayment call in a Promise.race with a timeout
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Swish cancellation timed out after 8 seconds')), 8000);
+        });
+        
+        await Promise.race([
+          swishService.cancelPayment(payment.swish_payment_id),
+          timeoutPromise
+        ]);
+        
         const swishDuration = Date.now() - swishStart;
         
         logDebug(`[${requestId}] Successfully cancelled payment in Swish in ${swishDuration}ms`, { 
@@ -139,10 +151,14 @@ export async function POST(request: Request) {
           swishPaymentId: payment.swish_payment_id 
         });
         swishCancelled = true;
-      } catch (swishError) {
-        logError(`[${requestId}] Error cancelling payment in Swish:`, swishError);
+      } catch (error) {
+        swishError = error;
+        logError(`[${requestId}] Error cancelling payment in Swish:`, error);
+        logDebug(`[${requestId}] Will continue to update database despite Swish API error`);
         // Continue to update our database even if Swish call fails
       }
+    } else {
+      logDebug(`[${requestId}] No Swish payment ID available, skipping Swish cancellation`);
     }
 
     // Prepare metadata for update
@@ -153,7 +169,12 @@ export async function POST(request: Request) {
         cancelled_by: cancelledBy,
         cancelled_from: cancelledFrom,
         previous_status: payment.status,
-        swish_cancelled: swishCancelled
+        swish_cancelled: swishCancelled,
+        swish_error: swishError ? {
+          message: swishError instanceof Error ? swishError.message : 'Unknown error',
+          name: swishError instanceof Error ? swishError.name : 'UnknownError',
+          time: new Date().toISOString()
+        } : null
       }
     };
 
@@ -213,6 +234,8 @@ export async function POST(request: Request) {
           details: updateError.message,
           code: updateError.code,
           hint: updateError.hint,
+          swishAttempted: payment.swish_payment_id ? true : false,
+          swishCancelled
         },
         { status: 500 }
       );
@@ -249,11 +272,14 @@ export async function POST(request: Request) {
       code: error?.code
     });
     
+    // Always return a meaningful response, even in case of unhandled exceptions
     return NextResponse.json(
       { 
         success: false, 
-        error: 'Internal server error',
-        details: errorMessage
+        error: 'Server error during payment cancellation',
+        message: errorMessage,
+        timestamp: new Date().toISOString(),
+        requestId
       },
       { status: 500 }
     );

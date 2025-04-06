@@ -433,52 +433,106 @@ export class SwishService {
 
   /**
    * Cancels a Swish payment request
-   * @param paymentReference The payment reference (e.g. SC-123456-789)
+   * @param paymentIdOrReference The Swish payment ID or payment reference (e.g. SC-123456-789)
+   * @param options Additional options for cancellation
    */
-  async cancelPayment(paymentReference: string): Promise<void> {
+  async cancelPayment(paymentIdOrReference: string, options: { timeout?: number, skipIdCheck?: boolean } = {}): Promise<void> {
+    if (!paymentIdOrReference) {
+      throw new Error('Payment ID or reference is required');
+    }
+
+    const timeout = options.timeout || 10000; // Default 10 second timeout
+    let swishPaymentId = paymentIdOrReference;
+    
+    // If the input looks like a payment reference (e.g. SC-123456-789), try to get the Swish payment ID
+    if (paymentIdOrReference.includes('-') && !options.skipIdCheck) {
+      try {
+        logDebug('Input looks like a payment reference, fetching Swish payment ID', {
+          paymentReference: paymentIdOrReference
+        });
+        
+        // First, get the payment details from our database
+        const startTime = Date.now();
+        const response = await fetch(`/api/payments/status/${paymentIdOrReference}`);
+        
+        if (!response.ok) {
+          logError('Failed to get payment details', {
+            status: response.status,
+            statusText: response.statusText,
+            paymentReference: paymentIdOrReference,
+            duration: Date.now() - startTime
+          });
+          throw new Error(`Failed to get payment details: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        logDebug('Received payment details', {
+          success: data.success,
+          hasData: !!data.data,
+          hasPayment: !!data.data?.payment,
+          hasSwishId: !!data.data?.payment?.swish_payment_id,
+          duration: Date.now() - startTime
+        });
+        
+        if (!data.success || !data.data?.payment?.swish_payment_id) {
+          throw new Error('Could not find Swish payment ID');
+        }
+
+        swishPaymentId = data.data.payment.swish_payment_id;
+        logDebug('Successfully resolved Swish payment ID', {
+          paymentReference: paymentIdOrReference,
+          swishPaymentId
+        });
+      } catch (error) {
+        logError('Error resolving Swish payment ID from reference', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          paymentReference: paymentIdOrReference
+        });
+        throw new Error(`Failed to resolve Swish payment ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    
+    // Use the configured API URL from the config
+    const url = this.config.getEndpointUrl('cancelPayment') + `/${swishPaymentId}`;
+
+    logDebug('Cancelling Swish payment', {
+      originalInput: paymentIdOrReference,
+      resolvedSwishId: swishPaymentId,
+      url,
+      timeout
+    });
+
     try {
-      logDebug('Cancelling Swish payment:', { paymentReference });
-
-      // First, get the payment details from our database
-      const response = await fetch(`/api/payments/status/${paymentReference}`);
-      if (!response.ok) {
-        throw new Error(`Failed to get payment details: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      if (!data.success || !data.data?.payment?.swish_payment_id) {
-        throw new Error('Could not find Swish payment ID');
-      }
-
-      const swishPaymentId = data.data.payment.swish_payment_id;
-      
-      // Use the configured API URL from the config
-      const url = this.config.getEndpointUrl('cancelPayment') + `/${swishPaymentId}`;
-
-      logDebug('Cancelling Swish payment:', {
-        paymentReference,
-        swishPaymentId,
-        url
-      });
-
       // Use makeSwishRequest to ensure proper certificate handling
-      const result = await this.makeSwishRequest({
-        method: 'PATCH',
-        url,
-        body: JSON.stringify({ status: 'cancelled' }),
-        isCancellation: true
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(`Swish cancellation timed out after ${timeout/1000} seconds`)), timeout);
       });
+      
+      const result = await Promise.race([
+        this.makeSwishRequest({
+          method: 'PATCH',
+          url,
+          body: JSON.stringify({ status: 'cancelled' }),
+          isCancellation: true
+        }),
+        timeoutPromise
+      ]) as { success: boolean; error?: string; data?: any };
 
       if (!result.success) {
         throw new Error(`Failed to cancel payment: ${result.error}`);
       }
 
-      logDebug('Successfully cancelled Swish payment:', {
-        paymentReference,
+      logDebug('Successfully cancelled Swish payment', {
+        originalInput: paymentIdOrReference,
         swishPaymentId
       });
     } catch (error) {
-      logError('Error cancelling Swish payment:', error);
+      logError('Error cancelling Swish payment', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        originalInput: paymentIdOrReference,
+        swishPaymentId,
+        url
+      });
       throw error;
     }
   }
