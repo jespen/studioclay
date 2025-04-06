@@ -447,12 +447,12 @@ export async function POST(request: NextRequest) {
               const backgroundStartTime = Date.now();
               
               // Create a keep-alive promise to delay function termination
-              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
+              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
               const keepAlivePromise = new Promise(resolve => {
                 const timerId = setTimeout(() => {
                   logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
                   resolve(true);
-                }, 15000);
+                }, 45000);
                 
                 // Ensure timer isn't lost to garbage collection
                 global.setTimeout = global.setTimeout || setTimeout;
@@ -573,12 +573,12 @@ export async function POST(request: NextRequest) {
               const backgroundStartTime = Date.now();
               
               // Create a keep-alive promise to delay function termination
-              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
+              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
               const keepAlivePromise = new Promise(resolve => {
                 const timerId = setTimeout(() => {
                   logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
                   resolve(true);
-                }, 15000);
+                }, 45000);
                 
                 // Ensure timer isn't lost to garbage collection
                 global.setTimeout = global.setTimeout || setTimeout;
@@ -786,12 +786,12 @@ export async function POST(request: NextRequest) {
                       const backgroundStartTime = Date.now();
                       
                       // Create a keep-alive promise to delay function termination
-                      logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
+                      logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
                       const keepAlivePromise = new Promise(resolve => {
                         const timerId = setTimeout(() => {
                           logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
                           resolve(true);
-                        }, 15000);
+                        }, 45000);
                         
                         // Ensure timer isn't lost to garbage collection
                         global.setTimeout = global.setTimeout || setTimeout;
