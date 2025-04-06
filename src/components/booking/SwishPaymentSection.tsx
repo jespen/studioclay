@@ -226,21 +226,36 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       return;
     }
 
+    console.log('Initiating payment cancellation for reference:', paymentReference);
+
     try {
-      const response = await fetch('/api/payments/swish/cancel', {
+      // First, cancel the payment in Swish
+      const cancelResponse = await fetch('/api/payments/swish/cancel', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ paymentReference })
+        body: JSON.stringify({ 
+          paymentReference,
+          // Add additional info for logging
+          cancelledBy: 'user',
+          cancelledFrom: 'payment_dialog'
+        })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to cancel payment');
+      if (!cancelResponse.ok) {
+        console.error('Failed to cancel Swish payment:', {
+          status: cancelResponse.status,
+          statusText: cancelResponse.statusText
+        });
+        throw new Error('Failed to cancel payment in Swish');
       }
 
-      const data = await response.json();
-      if (data.success) {
+      const cancelData = await cancelResponse.json();
+      console.log('Swish cancellation response:', cancelData);
+
+      if (cancelData.success) {
+        console.log('Payment successfully cancelled in Swish');
         setPaymentStatus(PaymentStatus.DECLINED);
         setShowPaymentDialog(false);
         if (onPaymentCancelled) {
@@ -249,7 +264,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           onPaymentComplete(false);
         }
       } else {
-        console.error('Payment cancellation failed:', data.error);
+        console.error('Payment cancellation failed:', cancelData.error);
         if (onPaymentFailure) {
           onPaymentFailure('ERROR');
         } else {
@@ -257,7 +272,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         }
       }
     } catch (error) {
-      console.error('Error cancelling payment:', error);
+      console.error('Error during payment cancellation:', error);
       if (onPaymentFailure) {
         onPaymentFailure('ERROR');
       } else {
