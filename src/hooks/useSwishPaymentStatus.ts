@@ -34,13 +34,13 @@ export const useSwishPaymentStatus = ({
   const isCancelledRef = useRef(false);
 
   // Check payment status
-  const checkPaymentStatus = async (directReference?: string): Promise<PaymentStatus> => {
+  const checkPaymentStatus = async (directReference?: string): Promise<PaymentStatus | null> => {
     const reference = directReference || paymentReference || getPaymentReference();
     console.log(`[${sessionId}] checkPaymentStatus called with reference:`, reference);
     
     if (!reference || reference === 'undefined' || reference === 'null') {
       console.error(`[${sessionId}] No valid payment reference available to check status`);
-      return PAYMENT_STATUS.ERROR;
+      return null;
     }
     
     try {
@@ -50,7 +50,7 @@ export const useSwishPaymentStatus = ({
       
       if (!response.ok) {
         console.error(`[${sessionId}] Payment status check failed with HTTP ${response.status}: ${response.statusText}`);
-        return PAYMENT_STATUS.ERROR;
+        return null;
       }
       
       const data = await response.json();
@@ -83,11 +83,12 @@ export const useSwishPaymentStatus = ({
         return mapToPaymentStatus(status);
       }
       
-      console.error(`[${sessionId}] No payment status found in response`);
-      return PAYMENT_STATUS.ERROR;
+      // If no status found, log it but do not generate an ERROR status
+      console.log(`[${sessionId}] No payment status found in response, continuing to poll`);
+      return null;
     } catch (error) {
       console.error(`[${sessionId}] Error checking payment status:`, error);
-      return PAYMENT_STATUS.ERROR;
+      return null;
     }
   };
 
@@ -183,7 +184,7 @@ export const useSwishPaymentStatus = ({
       const currentReference = paymentReference || getPaymentReference();
       if (!currentReference || currentReference === 'undefined' || currentReference === 'null') {
         console.log(`[${sessionId}] No valid reference available for polling`);
-        setPaymentStatus(PAYMENT_STATUS.ERROR);
+        // Stoppa pollning utan att sätta en ERROR-status
         if (pollingRef.current) {
           clearInterval(pollingRef.current);
           pollingRef.current = null;
@@ -199,11 +200,13 @@ export const useSwishPaymentStatus = ({
         const status = await checkPaymentStatus(currentReference);
         console.log(`[${sessionId}] Poll received status:`, status);
         
-        if (status !== paymentStatus) {
+        // Only update status if we got a non-null status from the API
+        if (status !== null && status !== paymentStatus) {
           console.log(`[${sessionId}] Updating payment status from`, paymentStatus, 'to', status);
           setPaymentStatus(status);
-        }
+        } 
         
+        // Handle completed states (PAID, DECLINED)
         if (status === PAYMENT_STATUS.PAID) {
           console.log(`[${sessionId}] Payment is PAID, clearing interval and preparing redirect`);
           if (pollingRef.current) {
@@ -221,8 +224,8 @@ export const useSwishPaymentStatus = ({
               router.push(redirectUrl);
             }
           }, 1500);
-        } else if (status === PAYMENT_STATUS.DECLINED || status === PAYMENT_STATUS.ERROR) {
-          console.log(`[${sessionId}] Payment failed or declined, clearing interval`);
+        } else if (status === PAYMENT_STATUS.DECLINED) {
+          console.log(`[${sessionId}] Payment declined, clearing interval`);
           if (pollingRef.current) {
             clearInterval(pollingRef.current);
             pollingRef.current = null;

@@ -82,6 +82,7 @@ export async function GET(
     // Return payment details in the new expected format
     return NextResponse.json({
       success: true,
+      status: payment.status,
       debug: { 
         search_reference: reference,
         payment_id: payment.id,
