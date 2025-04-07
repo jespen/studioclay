@@ -226,6 +226,11 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       });
       
       setPaymentReference(data.paymentReference);
+      
+      // Start polling for payment status
+      setIsPolling(true);
+      handlePaymentStatus(data.paymentReference);
+      
       setPaymentInProgress(false);
       return true;
       

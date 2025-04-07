@@ -68,7 +68,7 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
         *,
         course_templates (
           id,
-          name,
+          title,
           description,
           price
         )
@@ -84,17 +84,26 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
     if (!courseData) {
       throw new Error('Course not found');
     }
+    
+    // Format date using ISO format
+    const bookingDate = new Date().toISOString();
 
-    // Create the booking
+    // Create the booking with columns matching the database schema
     const { data: booking, error: bookingError } = await supabase
     .from('bookings')
     .insert({
-        reference: bookingReference,
-        course_instance_id: courseId,
-      payment_id: paymentId,
-        user_info: userInfo,
-        amount: courseData.course_templates.price,
-        status: 'CONFIRMED'
+        booking_reference: bookingReference,
+      course_id: courseId,
+      customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
+      customer_email: userInfo.email,
+      customer_phone: userInfo.phone,
+      number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
+        booking_date: bookingDate,
+        status: 'confirmed',
+        payment_status: 'paid',
+        payment_method: 'swish',
+        // Include the payment ID in a message or metadata if there's no direct column
+        message: `Payment ID: ${paymentId}`
     })
     .select()
     .single();
@@ -106,12 +115,25 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
 
     // Update course participants count
     const { error: updateError } = await supabase.rpc('increment_course_participants', {
-      course_instance_id: courseId
+      instance_id: courseId
     });
 
     if (updateError) {
       console.error('Error updating course participants:', updateError);
       // Don't throw here, as the booking is already created
+    }
+
+    // Also update the payment record to link to the booking
+    const { error: paymentUpdateError } = await supabase
+      .from('payments')
+      .update({
+        booking_id: booking.id
+      })
+      .eq('id', paymentId);
+
+    if (paymentUpdateError) {
+      console.error('Error linking payment to booking:', paymentUpdateError);
+      // Don't throw here as booking is created
   }
 
   return booking;
@@ -459,8 +481,8 @@ export async function POST(request: NextRequest) {
 
           const { data: existingBooking } = await supabase
             .from('bookings')
-            .select('id, reference')
-            .eq('reference', paymentSpecificBookingRef)
+            .select('id, booking_reference')
+            .eq('booking_reference', paymentSpecificBookingRef)
             .single();
             
           if (!existingBooking) {
@@ -468,7 +490,7 @@ export async function POST(request: NextRequest) {
             
             // Create a booking for this payment
             const booking = await createBooking(payment.id, productId, userInfo, paymentSpecificBookingRef);
-            const bookingReference = booking.reference;
+            const bookingReference = booking.booking_reference;
             
             logDebug(`[${requestId}] Booking created with reference: ${bookingReference}`);
             
@@ -503,7 +525,7 @@ export async function POST(request: NextRequest) {
                 // Get course details for email
                 const { data: courseDetails, error: courseDetailsError } = await supabase
                   .from('course_instances')
-                  .select('*, course_templates(name, description, price)')
+                  .select('*, course_templates(title, description, price)')
                   .eq('id', productId)
                   .single();
 
@@ -523,7 +545,7 @@ export async function POST(request: NextRequest) {
                   
                   const courseData = courseDetails || {
                     course_templates: {
-                      name: 'Okänd kurs',
+                      title: 'Okänd kurs',
                       description: '',
                       price: 0
                     },
@@ -547,7 +569,7 @@ export async function POST(request: NextRequest) {
                     },
                     courseDetails: {
                       id: productId,
-                      title: courseData.course_templates.name,
+                      title: courseData.course_templates.title,
                       description: courseData.course_templates.description,
                       start_date: courseData.start_date,
                       location: courseData.location,
@@ -578,7 +600,7 @@ export async function POST(request: NextRequest) {
           } else {
             logDebug(`[${requestId}] Booking already exists for this payment`, { 
               booking_id: existingBooking.id, 
-              reference: existingBooking.reference 
+              reference: existingBooking.booking_reference 
             });
           }
         } catch (error) {

@@ -47,53 +47,63 @@ export const useSwishPaymentStatus = ({
       console.log(`[${sessionId}] Checking status for payment: ${reference}`);
       
       const response = await fetch(`/api/payments/status/${reference}`);
+      
+      if (!response.ok) {
+        console.error(`[${sessionId}] Payment status check failed with HTTP ${response.status}: ${response.statusText}`);
+        return PAYMENT_STATUS.ERROR;
+      }
+      
       const data = await response.json();
       
       console.log(`[${sessionId}] Status check raw response:`, data);
       
-      if (!data.success) {
-        console.error(`[${sessionId}] Status API reported error:`, data);
-        return PAYMENT_STATUS.ERROR;
+      // Handle older API format
+      if (data.payment?.status) {
+        const status = data.payment.status.toUpperCase();
+        console.log(`[${sessionId}] Payment status (old format): ${status}`);
+        
+        if (data.booking?.reference) {
+          console.log(`[${sessionId}] Booking reference received:`, data.booking.reference);
+          setBookingReference(data.booking.reference);
+        }
+        
+        return mapToPaymentStatus(status);
       }
       
-      console.log(`[${sessionId}] Payment details from status check:`, {
-        id: data.data?.payment?.id,
-        status: data.data?.payment?.status,
-        created_at: data.data?.payment?.created_at,
-        updated_at: data.data?.payment?.updated_at,
-        callback_received: data.data?.payment?.callback_received,
-        callback_time: data.data?.payment?.callback_time,
-        direct_swish_status: data.data?.payment?.direct_swish_status
-      });
-      
-      if (data.data?.booking?.reference) {
-        console.log(`[${sessionId}] Booking reference received:`, data.data.booking.reference);
-        setBookingReference(data.data.booking.reference);
+      // Handle newer API format
+      if (data.status) {
+        const status = data.status.toUpperCase();
+        console.log(`[${sessionId}] Payment status (new format): ${status}`);
+        
+        if (data.bookingReference) {
+          console.log(`[${sessionId}] Booking reference received:`, data.bookingReference);
+          setBookingReference(data.bookingReference);
+        }
+        
+        return mapToPaymentStatus(status);
       }
       
-      const status = data.data?.payment?.status as string;
-      console.log(`[${sessionId}] Payment status: ${status}`);
-      
-      if (!status) {
-        console.error(`[${sessionId}] No payment status found in response`);
-        return PAYMENT_STATUS.ERROR;
-      }
-      
-      switch (status.toUpperCase()) {
-        case 'PAID':
-          return PAYMENT_STATUS.PAID;
-        case 'DECLINED':
-          return PAYMENT_STATUS.DECLINED;
-        case 'ERROR':
-          return PAYMENT_STATUS.ERROR;
-        case 'CREATED':
-          return PAYMENT_STATUS.CREATED;
-        default:
-          return PAYMENT_STATUS.CREATED;
-      }
+      console.error(`[${sessionId}] No payment status found in response`);
+      return PAYMENT_STATUS.ERROR;
     } catch (error) {
       console.error(`[${sessionId}] Error checking payment status:`, error);
       return PAYMENT_STATUS.ERROR;
+    }
+  };
+
+  // Helper function to map status string to PaymentStatus enum
+  const mapToPaymentStatus = (status: string): PaymentStatus => {
+    switch (status) {
+      case 'PAID':
+        return PAYMENT_STATUS.PAID;
+      case 'DECLINED':
+        return PAYMENT_STATUS.DECLINED;
+      case 'ERROR':
+        return PAYMENT_STATUS.ERROR;
+      case 'CREATED':
+        return PAYMENT_STATUS.CREATED;
+      default:
+        return PAYMENT_STATUS.CREATED;
     }
   };
 
