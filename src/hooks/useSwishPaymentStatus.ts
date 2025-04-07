@@ -45,18 +45,19 @@ export const useSwishPaymentStatus = ({
     }
     
     try {
-      console.log(`[${sessionId}] Checking status for payment: ${reference}`);
+      console.log(`[${sessionId}] Checking status for payment reference: ${reference} (typeof: ${typeof reference})`);
       
       const response = await fetch(`/api/payments/status/${reference}`);
       
       if (!response.ok) {
-        console.error(`[${sessionId}] Payment status check failed with HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`[${sessionId}] Payment status check failed with HTTP ${response.status}: ${response.statusText}`, errorText);
         return null;
       }
       
       const data = await response.json();
       
-      console.log(`[${sessionId}] Status check raw response:`, data);
+      console.log(`[${sessionId}] Status check raw response:`, JSON.stringify(data));
       
       // First try the newest API format (data.data.status)
       if (data.data?.status) {
@@ -200,15 +201,19 @@ export const useSwishPaymentStatus = ({
       console.log(`[${sessionId}] Payment status check attempt ${attempts}/${maxAttempts} for reference: ${currentReference}`);
       
       try {
-        // Regular status check
+        const currentStatus = paymentStatus;
         const status = await checkPaymentStatus(currentReference);
-        console.log(`[${sessionId}] Poll received status:`, status);
+        console.log(`[${sessionId}] Poll received status:`, status, 'current:', currentStatus);
         
         // Only update status if we got a non-null status from the API
         if (status !== null && status !== paymentStatus) {
           console.log(`[${sessionId}] Updating payment status from`, paymentStatus, 'to', status);
           setPaymentStatus(status);
-        } 
+        } else if (status === null) {
+          console.log(`[${sessionId}] Received null status, not updating`);
+        } else if (status === paymentStatus) {
+          console.log(`[${sessionId}] Status unchanged: ${status}, not updating`);
+        }
         
         // Handle completed states (PAID, DECLINED)
         if (status === PAYMENT_STATUS.PAID) {

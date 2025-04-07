@@ -26,23 +26,45 @@ export async function GET(
 
     console.log(`Checking payment status for reference: ${reference}`);
 
-    // First try to find payment by payment_reference
+    // First try to find payment by swish_payment_id since that's what the frontend often uses
     let { data: payment, error } = await supabase
       .from('payments')
       .select('*')
-      .eq('payment_reference', reference)
+      .eq('swish_payment_id', reference)
       .single();
+      
+    console.log(`Search by swish_payment_id=${reference} result:`, payment ? 'Found' : 'Not found');
 
-    // If not found, try with swish_payment_id
+    // If not found, try with payment_reference
     if (!payment && !error) {
+      console.log(`Payment not found by swish_payment_id, trying payment_reference=${reference}`);
       const { data: payment2, error: error2 } = await supabase
         .from('payments')
         .select('*')
-        .eq('swish_payment_id', reference)
+        .eq('payment_reference', reference)
         .single();
       
       payment = payment2;
       error = error2;
+      console.log(`Search by payment_reference result:`, payment ? 'Found' : 'Not found');
+    }
+
+    // If still not found, try searching by message (sometimes reference ends up in message)
+    if (!payment && !error) {
+      console.log(`Payment not found by either reference, checking if it's in message field`);
+      const { data: payments, error: messageError } = await supabase
+        .from('payments')
+        .select('*')
+        .ilike('message', `%${reference}%`)
+        .limit(1);
+      
+      if (payments && payments.length > 0) {
+        payment = payments[0];
+        error = null;
+        console.log(`Found payment by message containing reference`);
+      } else {
+        console.log(`No payment found with reference ${reference} in any field`);
+      }
     }
 
     if (error) {

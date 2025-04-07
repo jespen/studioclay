@@ -455,11 +455,13 @@ export async function POST(request: Request) {
         return NextResponse.json({
           success: true,
           paymentReference: paymentData.payment_reference,
+          swishPaymentReference: result.data?.reference,
           data: {
             id: paymentData.id,
             status: paymentData.status,
             amount: paymentData.amount,
-            currency: paymentData.currency
+            currency: paymentData.currency,
+            swish_payment_id: result.data?.reference
           }
         });
 

@@ -54,6 +54,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
   );
   const [error, setError] = useState<string>();
   const [paymentReference, setPaymentReference] = useState<string>('');
+  const [swishPaymentReference, setSwishPaymentReference] = useState<string>('');
   const [paymentInProgress, setPaymentInProgress] = useState<boolean>(false);
   const [isPolling, setIsPolling] = useState<boolean>(false);
 
@@ -207,6 +208,9 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
 
       const data = await response.json();
       
+      // Logga hela API-svaret för debugging
+      console.log('Full payment creation response:', data);
+      
       // Check if this was a duplicate payment that already exists
       if (data.data?.already_exists) {
         console.log('Found existing payment with same idempotency key:', data.paymentReference);
@@ -222,12 +226,14 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
 
       console.log('Payment created successfully:', {
         paymentReference: data.paymentReference,
+        swishPaymentReference: data.swishPaymentReference,
         flowType,
         productType
       });
       
-      // Store the payment reference in local storage and component state
+      // Store both references
       setPaymentReference(data.paymentReference);
+      setSwishPaymentReference(data.swishPaymentReference || data.paymentReference);
       
       // Start polling for payment status immediately
       setIsPolling(true);
@@ -327,8 +333,12 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
 
   const handlePaymentStatus = async (paymentReference: string) => {
     try {
-      // Use the correct API endpoint
-      const response = await fetch(`/api/payments/status/${paymentReference}`);
+      // Log vilket värde vi faktiskt använder
+      console.log('Checking payment status with reference:', paymentReference);
+      
+      // Use the correct API endpoint - prefer swishPaymentReference if available
+      const statusReference = swishPaymentReference || paymentReference;
+      const response = await fetch(`/api/payments/status/${statusReference}`);
       const data = await response.json();
 
       console.log('Payment status response:', data);
