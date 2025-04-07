@@ -64,7 +64,7 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
     // Get course information to save in booking
     const { data: courseData, error: courseError } = await supabase
       .from('course_instances')
-      .select('*, courses(name, price)')
+      .select('*, course_templates(name, price)')
       .eq('id', courseId)
       .single();
     
@@ -87,7 +87,7 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
         payment_method: 'swish',
         payment_status: 'paid',
         payment_id: paymentId, // Store payment_id directly as a column
-        amount: courseData.courses.price,
+        amount: courseData.course_templates.price,
         number_of_participants: parseInt(userInfo.numberOfParticipants) || 1
       })
       .select()
@@ -456,8 +456,8 @@ export async function POST(request: NextRequest) {
 
           const { data: existingBooking } = await supabase
             .from('bookings')
-            .select('id, booking_reference')
-            .eq('booking_reference', paymentSpecificBookingRef)
+            .select('id, reference')
+            .eq('reference', paymentSpecificBookingRef)
             .single();
             
           if (!existingBooking) {
@@ -497,69 +497,75 @@ export async function POST(request: NextRequest) {
               });
               
               try {
-                // Try to send confirmation email
-                logDebug(`[${requestId}] Sending booking confirmation email`);
-                
-                const { sendServerBookingConfirmationEmail } = await import('@/utils/serverEmail');
-                
-                // Fetch course details
-                const { data: courseData, error: courseError } = await supabase
+                // Get course details for email
+                const { data: courseDetails, error: courseDetailsError } = await supabase
                   .from('course_instances')
-                  .select('*')
+                  .select('*, course_templates(name, description, price)')
                   .eq('id', productId)
                   .single();
+
+                if (courseDetailsError) {
+                  console.error(`[${requestId}] Error fetching course details:`, courseDetailsError);
+                  // Continue without course details
+                }
+
+                // We need to dynamically load the serverEmail module to avoid edge runtime errors
+                logDebug(`[${requestId}] Loading serverEmail module for email sending`);
+                const { sendServerBookingConfirmationEmail } = await import('@/utils/serverEmail');
+
+                // Process email in the background
+                let emailResult;
+                try {
+                  logDebug(`[${requestId}] Setting up email data for booking confirmation`);
                   
-                if (courseError) {
-                  logError(`[${requestId}] Error fetching course details for email:`, courseError);
-                  throw new Error('Failed to fetch course details for email');
+                  const courseData = courseDetails || {
+                    course_templates: {
+                      name: 'Okänd kurs',
+                      description: '',
+                      price: 0
+                    },
+                    start_date: new Date().toISOString(),
+                    location: 'Studio Clay',
+                  };
+                  
+                  emailResult = await sendServerBookingConfirmationEmail({
+                    userInfo: {
+                      firstName: userInfo.firstName,
+                      lastName: userInfo.lastName,
+                      email: userInfo.email,
+                      phone: userInfo.phone,
+                      numberOfParticipants: userInfo.numberOfParticipants || "1",
+                      specialRequirements: userInfo.specialRequirements || ""
+                    },
+                    paymentDetails: {
+                      method: 'swish',
+                      status: 'PAID',
+                      paymentReference: reference
+                    },
+                    courseDetails: {
+                      id: productId,
+                      title: courseData.course_templates.name,
+                      description: courseData.course_templates.description,
+                      start_date: courseData.start_date,
+                      location: courseData.location,
+                      price: courseData.course_templates.price
+                    },
+                    bookingReference: bookingReference
+                  });
+                } catch (emailError) {
+                  logError(`[${requestId}] Error sending confirmation email:`, emailError);
+                  // Don't fail the overall process if email sending fails
                 }
                 
-                logDebug(`[${requestId}] DIAGNOSTIC: About to attempt email sending for course booking`);
-                logDebug(`[${requestId}] DIAGNOSTIC: Email parameters:`, {
-                  recipientEmail: userInfo.email,
-                  courseTitle: courseData.title,
-                  bookingReference: bookingReference,
-                  paymentReference: reference
-                });
+                // Wait for the keep-alive promise to resolve before finishing
+                logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
+                await keepAlivePromise;
+                logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
                 
-                const emailResult = await sendServerBookingConfirmationEmail({
-                  userInfo: {
-                    firstName: userInfo.firstName,
-                    lastName: userInfo.lastName,
-                    email: userInfo.email,
-                    phone: userInfo.phone,
-                    numberOfParticipants: userInfo.numberOfParticipants || "1",
-                    specialRequirements: userInfo.specialRequirements || ""
-                  },
-                  paymentDetails: {
-                    method: 'swish',
-                    status: 'PAID',
-                    paymentReference: reference
-                  },
-                  courseDetails: {
-                    id: productId,
-                    title: courseData.title,
-                    description: courseData.description,
-                    start_date: courseData.start_date,
-                    location: courseData.location,
-                    price: courseData.price
-                  },
-                  bookingReference: bookingReference
-                });
-                
-                logDebug(`[${requestId}] Email sending result:`, emailResult);
-                logDebug(`[${requestId}] Background email process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
-              } catch (emailError) {
-                logError(`[${requestId}] Error sending confirmation email:`, emailError);
-                // Don't fail the overall process if email sending fails
+                return { success: true };
+              } catch (backgroundError) {
+                logError(`[${requestId}] Error in background email processing:`, backgroundError);
               }
-              
-              // Wait for the keep-alive promise to resolve before finishing
-              logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
-              await keepAlivePromise;
-              logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
-              
-              return { success: true };
             };
             
             // Execute the background process with explicit promise handling
@@ -569,7 +575,7 @@ export async function POST(request: NextRequest) {
           } else {
             logDebug(`[${requestId}] Booking already exists for this payment`, { 
               booking_id: existingBooking.id, 
-              reference: existingBooking.booking_reference 
+              reference: existingBooking.reference 
             });
           }
         } catch (error) {
