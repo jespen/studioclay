@@ -56,11 +56,16 @@ export const useSwishPaymentStatus = ({
       }
       
       const data = await response.json();
+      console.log(`[${sessionId}] FULL API RESPONSE:`, JSON.stringify(data));
       
-      console.log(`[${sessionId}] Status check raw response:`, JSON.stringify(data));
+      // VIKTIG DEBUGLOGGNING - Logga hela sökvägen till status
+      console.log(`[${sessionId}] Looking for status in response:
+      - data.data?.status = ${data.data?.status}
+      - data.status = ${data.status}
+      - data.payment?.status = ${data.payment?.status}
+      `);
       
-      // MYCKET VIKTIG ÄNDRING: Sök explicit efter PAID status oavsett format
-      // Detta fångar alltid PAID om det finns någonstans i svaret
+      // MYCKET VIKTIG ÄNDRING - ALLTID RETURNA PAID OM HITTAT
       if (
         (data.data?.status === PAYMENT_STATUSES.PAID) || 
         (data.status === PAYMENT_STATUSES.PAID) || 
@@ -194,6 +199,15 @@ export const useSwishPaymentStatus = ({
     let attempts = 0;
     const maxAttempts = 30; // 60 seconds with 2 second interval
     let redirectTimeout: NodeJS.Timeout;
+    let pollInterval: NodeJS.Timeout;
+
+    // Viktigt: Logga när denna effekt triggas och varför
+    console.log(`[${sessionId}] useEffect for polling triggered:
+    - showPaymentDialog: ${showPaymentDialog}
+    - paymentReference: ${paymentReference || getPaymentReference() || 'NONE'}
+    - paymentStatus: ${paymentStatus}
+    - isCancelled: ${isCancelledRef.current}
+    `);
 
     const pollStatus = async () => {
       // Don't poll if dialog is closed or payment is cancelled
@@ -226,28 +240,27 @@ export const useSwishPaymentStatus = ({
       console.log(`[${sessionId}] Payment status check attempt ${attempts}/${maxAttempts} for reference: ${currentReference}`);
       
       try {
+        // Spara aktuell status för korrekt jämförelse
         const currentStatus = paymentStatus;
         const status = await checkPaymentStatus(currentReference);
         console.log(`[${sessionId}] Poll received status:`, status, 'current:', currentStatus);
         
-        // Only update status if we got a non-null status from the API
-        if (status !== null && status !== paymentStatus) {
-          console.log(`[${sessionId}] Updating payment status from`, paymentStatus, 'to', status);
-          setPaymentStatus(status);
-        } else if (status === null) {
-          console.log(`[${sessionId}] Received null status, not updating`);
-        } else if (status === paymentStatus) {
-          console.log(`[${sessionId}] Status unchanged: ${status}, not updating`);
-        }
-        
-        // Handle completed states (PAID, DECLINED)
+        // PRIORITERA ALLTID PAID status oavsett tidigare tillstånd
         if (status === PAYMENT_STATUS.PAID) {
-          console.log(`[${sessionId}] Payment is PAID, clearing interval and preparing redirect`);
+          console.log(`[${sessionId}] Received PAID status, IMMEDIATELY updating regardless of current state`);
+          setPaymentStatus(PAYMENT_STATUS.PAID);
+          
+          // Visa extra debug
+          console.log(`[${sessionId}] CRITICALLY IMPORTANT: Status is now PAID - dialog should update`);
+          console.log(`[${sessionId}] paymentStatus=${currentStatus}, new status=${status}`);
+          
+          // Stäng polling direkt
           if (pollingRef.current) {
             clearInterval(pollingRef.current);
             pollingRef.current = null;
           }
           
+          // Förbereder redirect
           redirectTimeout = setTimeout(() => {
             console.log(`[${sessionId}] Redirecting after successful payment`);
             if (onSuccess) {
@@ -258,12 +271,27 @@ export const useSwishPaymentStatus = ({
               router.push(redirectUrl);
             }
           }, 1500);
-        } else if (status === PAYMENT_STATUS.DECLINED) {
-          console.log(`[${sessionId}] Payment declined, clearing interval`);
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
+          
+          return; // Avsluta direkt
+        }
+        
+        // För andra statusar, normal logik
+        if (status !== null && status !== currentStatus) {
+          console.log(`[${sessionId}] Updating payment status from`, currentStatus, 'to', status);
+          setPaymentStatus(status);
+          
+          // Handle DECLINED
+          if (status === PAYMENT_STATUS.DECLINED) {
+            console.log(`[${sessionId}] Payment declined, clearing interval`);
+            if (pollingRef.current) {
+              clearInterval(pollingRef.current);
+              pollingRef.current = null;
+            }
           }
+        } else if (status === null) {
+          console.log(`[${sessionId}] Received null status, not updating`);
+        } else if (status === currentStatus) {
+          console.log(`[${sessionId}] Status unchanged: ${status}, not updating`);
         }
       } catch (error) {
         console.error(`[${sessionId}] Error in pollStatus:`, error);
@@ -271,9 +299,23 @@ export const useSwishPaymentStatus = ({
     };
 
     if (showPaymentDialog && (paymentReference || getPaymentReference()) && !isCancelledRef.current) {
-      console.log(`[${sessionId}] Starting payment status polling`);
+      console.log(`[${sessionId}] Starting payment status polling now!`);
+      
+      // Kör omedelbart
       pollStatus();
+      
+      // Rensa tidigare interval om det finns
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+      
+      // Sätt nytt interval
       pollingRef.current = setInterval(pollStatus, 2000);
+      
+      // Debugloggning
+      console.log(`[${sessionId}] Polling interval set with ID: ${pollingRef.current}`);
+    } else {
+      console.log(`[${sessionId}] Not starting polling because conditions not met`);
     }
 
     return () => {

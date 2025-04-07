@@ -80,6 +80,16 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
     }
   };
   
+  // I början av komponenten, lägg till loggning av statusändringar
+  useEffect(() => {
+    console.log(`SwishPaymentDialog: Payment status changed to: ${paymentStatus}`);
+    
+    // Extra check för PAID-status
+    if (paymentStatus === PAYMENT_STATUS.PAID) {
+      console.log('SwishPaymentDialog: PAID status detected, dialog should show success view!');
+    }
+  }, [paymentStatus]);
+  
   return (
     <Dialog 
       open={open} 
