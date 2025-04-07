@@ -66,7 +66,7 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
     .from('course_instances')
       .select(`
         *,
-        course_templates (
+        course_templates:template_id (
           id,
           title,
           description,
@@ -525,7 +525,7 @@ export async function POST(request: NextRequest) {
                 // Get course details for email
                 const { data: courseDetails, error: courseDetailsError } = await supabase
                   .from('course_instances')
-                  .select('*, course_templates(title, description, price)')
+                  .select('*, course_templates:template_id(title, description, price)')
                   .eq('id', productId)
                   .single();
 
@@ -569,11 +569,11 @@ export async function POST(request: NextRequest) {
                     },
                     courseDetails: {
                       id: productId,
-                      title: courseData.course_templates.title,
-                      description: courseData.course_templates.description,
+                      title: courseData.course_templates?.title || courseData.title || 'Okänd kurs',
+                      description: courseData.course_templates?.description || courseData.description || '',
                       start_date: courseData.start_date,
                       location: courseData.location,
-                      price: courseData.course_templates.price
+                      price: courseData.course_templates?.price || courseData.price || 0
                     },
                     bookingReference: bookingReference
                   });
@@ -815,7 +815,7 @@ export async function POST(request: NextRequest) {
                   // First get the current product
                   const { data: productData, error: productFetchError } = await supabase
                     .from('products')
-                    .select('title, price, description, image, stock_quantity, in_stock')
+                    .select('id, title, price, description, image, stock_quantity, in_stock')
                     .eq('id', productId)
                     .single();
                     

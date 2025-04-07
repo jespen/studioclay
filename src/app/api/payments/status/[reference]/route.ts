@@ -18,7 +18,7 @@ export async function GET(
     
     if (!reference) {
       return NextResponse.json(
-        { error: 'Payment reference is required' },
+        { success: false, error: 'Payment reference is required' },
         { status: 400 }
       );
     }
@@ -28,7 +28,7 @@ export async function GET(
     // First try to find payment by payment_reference
     let { data: payment, error } = await supabase
       .from('payments')
-      .select('id, status, payment_reference, swish_payment_id')
+      .select('*')
       .eq('payment_reference', reference)
       .single();
 
@@ -36,7 +36,7 @@ export async function GET(
     if (!payment && !error) {
       const { data: payment2, error: error2 } = await supabase
         .from('payments')
-        .select('id, status, payment_reference, swish_payment_id')
+        .select('*')
         .eq('swish_payment_id', reference)
         .single();
       
@@ -49,46 +49,63 @@ export async function GET(
       
       // If we simply didn't find a payment, that's different than a real error
       if (error.code === 'PGRST116') {
-        return NextResponse.json(
-          { status: 'PENDING', message: 'Payment not found yet' },
-          { status: 200 }
-        );
+        return NextResponse.json({
+          success: true,
+          debug: { error: 'Payment not found yet', code: error.code },
+          data: { status: 'PENDING', callback_received: false }
+        }, { status: 200 });
       }
       
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
+      return NextResponse.json({
+        success: false,
+        error: error.message,
+        debug: { error_details: error }
+      }, { status: 500 });
     }
 
     if (!payment) {
-      return NextResponse.json(
-        { status: 'UNKNOWN', message: 'Payment not found' },
-        { status: 200 }
-      );
+      return NextResponse.json({
+        success: true,
+        debug: { message: 'Payment not found' },
+        data: { status: 'UNKNOWN', callback_received: false }
+      }, { status: 200 });
     }
 
-    // Check if there's a booking for this payment
+    // Find booking by looking for bookings with this payment_id or reference
     const { data: booking } = await supabase
       .from('bookings')
-      .select('id, reference')
-      .eq('payment_id', payment.id)
-      .single();
+      .select('*')
+      .or(`payment_id.eq.${payment.id},message.ilike.%${payment.id}%`)
+      .limit(1)
+      .maybeSingle();
 
+    // Return payment details in the new expected format
     return NextResponse.json({
-      status: payment.status,
-      paymentId: payment.id,
-      paymentReference: payment.payment_reference,
-      swishPaymentId: payment.swish_payment_id,
-      bookingId: booking?.id,
-      bookingReference: booking?.reference
+      success: true,
+      debug: { 
+        search_reference: reference,
+        payment_id: payment.id,
+        booking_found: !!booking 
+      },
+      data: {
+        id: payment.id,
+        status: payment.status,
+        created_at: payment.created_at,
+        updated_at: payment.updated_at,
+        callback_received: payment.status === 'PAID',
+        payment_reference: payment.payment_reference,
+        swish_payment_id: payment.swish_payment_id,
+        booking_id: booking?.id,
+        booking_reference: booking?.reference || booking?.booking_reference
+      }
     });
 
   } catch (error) {
     console.error('Error in status check:', error);
-    return NextResponse.json(
-      { error: 'Internal server error', status: 'ERROR' },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: false,
+      error: 'Internal server error',
+      debug: { error_details: error }
+    }, { status: 500 });
   }
 } 
