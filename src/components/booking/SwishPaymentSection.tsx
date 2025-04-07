@@ -54,6 +54,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
   const [error, setError] = useState<string>();
   const [paymentReference, setPaymentReference] = useState<string>('');
   const [paymentInProgress, setPaymentInProgress] = useState<boolean>(false);
+  const [isPolling, setIsPolling] = useState<boolean>(false);
 
   const {
     paymentStatus,
@@ -311,6 +312,34 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       onPaymentCancelled();
     } else {
       onPaymentComplete(false);
+    }
+  };
+
+  const handlePaymentStatus = async (paymentReference: string) => {
+    try {
+      const response = await fetch(`/api/payments/swish/status?paymentReference=${paymentReference}`);
+      const data = await response.json();
+
+      if (data.status === 'PAID') {
+        setPaymentStatus('PAID');
+        setIsPolling(false);
+        onPaymentComplete(true);
+      } else if (data.status === 'DECLINED' || data.status === 'ERROR') {
+        setPaymentStatus('DECLINED');
+        setIsPolling(false);
+        onPaymentFailure?.(data.status === 'DECLINED' ? 'DECLINED' : 'ERROR');
+      } else if (data.status === 'CREATED') {
+        // Continue polling if payment is still in progress
+        if (isPolling) {
+          setTimeout(() => handlePaymentStatus(paymentReference), 2000);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+      // Don't stop polling on network errors, as the payment might still be processing
+      if (isPolling) {
+        setTimeout(() => handlePaymentStatus(paymentReference), 2000);
+      }
     }
   };
 

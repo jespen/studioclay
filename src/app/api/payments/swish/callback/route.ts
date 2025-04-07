@@ -61,57 +61,60 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
   console.log(`Creating booking for course ${courseId} with payment ${paymentId}`);
   
   try {
-    // Get course information to save in booking
+    // First get the course instance and template data
     const { data: courseData, error: courseError } = await supabase
-      .from('course_instances')
-      .select('*, course_templates(name, price)')
-      .eq('id', courseId)
-      .single();
-    
-    if (courseError) {
+    .from('course_instances')
+      .select(`
+        *,
+        course_templates (
+          id,
+          name,
+          description,
+          price
+        )
+      `)
+    .eq('id', courseId)
+    .single();
+
+  if (courseError) {
       console.error('Error fetching course data:', courseError);
       throw new Error(`Failed to get course data: ${courseError.message}`);
     }
-    
-    // Insert the booking record
-    const { data: bookingData, error: bookingError } = await supabase
-      .from('bookings')
-      .insert({
+
+    if (!courseData) {
+      throw new Error('Course not found');
+    }
+
+    // Create the booking
+    const { data: booking, error: bookingError } = await supabase
+    .from('bookings')
+    .insert({
         reference: bookingReference,
-        first_name: userInfo.firstName,
-        last_name: userInfo.lastName,
-        email: userInfo.email,
-        phone: userInfo.phone,
         course_instance_id: courseId,
-        status: 'confirmed',
-        payment_method: 'swish',
-        payment_status: 'paid',
-        payment_id: paymentId, // Store payment_id directly as a column
+      payment_id: paymentId,
+        user_info: userInfo,
         amount: courseData.course_templates.price,
-        number_of_participants: parseInt(userInfo.numberOfParticipants) || 1
-      })
-      .select()
-      .single();
-    
+        status: 'CONFIRMED'
+    })
+    .select()
+    .single();
+
     if (bookingError) {
       console.error('Error creating booking:', bookingError);
       throw new Error(`Failed to create booking: ${bookingError.message}`);
     }
-    
-    // Update course instance to increase participant count
-    const participantCount = parseInt(userInfo.numberOfParticipants) || 1;
-    
+
+    // Update course participants count
     const { error: updateError } = await supabase.rpc('increment_course_participants', {
-      instance_id: courseId,
-      increment_by: participantCount
+      course_instance_id: courseId
     });
-    
+
     if (updateError) {
-      console.error('Error updating course participant count:', updateError);
-      // Don't throw, as booking is created successfully
-    }
-    
-    return bookingData;
+      console.error('Error updating course participants:', updateError);
+      // Don't throw here, as the booking is already created
+  }
+
+  return booking;
   } catch (error) {
     console.error('Error in booking creation:', error);
     throw error;

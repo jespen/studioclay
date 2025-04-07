@@ -15,87 +15,63 @@ const supabase = createClient(
  */
 export async function GET(request: NextRequest) {
   try {
-    // Konfigurera certifikat i produktionsmiljö
-    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_SWISH_TEST_MODE !== 'true') {
-      logDebug('Setting up Swish certificates from environment variables in status endpoint');
-      const certSetupResult = setupCertificate();
-      
-      if (!certSetupResult.success) {
-        logError('Failed to set up Swish certificates in status endpoint:', certSetupResult);
-      }
+    const paymentReference = request.nextUrl.searchParams.get('paymentReference');
+    
+    if (!paymentReference) {
+      return NextResponse.json(
+        { error: 'Payment reference is required' },
+        { status: 400 }
+      );
     }
-    
-    const url = new URL(request.url);
-    const reference = url.searchParams.get('reference');
-    
-    if (!reference) {
-      return NextResponse.json({
-        success: false,
-        error: 'Missing payment reference'
-      }, { status: 400 });
-    }
-    
-    // Logga anrop för felsökning
-    logDebug('Checking payment status for reference:', reference);
-    
-    // Hämta betalningsinformation från databasen
-    const { data: payment, error } = await supabase
+
+    // First try to find payment by payeePaymentReference
+    let { data: payment, error } = await supabase
       .from('payments')
       .select('*')
-      .eq('payment_reference', reference)
+      .eq('payment_reference', paymentReference)
       .single();
-    
+
+    // If not found, try with swish_payment_id
+    if (!payment && !error) {
+      const { data: payment2, error: error2 } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('swish_payment_id', paymentReference)
+        .single();
+      
+      payment = payment2;
+      error = error2;
+    }
+
     if (error) {
-      logError('Error fetching payment:', error);
-      
-      // Om vi inte hittar betalning i databasen, kanske den inte har kommit tillbaka från Swish än
-      if (error.code === 'PGRST116') {
-        return NextResponse.json({
-          success: true,
-          message: 'Payment not found in database yet',
-          status: 'PENDING',
-          reference: reference,
-          note: 'This payment might be new or still processing. Check again in a few seconds.'
-        });
-      }
-      
-      return NextResponse.json({
-        success: false,
-        error: error.message
-      }, { status: 500 });
+      console.error('Error fetching payment:', error);
+      return NextResponse.json(
+        { error: 'Payment not found' },
+        { status: 404 }
+      );
     }
-    
-    if (!payment) {
-      return NextResponse.json({
-        success: true,
-        message: 'Payment not found',
-        status: 'UNKNOWN',
-        reference: reference
-      });
-    }
-    
-    // Returnera status och information om betalningen
+
+    // Check if there's a booking for this payment
+    const { data: booking } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('payment_id', payment.id)
+      .single();
+
     return NextResponse.json({
-      success: true,
-      message: 'Payment status retrieved',
-      payment: {
-        reference: payment.payment_reference,
-        status: payment.status,
-        amount: payment.amount,
-        created_at: payment.created_at,
-        updated_at: payment.updated_at,
-        method: payment.payment_method
-      },
-      // Instruktioner baserade på status
-      next_steps: getNextStepsForStatus(payment.status)
+      status: payment.status,
+      paymentId: payment.id,
+      bookingId: booking?.id,
+      bookingReference: booking?.reference,
+      error: payment.error_message
     });
-    
+
   } catch (error) {
-    logError('Error checking payment status:', error);
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    console.error('Error in status check:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
