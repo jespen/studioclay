@@ -67,6 +67,54 @@ export async function GET(
       }
     }
 
+    // Om vi fortfarande inte har hittat någon betalning, gör en bredare sökning
+    // Hämta ALLA nyligen betalda betalningar och försök matcha på något sätt
+    if (!payment && !error) {
+      console.log(`Checking ALL recently paid payments as a last resort for reference: ${reference}`);
+      
+      // Hämta alla betalningar med status='PAID' från de senaste 10 minuterna
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      
+      const { data: recentPayments } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('status', 'PAID')
+        .gt('updated_at', tenMinutesAgo)
+        .order('updated_at', { ascending: false });
+      
+      if (recentPayments && recentPayments.length > 0) {
+        console.log(`Found ${recentPayments.length} recent PAID payments, checking for matches`);
+        
+        // Försök hitta någon som matchar på något sätt
+        for (const p of recentPayments) {
+          // Kolla om någon del av metadata innehåller referensen
+          const metadataStr = JSON.stringify(p.metadata || {});
+          const messageMatch = (p.message || '').includes(reference);
+          const metadataMatch = metadataStr.includes(reference);
+          
+          if (
+            // De vanliga fälten
+            p.payment_reference === reference ||
+            p.swish_payment_id === reference ||
+            // Mer flexibel matchning
+            messageMatch || 
+            metadataMatch
+          ) {
+            console.log(`Found matching payment through broad search! Match type: ${
+              p.payment_reference === reference ? 'payment_reference' :
+              p.swish_payment_id === reference ? 'swish_payment_id' :
+              messageMatch ? 'message' :
+              'metadata'
+            }`);
+            
+            payment = p;
+            error = null;
+            break;
+          }
+        }
+      }
+    }
+
     if (error) {
       console.error('Error fetching payment:', error);
       

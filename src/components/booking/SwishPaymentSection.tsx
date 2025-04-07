@@ -331,6 +331,10 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
     }
   };
 
+  // Variabel för att hålla reda på misslyckade försök
+  let failedAttempts = 0;
+  const MAX_FAILED_ATTEMPTS = 5;
+
   const handlePaymentStatus = async (paymentReference: string) => {
     try {
       // Vi provar BÅDA referenserna varje gång för att vara säkra
@@ -385,6 +389,52 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         if (isPolling) {
           setTimeout(() => handlePaymentStatus(paymentReference), 2000);
         }
+      }
+
+      // Om båda misslyckades, och vi har försökt tillräckligt många gånger, gör ett "SISTA FÖRSÖK"
+      if (
+        status !== PAYMENT_STATUSES.PAID && 
+        failedAttempts >= MAX_FAILED_ATTEMPTS && 
+        paymentReference
+      ) {
+        // Gör ett absolut sista försök direkt till API server
+        try {
+          console.log('LAST RESORT: Trying debug API to get payment status');
+          const debugResponse = await fetch('/api/payments/swish/debug', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              reference: paymentReference,
+              requestType: 'statusCheck'
+            }),
+          });
+          
+          if (debugResponse.ok) {
+            const debugData = await debugResponse.json();
+            console.log('Debug API response:', debugData);
+            
+            if (debugData.status === PAYMENT_STATUSES.PAID) {
+              console.log('Debug API returned PAID status! Updating local state');
+              setPaymentStatus(PAYMENT_STATUSES.PAID);
+              setIsPolling(false);
+              onPaymentComplete(true);
+              return;
+            }
+          }
+        } catch (debugError) {
+          console.error('Error with debug API call:', debugError);
+        }
+        
+        // Öka räknaren endast om vi fortfarande försöker
+        failedAttempts++;
+      } else if (status !== PAYMENT_STATUSES.PAID) {
+        // Öka räknaren om statuskollen misslyckades
+        failedAttempts++;
+      } else {
+        // Återställ räknaren om vi får något giltigt svar
+        failedAttempts = 0;
       }
     } catch (error) {
       console.error('Error checking payment status:', error);

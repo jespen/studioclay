@@ -7,6 +7,7 @@ import { SwishService } from '@/services/swish/swishService';
 import { PAYMENT_STATUS } from '@/services/swish/types';
 import { z } from 'zod';
 import axios from 'axios';
+import { PAYMENT_STATUSES } from "@/constants/statusCodes";
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -261,5 +262,186 @@ export async function GET(request: NextRequest) {
       error: 'Failed to simulate Swish callback',
       details: errorMessage
     }, { status: 500 });
+  }
+}
+
+/**
+ * Debug endpoint för att manuellt sätta betalningsstatus
+ * ENDAST för utvecklingsändamål
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { paymentId, reference, status, reason, requestType } = body;
+    
+    console.log("Debug endpoint called with:", body);
+    
+    // Hantera status-kontroll utan att ändra något
+    if (requestType === 'statusCheck') {
+      console.log("Status check request for reference:", reference);
+      
+      if (!reference) {
+        return NextResponse.json(
+          { success: false, error: "Reference is required for status check" },
+          { status: 400 }
+        );
+      }
+      
+      // Sök på flera olika sätt
+      const searchResults = await Promise.all([
+        // Sök på payment_reference
+        supabase.from('payments').select('*').eq('payment_reference', reference).maybeSingle(),
+        // Sök på swish_payment_id
+        supabase.from('payments').select('*').eq('swish_payment_id', reference).maybeSingle(),
+        // Sök på alla PAID betalningar från de senaste 10 minuterna
+        supabase.from('payments')
+          .select('*')
+          .eq('status', PAYMENT_STATUSES.PAID)
+          .gt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+          .order('updated_at', { ascending: false })
+      ]);
+      
+      const paymentByRef = searchResults[0].data;
+      const paymentBySwishId = searchResults[1].data;
+      const recentPaidPayments = searchResults[2].data || [];
+      
+      // Om vi hittar en direkt match, returnera den
+      if (paymentByRef) {
+        return NextResponse.json({
+          success: true,
+          found: true,
+          matchType: 'payment_reference',
+          payment: paymentByRef,
+          status: paymentByRef.status
+        });
+      }
+      
+      if (paymentBySwishId) {
+        return NextResponse.json({
+          success: true,
+          found: true,
+          matchType: 'swish_payment_id',
+          payment: paymentBySwishId,
+          status: paymentBySwishId.status
+        });
+      }
+      
+      // Om ingen direkt match, sök i metadata för nyligen betalda betalningar
+      for (const payment of recentPaidPayments) {
+        const metadataStr = JSON.stringify(payment.metadata || {});
+        if (metadataStr.includes(reference)) {
+          return NextResponse.json({
+            success: true,
+            found: true,
+            matchType: 'metadata_match',
+            payment,
+            status: payment.status
+          });
+        }
+      }
+      
+      // Ingen match alls
+      return NextResponse.json({
+        success: false,
+        found: false,
+        error: "No payment found matching the reference"
+      });
+    }
+    
+    // Fortsätt med normal uppdatering av status om det inte är en statusCheck
+    if (!status) {
+      return NextResponse.json(
+        { success: false, error: "Status is required" },
+        { status: 400 }
+      );
+    }
+    
+    // Måste ange antingen paymentId eller reference
+    if (!paymentId && !reference) {
+      return NextResponse.json(
+        { success: false, error: "Either paymentId or reference is required" },
+        { status: 400 }
+      );
+    }
+    
+    // Sök först efter betalningen
+    let payment;
+    
+    if (paymentId) {
+      const { data } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('id', paymentId)
+        .single();
+      
+      payment = data;
+    } else if (reference) {
+      // Sök på payment_reference först
+      let { data } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('payment_reference', reference)
+        .single();
+      
+      if (!data) {
+        // Sedan på swish_payment_id
+        const { data: data2 } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('swish_payment_id', reference)
+          .single();
+        
+        payment = data2;
+      } else {
+        payment = data;
+      }
+    }
+    
+    if (!payment) {
+      return NextResponse.json(
+        { success: false, error: "Payment not found" },
+        { status: 404 }
+      );
+    }
+    
+    // Uppdatera betalningen
+    const params = {
+      status: status,
+      updated_at: new Date().toISOString(), // Använd updated_at istället för payment_date
+      metadata: {
+        ...payment.metadata,
+        debug_status_change: {
+          timestamp: new Date().toISOString(),
+          old_status: payment.status,
+          new_status: status
+        }
+      }
+    };
+    
+    if (reason) {
+      params.metadata.debug_status_change.reason = reason;
+    }
+    
+    await supabase
+      .from('payments')
+      .update(params)
+      .eq('id', payment.id);
+      
+    return NextResponse.json({
+      success: true,
+      message: `Payment status updated to ${status}`,
+      paymentId: payment.id,
+      paymentReference: payment.payment_reference,
+      swishPaymentId: payment.swish_payment_id,
+      oldStatus: payment.status,
+      newStatus: status
+    });
+    
+  } catch (error) {
+    console.error("Error in debug status update:", error);
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 } 
