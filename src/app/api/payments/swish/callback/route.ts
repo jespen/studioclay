@@ -117,6 +117,9 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
       status: 'confirmed',
       payment_status: 'PAID',
       payment_method: 'swish',
+      unit_price: courseData.template?.price || courseData.price || 0,
+      total_price: (courseData.template?.price || courseData.price || 0) * (parseInt(userInfo.numberOfParticipants) || 1),
+      currency: 'SEK'
     })
     .select()
     .single();

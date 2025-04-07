@@ -225,10 +225,14 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         productType
       });
       
+      // Store the payment reference in local storage and component state
       setPaymentReference(data.paymentReference);
       
-      // Start polling for payment status
+      // Start polling for payment status immediately
       setIsPolling(true);
+      
+      // Use the stored reference to start polling
+      console.log('Starting status polling for payment reference:', data.paymentReference);
       handlePaymentStatus(data.paymentReference);
       
       setPaymentInProgress(false);
@@ -322,19 +326,34 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
 
   const handlePaymentStatus = async (paymentReference: string) => {
     try {
-      const response = await fetch(`/api/payments/swish/status?paymentReference=${paymentReference}`);
+      // Use the correct API endpoint
+      const response = await fetch(`/api/payments/status/${paymentReference}`);
       const data = await response.json();
 
-      if (data.status === 'PAID') {
+      console.log('Payment status response:', data);
+
+      // Extract status from the data.data structure
+      const status = data.data?.status || data.status;
+      
+      if (status === 'PAID') {
+        console.log('Payment status is PAID, completing payment flow');
         setPaymentStatus('PAID');
         setIsPolling(false);
         onPaymentComplete(true);
-      } else if (data.status === 'DECLINED' || data.status === 'ERROR') {
+      } else if (status === 'DECLINED' || status === 'ERROR') {
+        console.log('Payment status is declined or error:', status);
         setPaymentStatus('DECLINED');
         setIsPolling(false);
-        onPaymentFailure?.(data.status === 'DECLINED' ? 'DECLINED' : 'ERROR');
-      } else if (data.status === 'CREATED') {
+        onPaymentFailure?.(status === 'DECLINED' ? 'DECLINED' : 'ERROR');
+      } else if (status === 'CREATED' || status === 'PENDING') {
+        console.log('Payment status is still pending:', status);
         // Continue polling if payment is still in progress
+        if (isPolling) {
+          setTimeout(() => handlePaymentStatus(paymentReference), 2000);
+        }
+      } else {
+        console.log('Unknown payment status:', status);
+        // Continue polling for unknown status
         if (isPolling) {
           setTimeout(() => handlePaymentStatus(paymentReference), 2000);
         }

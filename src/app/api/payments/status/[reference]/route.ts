@@ -86,7 +86,10 @@ export async function GET(
       debug: { 
         search_reference: reference,
         payment_id: payment.id,
-        booking_found: !!booking 
+        booking_found: !!booking,
+        booking_id: booking?.id,
+        payment_method: payment.payment_method,
+        product_type: payment.product_type
       },
       data: {
         id: payment.id,
@@ -97,7 +100,11 @@ export async function GET(
         payment_reference: payment.payment_reference,
         swish_payment_id: payment.swish_payment_id,
         booking_id: payment.booking_id || booking?.id,
-        booking_reference: booking?.booking_reference
+        booking_reference: booking?.booking_reference,
+        product_type: payment.product_type,
+        product_id: payment.product_id,
+        payment_method: payment.payment_method,
+        amount: payment.amount
       }
     });
 

@@ -57,27 +57,41 @@ export const useSwishPaymentStatus = ({
       
       console.log(`[${sessionId}] Status check raw response:`, data);
       
-      // Handle older API format
-      if (data.payment?.status) {
-        const status = data.payment.status.toUpperCase();
-        console.log(`[${sessionId}] Payment status (old format): ${status}`);
+      // First try the newest API format (data.data.status)
+      if (data.data?.status) {
+        const status = data.data.status.toUpperCase();
+        console.log(`[${sessionId}] Payment status (newest format): ${status}`);
         
-        if (data.booking?.reference) {
-          console.log(`[${sessionId}] Booking reference received:`, data.booking.reference);
-          setBookingReference(data.booking.reference);
+        if (data.data.booking_reference) {
+          console.log(`[${sessionId}] Booking reference received:`, data.data.booking_reference);
+          setBookingReference(data.data.booking_reference);
         }
         
         return mapToPaymentStatus(status);
       }
       
-      // Handle newer API format
+      // Then try the "middle" API format
       if (data.status) {
         const status = data.status.toUpperCase();
-        console.log(`[${sessionId}] Payment status (new format): ${status}`);
+        console.log(`[${sessionId}] Payment status (middle format): ${status}`);
         
         if (data.bookingReference) {
           console.log(`[${sessionId}] Booking reference received:`, data.bookingReference);
           setBookingReference(data.bookingReference);
+        }
+        
+        return mapToPaymentStatus(status);
+      }
+      
+      // Finally try the oldest format for backwards compatibility
+      if (data.payment?.status) {
+        const status = data.payment.status.toUpperCase();
+        console.log(`[${sessionId}] Payment status (old format): ${status}`);
+        
+        if (data.booking?.reference || data.booking?.booking_reference) {
+          const ref = data.booking.reference || data.booking.booking_reference;
+          console.log(`[${sessionId}] Booking reference received:`, ref);
+          setBookingReference(ref);
         }
         
         return mapToPaymentStatus(status);
