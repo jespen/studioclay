@@ -178,7 +178,7 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
                 payment_method: orderData.order?.payment_method,
                 status: orderData.order?.payment_status || 'PAID',
                 amount: orderData.order?.total_price,
-                payment_date: orderData.order?.created_at
+                updated_at: orderData.order?.updated_at || orderData.order?.created_at
               },
               itemDetails: orderData.product || orderData.course || orderData.giftCard || {}
             });
@@ -350,7 +350,7 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2" color="text.secondary">Datum:</Typography>
-                <Typography variant="body2">{formatDate(data.paymentInfo?.payment_date || new Date().toISOString())}</Typography>
+                <Typography variant="body2">{formatDate(data.paymentInfo?.updated_at || data.paymentInfo?.created_at || new Date().toISOString())}</Typography>
               </Box>
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>

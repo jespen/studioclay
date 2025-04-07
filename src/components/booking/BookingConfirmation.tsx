@@ -276,7 +276,7 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flo
                 <ListItem disableGutters>
                   <ListItemText 
                     primary="Betaldatum:" 
-                    secondary={paymentInfo?.payment_date ? formatDate(paymentInfo.payment_date) : new Date().toLocaleDateString()} 
+                    secondary={paymentInfo?.updated_at ? formatDate(paymentInfo.updated_at) : (paymentInfo?.created_at ? formatDate(paymentInfo.created_at) : new Date().toLocaleDateString())} 
                   />
                 </ListItem>
                 

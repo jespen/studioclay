@@ -74,6 +74,7 @@ import {
   getGiftCardDetails 
 } from '@/utils/flowStorage';
 import { getPreviousStepUrl, getNextStepUrl } from '@/utils/flowNavigation';
+import { PAYMENT_STATUSES } from '@/constants/statusCodes';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -240,10 +241,9 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
         if (success) {
           // Store payment info and redirect for invoice payments
           const paymentInfo = {
-            status: 'pending',
+            status: PAYMENT_STATUSES.CREATED,
             amount: calculatePrice(),
             payment_method: 'invoice',
-            payment_date: new Date().toISOString(),
             reference: uuidv4()
           };
           console.log('Invoice payment successful, storing payment info:', paymentInfo);
@@ -310,10 +310,9 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
 
     // Create the payment info with correct status
     const paymentInfo = {
-        reference: typeof paymentData === 'string' ? paymentData : paymentData.reference || uuidv4(),
-        status: paymentDetails.method === 'invoice' ? 'CREATED' : 'PAID',
+        reference: paymentData.reference || uuidv4(),
+        status: PAYMENT_STATUSES.CREATED,
         payment_method: paymentDetails.method,
-        payment_date: new Date().toISOString(),
         amount: calculatePrice(),
     };
     
@@ -343,9 +342,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     
     const paymentInfo = {
         reference: getPaymentReference() || uuidv4(),
-        status: status,
+        status: status === 'ERROR' ? PAYMENT_STATUSES.ERROR : PAYMENT_STATUSES.DECLINED,
         payment_method: paymentDetails.method,
-        payment_date: new Date().toISOString(),
         amount: calculatePrice(),
         error: status === 'ERROR' ? 'Payment processing error' : 'Payment declined'
     };
@@ -375,9 +373,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     
     const paymentInfo = {
         reference: getPaymentReference() || uuidv4(),
-        status: 'DECLINED',
+        status: PAYMENT_STATUSES.DECLINED,
         payment_method: paymentDetails.method,
-        payment_date: new Date().toISOString(),
         amount: calculatePrice(),
         cancelled_by_user: true
     };

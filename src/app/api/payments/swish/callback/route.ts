@@ -484,14 +484,14 @@ export async function POST(request: NextRequest) {
         swish_callback_url: callbackUrl,
         swish_payment_id: paymentReference,
         error_message: errorMessage,
-        updated_at: new Date().toISOString(),
-        payment_date: status === PAYMENT_STATUSES.PAID ? payment_date : null,
+        updated_at: status === PAYMENT_STATUSES.PAID ? new Date().toISOString() : payment.updated_at,
         // Spara callback-data för debugging
         metadata: {
           ...payment.metadata,
           callback: {
             data: logData,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            payment_date: status === PAYMENT_STATUSES.PAID ? payment_date : null // Spara det faktiska Swish betalningsdatumet i metadata
           }
         }
       })
@@ -528,8 +528,8 @@ export async function POST(request: NextRequest) {
 
           const { data: existingBooking } = await supabase
             .from('bookings')
-            .select('id, reference')
-            .eq('reference', paymentSpecificBookingRef)
+            .select('id, booking_reference')
+            .eq('booking_reference', paymentSpecificBookingRef)
             .single();
             
           if (!existingBooking) {
@@ -537,9 +537,8 @@ export async function POST(request: NextRequest) {
             
             // Create a booking for this payment
             const booking = await createBooking(payment.id, productId, userInfo, paymentSpecificBookingRef);
-            const bookingReference = booking.booking_reference;
             
-            logDebug(`[${requestId}] Booking created with reference: ${bookingReference}`);
+            logDebug(`[${requestId}] Booking created with reference: ${booking.booking_reference}`);
             
             // CRITICAL DB OPERATIONS COMPLETE
             // Early response could be sent here in a different architectural approach
@@ -644,7 +643,7 @@ export async function POST(request: NextRequest) {
                       location: courseData.location,
                       price: courseData.template?.price || courseData.price || 0
                     },
-                    bookingReference: bookingReference
+                    bookingReference: booking.booking_reference
                   });
                 } catch (emailError) {
                   logError(`[${requestId}] Error sending confirmation email:`, emailError);
@@ -669,7 +668,7 @@ export async function POST(request: NextRequest) {
           } else {
             logDebug(`[${requestId}] Booking already exists for this payment`, { 
               booking_id: existingBooking.id, 
-              reference: existingBooking.reference 
+              reference: existingBooking.booking_reference 
             });
           }
         } catch (error) {

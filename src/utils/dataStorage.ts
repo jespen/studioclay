@@ -254,7 +254,8 @@ export const getPaymentInfo = <T>(): T | null => {
           status: details.paymentStatus || 'completed',
           amount: details.amount || 0,
           payment_method: details.method || 'unknown',
-          payment_date: details.paymentDate || new Date().toISOString(),
+          updated_at: details.paymentDate || new Date().toISOString(),
+          created_at: details.createdAt || new Date().toISOString(),
           reference: details.paymentReference || ''
         };
         

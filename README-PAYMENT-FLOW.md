@@ -262,9 +262,9 @@ CREATE TABLE "public"."payments" (
   "swish_callback_url" TEXT,
   "phone_number" TEXT,
   "status" TEXT NOT NULL, -- 'CREATED', 'PAID', 'DECLINED', 'ERROR'
-  "error_message" TEXT,
-  "created_at" TIMESTAMPTZ DEFAULT NOW(),
-  "updated_at" TIMESTAMPTZ DEFAULT NOW(),
+  "error_message" TEXT, -- Felmeddelande om betalningen misslyckades
+  "created_at" TIMESTAMPTZ DEFAULT NOW(), -- Skapandetidpunkt
+  "updated_at" TIMESTAMPTZ DEFAULT NOW(), -- Tidpunkt för senaste uppdatering (används som betalningsdatum för PAID-status)
   "payment_method" TEXT NOT NULL, -- 'swish', 'invoice'
   "booking_id" UUID, -- FK till bookings.id
   "course_id" UUID, -- FK till course_instances.id
@@ -272,9 +272,11 @@ CREATE TABLE "public"."payments" (
   "product_type" TEXT NOT NULL, -- 'course', 'gift_card', 'art_product'
   "product_id" UUID NOT NULL, -- ID för produkten (course_instance, gift_card eller product)
   "currency" TEXT DEFAULT 'SEK',
-  "metadata" JSONB -- Ytterligare data, callbacks, etc
+  "metadata" JSONB -- Ytterligare data, callbacks, betalningsdatum från Swish, etc.
 );
 ```
+
+**OBS:** Betalningsdatum ('payment_date') från Swish sparas inte som en separat kolumn utan i `metadata`-fältet, medan `updated_at` uppdateras till aktuell tidpunkt när en betalning bekräftas som betald (PAID).
 
 **API-användning**:
 - `/api/payments/swish/create`: Skapar en ny betalning och skickar betalningsförfrågan till Swish

@@ -113,7 +113,7 @@ const ShopConfirmation: React.FC<ShopConfirmationProps> = ({ flowData, orderRefe
         status: 'Bekräftad',
         payment_method: data.order.payment_method,
         amount: data.order.amount,
-        payment_date: data.order.created_at
+        updated_at: data.order.updated_at || data.order.created_at
       });
       
       return true;
@@ -148,7 +148,7 @@ const ShopConfirmation: React.FC<ShopConfirmationProps> = ({ flowData, orderRefe
             status: 'Bekräftad',
             amount: payment.amount || flowData.itemDetails?.price || 0,
             payment_method: payment.payment_method || 'unknown',
-            payment_date: payment.payment_date || new Date().toISOString()
+            updated_at: payment.updated_at || payment.created_at || new Date().toISOString()
           });
           setOrderRef(payment.reference || '');
 
@@ -454,7 +454,7 @@ const ShopConfirmation: React.FC<ShopConfirmationProps> = ({ flowData, orderRefe
                 <ListItem disableGutters>
                   <ListItemText 
                     primary="Betaldatum" 
-                    secondary={formatDate(paymentInfo?.payment_date)} 
+                    secondary={formatDate(paymentInfo?.updated_at || paymentInfo?.created_at)} 
                   />
                 </ListItem>
                 
