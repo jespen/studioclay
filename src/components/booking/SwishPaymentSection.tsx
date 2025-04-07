@@ -333,18 +333,35 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
 
   const handlePaymentStatus = async (paymentReference: string) => {
     try {
-      // Log vilket värde vi faktiskt använder
-      console.log('Checking payment status with reference:', paymentReference);
+      // Vi provar BÅDA referenserna varje gång för att vara säkra
+      console.log('Checking payment status with BOTH references');
       
-      // Use the correct API endpoint - prefer swishPaymentReference if available
-      const statusReference = swishPaymentReference || paymentReference;
-      const response = await fetch(`/api/payments/status/${statusReference}`);
-      const data = await response.json();
-
-      console.log('Payment status response:', data);
-
-      // Extract status from the data.data structure
-      const status = data.data?.status || data.status;
+      // Först prova swishPaymentReference om det finns
+      if (swishPaymentReference) {
+        console.log('First trying with swishPaymentReference:', swishPaymentReference);
+        const swishResponse = await fetch(`/api/payments/status/${swishPaymentReference}`);
+        const swishData = await swishResponse.json();
+        console.log('Response using swishPaymentReference:', swishData);
+        
+        // Kontrollera om Swish-referensen ger PAID status
+        const swishStatus = swishData?.data?.status || swishData?.status;
+        if (swishStatus === PAYMENT_STATUSES.PAID) {
+          console.log('Found PAID status with swishPaymentReference!');
+          setPaymentStatus(PAYMENT_STATUSES.PAID);
+          setIsPolling(false);
+          onPaymentComplete(true);
+          return; // Avbryt här om vi hittade PAID
+        }
+      }
+      
+      // Sedan prova vår egen payment_reference
+      console.log('Now trying with paymentReference:', paymentReference);
+      const paymentResponse = await fetch(`/api/payments/status/${paymentReference}`);
+      const paymentData = await paymentResponse.json();
+      console.log('Response using paymentReference:', paymentData);
+      
+      // Extract status from the data
+      const status = paymentData?.data?.status || paymentData?.status;
       
       if (status === PAYMENT_STATUSES.PAID) {
         console.log('Payment status is PAID, completing payment flow');
@@ -353,7 +370,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         onPaymentComplete(true);
       } else if (status === PAYMENT_STATUSES.DECLINED || status === PAYMENT_STATUSES.ERROR) {
         console.log('Payment status is declined or error:', status);
-        setPaymentStatus(PAYMENT_STATUSES.DECLINED);
+        setPaymentStatus(status);
         setIsPolling(false);
         onPaymentFailure?.(status === PAYMENT_STATUSES.DECLINED ? PAYMENT_STATUSES.DECLINED : PAYMENT_STATUSES.ERROR);
       } else if (status === PAYMENT_STATUSES.CREATED) {

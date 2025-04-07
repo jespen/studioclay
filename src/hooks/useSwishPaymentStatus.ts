@@ -59,6 +59,31 @@ export const useSwishPaymentStatus = ({
       
       console.log(`[${sessionId}] Status check raw response:`, JSON.stringify(data));
       
+      // MYCKET VIKTIG ÄNDRING: Sök explicit efter PAID status oavsett format
+      // Detta fångar alltid PAID om det finns någonstans i svaret
+      if (
+        (data.data?.status === PAYMENT_STATUSES.PAID) || 
+        (data.status === PAYMENT_STATUSES.PAID) || 
+        (data.payment?.status === PAYMENT_STATUSES.PAID)
+      ) {
+        console.log(`[${sessionId}] PAID STATUS DETECTED! Processing payment as PAID`);
+        
+        // Om status är betald, försök hitta booking_reference i alla möjliga format
+        const bookingRef = 
+          data.data?.booking_reference || 
+          data.bookingReference || 
+          data.booking?.reference || 
+          data.booking?.booking_reference;
+          
+        if (bookingRef) {
+          console.log(`[${sessionId}] Booking reference received:`, bookingRef);
+          setBookingReference(bookingRef);
+        }
+        
+        return PAYMENT_STATUSES.PAID;
+      }
+      
+      // Om inte PAID, fortsätt med vanlig logik...
       // First try the newest API format (data.data.status)
       if (data.data?.status) {
         const status = data.data.status.toUpperCase();
