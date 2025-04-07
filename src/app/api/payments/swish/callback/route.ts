@@ -107,7 +107,7 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
     const { data: booking, error: bookingError } = await supabase
     .from('bookings')
     .insert({
-      reference: bookingReference, // Use 'reference' instead of 'booking_reference'
+      booking_reference: bookingReference, // Use 'booking_reference' instead of 'reference'
       course_id: courseId,
       customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
       customer_email: userInfo.email,
@@ -516,8 +516,8 @@ export async function POST(request: NextRequest) {
 
           const { data: existingBooking } = await supabase
             .from('bookings')
-            .select('id, reference')
-            .eq('reference', paymentSpecificBookingRef)
+            .select('id, booking_reference')
+            .eq('booking_reference', paymentSpecificBookingRef)
             .single();
             
           if (!existingBooking) {
@@ -525,7 +525,7 @@ export async function POST(request: NextRequest) {
             
             // Create a booking for this payment
             const booking = await createBooking(payment.id, productId, userInfo, paymentSpecificBookingRef);
-            const bookingReference = booking.reference;
+            const bookingReference = booking.booking_reference;
             
             logDebug(`[${requestId}] Booking created with reference: ${bookingReference}`);
             
@@ -657,7 +657,7 @@ export async function POST(request: NextRequest) {
           } else {
             logDebug(`[${requestId}] Booking already exists for this payment`, { 
               booking_id: existingBooking.id, 
-              reference: existingBooking.reference 
+              reference: existingBooking.booking_reference 
             });
           }
         } catch (error) {
