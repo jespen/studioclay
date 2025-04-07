@@ -35,112 +35,49 @@ export const useSwishPaymentStatus = ({
   const isCancelledRef = useRef(false);
 
   // Check payment status
-  const checkPaymentStatus = async (directReference?: string): Promise<PaymentStatus | null> => {
-    const reference = directReference || paymentReference || getPaymentReference();
-    console.log(`[${sessionId}] checkPaymentStatus called with reference:`, reference);
+  const checkPaymentStatus = async (reference?: string): Promise<PaymentStatus | null> => {
+    const paymentRef = reference || paymentReference || getPaymentReference();
     
-    if (!reference || reference === 'undefined' || reference === 'null') {
-      console.error(`[${sessionId}] No valid payment reference available to check status`);
+    if (!paymentRef) {
+      console.log('⚠️ No payment reference available');
       return null;
     }
     
     try {
-      console.log(`[${sessionId}] Checking status for payment reference: ${reference} (typeof: ${typeof reference})`);
+      console.log(`🔄 Checking status for payment: ${paymentRef}`);
       
-      const response = await fetch(`/api/payments/status/${reference}`);
-      
+      // Enkel fetch, simpel URL
+      const response = await fetch(`/api/payments/status/${paymentRef}`);
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[${sessionId}] Payment status check failed with HTTP ${response.status}: ${response.statusText}`, errorText);
+        console.log(`❌ API request failed: ${response.status}`);
         return null;
       }
       
       const data = await response.json();
-      console.log(`[${sessionId}] FULL API RESPONSE:`, JSON.stringify(data));
+      console.log('📥 Got API response:', data);
       
-      // VIKTIG DEBUGLOGGNING - Logga hela sökvägen till status
-      console.log(`[${sessionId}] Looking for status in response:
-      - data.data?.status = ${data.data?.status}
-      - data.status = ${data.status}
-      - data.payment?.status = ${data.payment?.status}
-      `);
-      
-      // MYCKET VIKTIG ÄNDRING - ALLTID RETURNA PAID OM HITTAT
+      // Kolla om betalningen är PAID först av allt
       if (
-        (data.data?.status === PAYMENT_STATUSES.PAID) || 
-        (data.status === PAYMENT_STATUSES.PAID) || 
-        (data.payment?.status === PAYMENT_STATUSES.PAID)
+        data.data?.status === PAYMENT_STATUSES.PAID || 
+        data.status === PAYMENT_STATUSES.PAID
       ) {
-        console.log(`[${sessionId}] PAID STATUS DETECTED! Processing payment as PAID`);
-        
-        // Om status är betald, försök hitta booking_reference i alla möjliga format
-        const bookingRef = 
-          data.data?.booking_reference || 
-          data.bookingReference || 
-          data.booking?.reference || 
-          data.booking?.booking_reference;
-          
-        if (bookingRef) {
-          console.log(`[${sessionId}] Booking reference received:`, bookingRef);
-          setBookingReference(bookingRef);
-        }
-        
+        console.log('💰 PAYMENT IS PAID!');
         return PAYMENT_STATUSES.PAID;
       }
       
-      // Om inte PAID, fortsätt med vanlig logik...
-      // First try the newest API format (data.data.status)
-      if (data.data?.status) {
-        const status = data.data.status.toUpperCase();
-        console.log(`[${sessionId}] Payment status (newest format): ${status}`);
-        
-        if (data.data.booking_reference) {
-          console.log(`[${sessionId}] Booking reference received:`, data.data.booking_reference);
-          setBookingReference(data.data.booking_reference);
-        }
-        
-        return mapToPaymentStatus(status);
+      // För andra statusar, returnera dem direkt
+      const status = data.data?.status || data.status;
+      if (status) {
+        return getValidPaymentStatus(status);
       }
       
-      // Then try the "middle" API format
-      if (data.status) {
-        const status = data.status.toUpperCase();
-        console.log(`[${sessionId}] Payment status (middle format): ${status}`);
-        
-        if (data.bookingReference) {
-          console.log(`[${sessionId}] Booking reference received:`, data.bookingReference);
-          setBookingReference(data.bookingReference);
-        }
-        
-        return mapToPaymentStatus(status);
-      }
-      
-      // Finally try the oldest format for backwards compatibility
-      if (data.payment?.status) {
-        const status = data.payment.status.toUpperCase();
-        console.log(`[${sessionId}] Payment status (old format): ${status}`);
-        
-        if (data.booking?.reference || data.booking?.booking_reference) {
-          const ref = data.booking.reference || data.booking.booking_reference;
-          console.log(`[${sessionId}] Booking reference received:`, ref);
-          setBookingReference(ref);
-        }
-        
-        return mapToPaymentStatus(status);
-      }
-      
-      // If no status found, log it but do not generate an ERROR status
-      console.log(`[${sessionId}] No payment status found in response, continuing to poll`);
+      // Om inget svar, returnera null
+      console.log('⚠️ No status found in API response');
       return null;
     } catch (error) {
-      console.error(`[${sessionId}] Error checking payment status:`, error);
+      console.error('❌ Error checking payment status:', error);
       return null;
     }
-  };
-
-  // Helper function to map status string to PaymentStatus enum
-  const mapToPaymentStatus = (status: string): PaymentStatus => {
-    return getValidPaymentStatus(status);
   };
 
   // Handle closing the payment dialog
@@ -196,137 +133,80 @@ export const useSwishPaymentStatus = ({
 
   // Start polling payment status
   useEffect(() => {
-    let attempts = 0;
-    const maxAttempts = 30; // 60 seconds with 2 second interval
-    let redirectTimeout: NodeJS.Timeout;
-    let pollInterval: NodeJS.Timeout;
-
-    // Viktigt: Logga när denna effekt triggas och varför
-    console.log(`[${sessionId}] useEffect for polling triggered:
-    - showPaymentDialog: ${showPaymentDialog}
-    - paymentReference: ${paymentReference || getPaymentReference() || 'NONE'}
-    - paymentStatus: ${paymentStatus}
-    - isCancelled: ${isCancelledRef.current}
-    `);
-
-    const pollStatus = async () => {
-      // Don't poll if dialog is closed or payment is cancelled
-      if (!showPaymentDialog || isCancelledRef.current) {
-        console.log(`[${sessionId}] Polling stopped - Dialog closed or payment cancelled`);
-        return;
-      }
-      
-      if (attempts >= maxAttempts) {
-        console.log(`[${sessionId}] Status check reached max attempts (${maxAttempts}). Stopping polling.`);
-        if (pollingRef.current) {
-          clearInterval(pollingRef.current);
-          pollingRef.current = null;
-        }
-        return;
-      }
-
-      const currentReference = paymentReference || getPaymentReference();
-      if (!currentReference || currentReference === 'undefined' || currentReference === 'null') {
-        console.log(`[${sessionId}] No valid reference available for polling`);
-        // Stoppa pollning utan att sätta en ERROR-status
-        if (pollingRef.current) {
-          clearInterval(pollingRef.current);
-          pollingRef.current = null;
-        }
-        return;
-      }
-
-      attempts++;
-      console.log(`[${sessionId}] Payment status check attempt ${attempts}/${maxAttempts} for reference: ${currentReference}`);
-      
-      try {
-        // Spara aktuell status för korrekt jämförelse
-        const currentStatus = paymentStatus;
-        const status = await checkPaymentStatus(currentReference);
-        console.log(`[${sessionId}] Poll received status:`, status, 'current:', currentStatus);
-        
-        // PRIORITERA ALLTID PAID status oavsett tidigare tillstånd
-        if (status === PAYMENT_STATUS.PAID) {
-          console.log(`[${sessionId}] Received PAID status, IMMEDIATELY updating regardless of current state`);
-          setPaymentStatus(PAYMENT_STATUS.PAID);
-          
-          // Visa extra debug
-          console.log(`[${sessionId}] CRITICALLY IMPORTANT: Status is now PAID - dialog should update`);
-          console.log(`[${sessionId}] paymentStatus=${currentStatus}, new status=${status}`);
-          
-          // Stäng polling direkt
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
-          }
-          
-          // Förbereder redirect
-          redirectTimeout = setTimeout(() => {
-            console.log(`[${sessionId}] Redirecting after successful payment`);
-            if (onSuccess) {
-              onSuccess();
-            } else {
-              const redirectUrl = getRedirectPath();
-              console.log(`[${sessionId}] Redirecting to:`, redirectUrl);
-              router.push(redirectUrl);
-            }
-          }, 1500);
-          
-          return; // Avsluta direkt
-        }
-        
-        // För andra statusar, normal logik
-        if (status !== null && status !== currentStatus) {
-          console.log(`[${sessionId}] Updating payment status from`, currentStatus, 'to', status);
-          setPaymentStatus(status);
-          
-          // Handle DECLINED
-          if (status === PAYMENT_STATUS.DECLINED) {
-            console.log(`[${sessionId}] Payment declined, clearing interval`);
-            if (pollingRef.current) {
-              clearInterval(pollingRef.current);
-              pollingRef.current = null;
-            }
-          }
-        } else if (status === null) {
-          console.log(`[${sessionId}] Received null status, not updating`);
-        } else if (status === currentStatus) {
-          console.log(`[${sessionId}] Status unchanged: ${status}, not updating`);
-        }
-      } catch (error) {
-        console.error(`[${sessionId}] Error in pollStatus:`, error);
-      }
-    };
-
-    if (showPaymentDialog && (paymentReference || getPaymentReference()) && !isCancelledRef.current) {
-      console.log(`[${sessionId}] Starting payment status polling now!`);
-      
-      // Kör omedelbart
-      pollStatus();
-      
-      // Rensa tidigare interval om det finns
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-      }
-      
-      // Sätt nytt interval
-      pollingRef.current = setInterval(pollStatus, 2000);
-      
-      // Debugloggning
-      console.log(`[${sessionId}] Polling interval set with ID: ${pollingRef.current}`);
-    } else {
-      console.log(`[${sessionId}] Not starting polling because conditions not met`);
+    // Om dialog inte är öppen eller betalning avbruten, gör inget
+    if (!showPaymentDialog || isCancelledRef.current) {
+      console.log('⏹️ Not polling: dialog closed or payment canceled');
+      return;
     }
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
+    
+    console.log('▶️ Starting payment polling');
+    let attempts = 0;
+    const MAX_ATTEMPTS = 30;
+    
+    // Funktion för att polla status
+    const pollStatus = async () => {
+      // Avbryt om dialog stängts eller betalning avbrutits
+      if (!showPaymentDialog || isCancelledRef.current) {
+        console.log('⏹️ Stopping poll: dialog closed or payment canceled');
+        return;
       }
-      if (redirectTimeout) {
-        clearTimeout(redirectTimeout);
+      
+      // Avbryt om max försök nåtts
+      if (attempts >= MAX_ATTEMPTS) {
+        console.log(`⏹️ Stopping poll: max attempts (${MAX_ATTEMPTS}) reached`);
+        return;
+      }
+      
+      attempts++;
+      console.log(`🔄 Poll attempt ${attempts}/${MAX_ATTEMPTS}`);
+      
+      // Hämta status
+      const status = await checkPaymentStatus();
+      console.log(`📊 Status received: ${status || 'null'}`);
+      
+      // MYCKET VIKTIG ÄNDRING: ALLTID uppdatera om vi får PAID
+      if (status === PAYMENT_STATUSES.PAID) {
+        console.log('💰 PAYMENT IS PAID! Updating status and preparing redirect');
+        setPaymentStatus(PAYMENT_STATUSES.PAID);
+        
+        // Använd en timeout för att omdirigera användaren
+        setTimeout(() => {
+          console.log('🚀 Redirecting after successful payment');
+          if (onSuccess) {
+            onSuccess();
+          } else {
+            const redirectUrl = redirectPath || getRedirectPath();
+            console.log(`🔀 Redirecting to ${redirectUrl}`);
+            router.push(redirectUrl);
+          }
+        }, 1500);
+        
+        return; // Avsluta polling
+      }
+      
+      // För andra statusar
+      if (status && status !== paymentStatus) {
+        console.log(`📈 Updating status from ${paymentStatus} to ${status}`);
+        setPaymentStatus(status);
+        
+        // Om declined eller error, stoppa polling
+        if (status === PAYMENT_STATUSES.DECLINED || status === PAYMENT_STATUSES.ERROR) {
+          console.log('⏹️ Payment declined or error, stopping poll');
+          return;
+        }
+      }
+      
+      // Fortsätt polla om vi inte har avbrutit
+      if (showPaymentDialog && !isCancelledRef.current) {
+        setTimeout(pollStatus, 2000);
       }
     };
+    
+    // Starta polling direkt
+    pollStatus();
+    
+    // Cleanup: inget att göra
+    return () => {};
   }, [showPaymentDialog, paymentReference, paymentStatus, courseId, router, onSuccess, redirectPath]);
 
   return {
