@@ -15,6 +15,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Type declaration for global state
+declare global {
+  var keepAliveTimers: NodeJS.Timeout[];
+}
+
 // Hjälpfunktion för att verifiera Swish signatur
 async function verifySwishSignature(request: Request): Promise<boolean> {
   // I testmiljö skippar vi signaturverifiering
@@ -52,8 +57,9 @@ async function verifySwishSignature(request: Request): Promise<boolean> {
 }
 
 // Hjälpfunktion för att skapa bokning
-async function createBooking(paymentId: string, courseId: string, userInfo: any) {
-  const bookingReference = crypto.randomUUID();
+async function createBooking(paymentId: string, courseId: string, userInfo: any, bookingReference: string) {
+  // Using the provided booking reference instead of generating a new one
+  // This ensures we can check for duplicate bookings consistently
   
   // Get course price first
   const { data: course, error: courseError } = await supabase
@@ -66,19 +72,26 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any)
     throw new Error(`Failed to fetch course price: ${courseError.message}`);
   }
   
+  // Insert booking with payment_id in metadata instead of as a column
   const { data: booking, error } = await supabase
     .from('bookings')
     .insert({
-      payment_id: paymentId,
       course_id: courseId,
-      reference: bookingReference,
+      booking_reference: bookingReference,
       status: 'CONFIRMED',
       customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
       customer_email: userInfo.email,
       customer_phone: userInfo.phone,
       number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
       unit_price: course.price,
-      total_price: course.price * (parseInt(userInfo.numberOfParticipants) || 1)
+      total_price: course.price * (parseInt(userInfo.numberOfParticipants) || 1),
+      booking_date: new Date().toISOString(),
+      payment_status: 'PAID', 
+      payment_method: 'swish',
+      metadata: {
+        payment_id: paymentId,
+        swish_reference: bookingReference
+      }
     })
     .select()
     .single();
@@ -197,7 +210,7 @@ export async function POST(request: NextRequest) {
     
     try {
       // Klona request för att kunna läsa body både som text och JSON
-      const requestClone = request.clone();
+    const requestClone = request.clone();
       bodyText = await requestClone.text();
       logDebug(`[${requestId}] Raw request body: ${bodyText}`);
       
@@ -323,8 +336,8 @@ export async function POST(request: NextRequest) {
     if (payeePaymentReference) {
       logDebug(`[${requestId}] Trying to find payment with payeePaymentReference: ${payeePaymentReference}`);
       const result = await supabase
-        .from('payments')
-        .select('*')
+      .from('payments')
+      .select('*')
         .eq('payment_reference', payeePaymentReference)
         .maybeSingle();
 
@@ -419,19 +432,25 @@ export async function POST(request: NextRequest) {
       
       if (productType === 'course' && productId && userInfo) {
         try {
+          // Get payment reference from Swish callback
+          const payeePaymentReference = body.payeePaymentReference;
+          logDebug(`[${requestId}] Trying to find booking with reference: ${payeePaymentReference}`);
+
           // Check if we already have a booking for this payment to avoid duplicates
+          const paymentSpecificBookingRef = `swish-${payment.id.substring(0, 8)}`;
+
           const { data: existingBooking } = await supabase
             .from('bookings')
-            .select('id, reference')
-            .eq('payment_id', payment.id)
+            .select('id, booking_reference')
+            .eq('booking_reference', paymentSpecificBookingRef)
             .single();
             
           if (!existingBooking) {
             logDebug(`[${requestId}] No existing booking found, creating new booking`);
             
             // Create a booking for this payment
-            const booking = await createBooking(payment.id, productId, userInfo);
-            const bookingReference = booking.reference;
+            const booking = await createBooking(payment.id, productId, userInfo, paymentSpecificBookingRef);
+            const bookingReference = booking.booking_reference;
             
             logDebug(`[${requestId}] Booking created with reference: ${bookingReference}`);
             
@@ -447,16 +466,16 @@ export async function POST(request: NextRequest) {
               const backgroundStartTime = Date.now();
               
               // Create a keep-alive promise to delay function termination
-              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
+              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
               const keepAlivePromise = new Promise(resolve => {
                 const timerId = setTimeout(() => {
                   logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
                   resolve(true);
-                }, 15000);
+                }, 45000);
                 
                 // Ensure timer isn't lost to garbage collection
                 global.setTimeout = global.setTimeout || setTimeout;
-                if (global.keepAliveTimers === undefined) {
+                if (!global.keepAliveTimers) {
                   global.keepAliveTimers = [];
                 }
                 global.keepAliveTimers.push(timerId);
@@ -535,7 +554,7 @@ export async function POST(request: NextRequest) {
           } else {
             logDebug(`[${requestId}] Booking already exists for this payment`, { 
               booking_id: existingBooking.id, 
-              reference: existingBooking.reference 
+              reference: existingBooking.booking_reference 
             });
           }
         } catch (error) {
@@ -573,16 +592,16 @@ export async function POST(request: NextRequest) {
               const backgroundStartTime = Date.now();
               
               // Create a keep-alive promise to delay function termination
-              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
+              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
               const keepAlivePromise = new Promise(resolve => {
                 const timerId = setTimeout(() => {
                   logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
                   resolve(true);
-                }, 15000);
+                }, 45000);
                 
                 // Ensure timer isn't lost to garbage collection
                 global.setTimeout = global.setTimeout || setTimeout;
-                if (global.keepAliveTimers === undefined) {
+                if (!global.keepAliveTimers) {
                   global.keepAliveTimers = [];
                 }
                 global.keepAliveTimers.push(timerId);
@@ -761,15 +780,15 @@ export async function POST(request: NextRequest) {
                     const newQuantity = Math.max(0, (productData.stock_quantity || 1) - 1);
                     
                     // Update the product with new stock quantity
-                    const { error: updateError } = await supabase
+                const { error: updateError } = await supabase
                       .from('products')
-                      .update({ 
+                  .update({
                         stock_quantity: newQuantity,
                         in_stock: newQuantity > 0
-                      })
+                  })
                       .eq('id', productId);
-                      
-                    if (updateError) {
+                  
+                if (updateError) {
                       logError(`[${requestId}] Error updating product stock:`, updateError);
                     } else {
                       logDebug(`[${requestId}] Updated product ${productId} stock to ${newQuantity}`);
@@ -786,16 +805,16 @@ export async function POST(request: NextRequest) {
                       const backgroundStartTime = Date.now();
                       
                       // Create a keep-alive promise to delay function termination
-                      logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
+                      logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
                       const keepAlivePromise = new Promise(resolve => {
                         const timerId = setTimeout(() => {
                           logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
                           resolve(true);
-                        }, 15000);
+                        }, 45000);
                         
                         // Ensure timer isn't lost to garbage collection
                         global.setTimeout = global.setTimeout || setTimeout;
-                        if (global.keepAliveTimers === undefined) {
+                        if (!global.keepAliveTimers) {
                           global.keepAliveTimers = [];
                         }
                         global.keepAliveTimers.push(timerId);
