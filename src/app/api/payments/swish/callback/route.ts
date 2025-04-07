@@ -483,7 +483,7 @@ export async function POST(request: NextRequest) {
         status: getValidPaymentStatus(status),
         swish_callback_url: callbackUrl,
         swish_payment_id: paymentReference,
-        errorMessage: errorMessage,
+        error_message: errorMessage,
         updated_at: new Date().toISOString(),
         payment_date: status === PAYMENT_STATUSES.PAID ? payment_date : null,
         // Spara callback-data för debugging
