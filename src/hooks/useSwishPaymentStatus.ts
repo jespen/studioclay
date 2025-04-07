@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
+import { PAYMENT_STATUSES, getValidPaymentStatus } from '@/constants/statusCodes';
 import { useRouter } from 'next/navigation';
 import { getPaymentReference, setPaymentReference, setBookingReference, getFlowType } from '@/utils/flowStorage';
 import { FlowType } from '@/components/common/BookingStepper';
@@ -108,18 +109,7 @@ export const useSwishPaymentStatus = ({
 
   // Helper function to map status string to PaymentStatus enum
   const mapToPaymentStatus = (status: string): PaymentStatus => {
-    switch (status) {
-      case 'PAID':
-        return PAYMENT_STATUS.PAID;
-      case 'DECLINED':
-        return PAYMENT_STATUS.DECLINED;
-      case 'ERROR':
-        return PAYMENT_STATUS.ERROR;
-      case 'CREATED':
-        return PAYMENT_STATUS.CREATED;
-      default:
-        return PAYMENT_STATUS.CREATED;
-    }
+    return getValidPaymentStatus(status);
   };
 
   // Handle closing the payment dialog

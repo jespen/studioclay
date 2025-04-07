@@ -5,6 +5,7 @@ import SwishPaymentForm from './SwishPaymentForm';
 import SwishPaymentDialog from './SwishPaymentDialog';
 import { useSwishPaymentStatus } from '@/hooks/useSwishPaymentStatus';
 import { getGiftCardDetails, getFlowType, setPaymentReference } from '@/utils/flowStorage';
+import { PAYMENT_STATUSES } from '@/constants/statusCodes';
 
 interface GiftCardDetails {
   type: string;
@@ -335,17 +336,17 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       // Extract status from the data.data structure
       const status = data.data?.status || data.status;
       
-      if (status === 'PAID') {
+      if (status === PAYMENT_STATUSES.PAID) {
         console.log('Payment status is PAID, completing payment flow');
-        setPaymentStatus('PAID');
+        setPaymentStatus(PAYMENT_STATUSES.PAID);
         setIsPolling(false);
         onPaymentComplete(true);
-      } else if (status === 'DECLINED' || status === 'ERROR') {
+      } else if (status === PAYMENT_STATUSES.DECLINED || status === PAYMENT_STATUSES.ERROR) {
         console.log('Payment status is declined or error:', status);
-        setPaymentStatus('DECLINED');
+        setPaymentStatus(PAYMENT_STATUSES.DECLINED);
         setIsPolling(false);
-        onPaymentFailure?.(status === 'DECLINED' ? 'DECLINED' : 'ERROR');
-      } else if (status === 'CREATED') {
+        onPaymentFailure?.(status === PAYMENT_STATUSES.DECLINED ? PAYMENT_STATUSES.DECLINED : PAYMENT_STATUSES.ERROR);
+      } else if (status === PAYMENT_STATUSES.CREATED) {
         console.log('Payment status is still pending:', status);
         // Continue polling if payment is still in progress
         if (isPolling) {

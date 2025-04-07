@@ -154,17 +154,14 @@ export interface SwishCallbackData {
   errorMessage?: string;
 }
 
-// Payment status values that are actually used
-export type PaymentStatus = 
-  | 'CREATED'   // Initial state when payment is created
-  | 'PAID'      // Payment confirmed by Swish
-  | 'ERROR'     // Payment failed
-  | 'DECLINED'; // Payment declined by user or Swish 
+// Import central definitions
+import { 
+  PaymentStatus as CentralPaymentStatus, 
+  PAYMENT_STATUSES 
+} from '@/constants/statusCodes';
 
-// Payment status values as a constant object
-export const PAYMENT_STATUS = {
-  CREATED: 'CREATED',
-  PAID: 'PAID',
-  ERROR: 'ERROR',
-  DECLINED: 'DECLINED'
-} as const; 
+// Re-export for backward compatibility
+export type PaymentStatus = CentralPaymentStatus;
+
+// Payment status values as a constant object - for backward compatibility
+export const PAYMENT_STATUS = PAYMENT_STATUSES; 

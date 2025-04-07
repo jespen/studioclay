@@ -8,6 +8,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { SwishCallbackData, PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
 import { generateGiftCardPDF, GiftCardData } from '@/utils/giftCardPDF';
 import { setupCertificate } from '../cert-helper';
+import { PAYMENT_STATUSES, getValidPaymentStatus } from '@/constants/statusCodes';
+import { sendServerBookingConfirmationEmail } from '@/utils/serverEmail';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -115,7 +117,7 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
       number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
       booking_date: bookingDate,
       status: 'confirmed',
-      payment_status: 'PAID',
+      payment_status: PAYMENT_STATUSES.PAID,
       payment_method: 'swish',
       unit_price: courseData.template?.price || courseData.price || 0,
       total_price: (courseData.template?.price || courseData.price || 0) * (parseInt(userInfo.numberOfParticipants) || 1),
@@ -478,17 +480,24 @@ export async function POST(request: NextRequest) {
     const { error: updateError } = await supabase
       .from('payments')
       .update({
-        status: status,
+        status: getValidPaymentStatus(status),
+        swish_callback_url: callbackUrl,
+        swish_payment_id: paymentReference,
+        errorMessage: errorMessage,
+        updated_at: new Date().toISOString(),
+        datePaid: status === PAYMENT_STATUSES.PAID ? datePaid : null,
+        // Spara callback-data för debugging
         metadata: {
           ...payment.metadata,
-          swish_callback: {
-            received_at: new Date().toISOString(),
-            data: logData
-          },
-          swish_error: errorCode ? { code: errorCode, message: errorMessage } : null
+          callback: {
+            data: logData,
+            timestamp: new Date().toISOString()
+          }
         }
       })
-      .eq('id', payment.id);
+      .eq('id', payment.id)
+      .select()
+      .single();
 
     if (updateError) {
       logError(`[${requestId}] Error updating payment:`, updateError);
@@ -498,7 +507,7 @@ export async function POST(request: NextRequest) {
     logDebug(`[${requestId}] Payment status updated to: ${status}`);
 
     // If the payment was successful and it's for a course, create a booking
-    if (status === PAYMENT_STATUS.PAID) {
+    if (status === PAYMENT_STATUSES.PAID) {
       logDebug(`[${requestId}] Payment is PAID, processing related actions`);
       
       // Get the product type to determine what actions to take
@@ -805,256 +814,28 @@ export async function POST(request: NextRequest) {
               logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
               await keepAlivePromise;
               logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
-              
-              return { success: true };
             };
             
             // Execute the background process with explicit promise handling
             Promise.resolve().then(runGiftCardBackgroundTask).catch(err => {
               logError(`[${requestId}] Critical error in background gift card processing:`, err);
             });
-          }
-        } catch (giftCardError) {
-          logError(`[${requestId}] Error processing gift card:`, giftCardError);
-          // Don't return an error response here - we still want to acknowledge the callback
-        }
-      }
-      // Handle art_product type
-      else if (productType === 'art_product' && productId) {
-        try {
-          logDebug(`[${requestId}] Handling art product purchase, product ID: ${productId}`);
-          
-          // Check if we already have an art_order for this payment
-          const { data: existingOrder } = await supabase
-            .from('art_orders')
-            .select('id, order_reference')
-            .eq('order_reference', reference)
-            .single();
-            
-          if (!existingOrder) {
-            // Create art order record if it doesn't exist
-            // (It should already exist as it's created in the create payment endpoint, but ensuring it here)
-            try {
-              const orderPayload = {
-                product_id: productId,
-                customer_name: userInfo.firstName + ' ' + userInfo.lastName,
-                customer_email: userInfo.email,
-                customer_phone: payment.phone_number,
-                payment_method: 'swish',
-                order_reference: reference,
-                payment_status: status,
-                unit_price: payment.amount,
-                total_price: payment.amount,
-                status: 'confirmed',
-                metadata: {
-                  payment_id: payment.id,
-                  user_info: userInfo
-                }
-              };
-              
-              logDebug(`[${requestId}] Creating new art order with data:`, { 
-                order_reference: orderPayload.order_reference,
-                product_id: orderPayload.product_id,
-                payment_status: orderPayload.payment_status
-              });
-              
-              // Insert without using onConflict
-              const { data: orderResult, error: orderError } = await supabase
-                .from('art_orders')
-                .insert(orderPayload)
-                .select()
-                .single();
-
-              if (orderError) {
-                logError(`[${requestId}] Error creating art order:`, orderError);
-              } else {
-                logDebug(`[${requestId}] Art order created:`, { id: orderResult?.id, reference: orderResult?.order_reference });
-                
-                // Update product stock if needed
-                try {
-                  // First get the current product
-                  const { data: productData, error: productFetchError } = await supabase
-                    .from('products')
-                    .select('id, title, price, description, image, stock_quantity, in_stock')
-                    .eq('id', productId)
-                    .single();
-                    
-                  if (productFetchError) {
-                    logError(`[${requestId}] Error fetching product for stock update:`, productFetchError);
-                  } else if (productData) {
-                    // Calculate new stock quantity
-                    const newQuantity = Math.max(0, (productData.stock_quantity || 1) - 1);
-                    
-                    // Update the product with new stock quantity
-                const { error: updateError } = await supabase
-                      .from('products')
-                  .update({
-                        stock_quantity: newQuantity,
-                        in_stock: newQuantity > 0
-                  })
-                      .eq('id', productId);
-                  
-                if (updateError) {
-                      logError(`[${requestId}] Error updating product stock:`, updateError);
-                    } else {
-                      logDebug(`[${requestId}] Updated product ${productId} stock to ${newQuantity}`);
-                    }
-                    
-                    // CRITICAL DB OPERATIONS COMPLETE
-                    // Now proceed with email sending in background
-                    
-                    // Create a promised-based background process
-                    logDebug(`[${requestId}] Setting up background process for product order email`);
-                    
-                    const runProductEmailBackgroundTask = async () => {
-                      logDebug(`[${requestId}] Starting background product email process`);
-                      const backgroundStartTime = Date.now();
-                      
-                      // Create a keep-alive promise to delay function termination
-                      logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
-                      const keepAlivePromise = new Promise(resolve => {
-                        const timerId = setTimeout(() => {
-                          logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
-                          resolve(true);
-                        }, 45000);
-                        
-                        // Ensure timer isn't lost to garbage collection
-                        global.setTimeout = global.setTimeout || setTimeout;
-                        if (!global.keepAliveTimers) {
-                          global.keepAliveTimers = [];
-                        }
-                        global.keepAliveTimers.push(timerId);
-                      });
-                      
-                      try {
-                        // Send confirmation email
-                        logDebug(`[${requestId}] Sending product order confirmation email`);
-                        logDebug(`[${requestId}] DIAGNOSTIC: About to attempt email sending for product order`);
-                        logDebug(`[${requestId}] DIAGNOSTIC: Email parameters:`, {
-                          recipientEmail: userInfo.email,
-                          productTitle: productData.title,
-                          orderReference: reference,
-                          amount: payment.amount
-                        });
-                        
-                        const { sendServerProductOrderConfirmationEmail } = await import('@/utils/serverEmail');
-                        
-                        const emailResult = await sendServerProductOrderConfirmationEmail({
-                          userInfo: {
-                            firstName: userInfo.firstName,
-                            lastName: userInfo.lastName,
-                            email: userInfo.email,
-                            phone: userInfo.phone || payment.phone_number
-                          },
-                          paymentDetails: {
-                            method: 'swish',
-                            status: 'PAID',
-                            reference: reference,
-                            amount: payment.amount
-                          },
-                          productDetails: {
-                            id: productId,
-                            title: productData.title,
-                            description: productData.description,
-                            price: payment.amount,
-                            quantity: 1,
-                            image: productData.image
-                          },
-                          orderReference: reference
-                        });
-                        
-                        logDebug(`[${requestId}] Product order email result:`, emailResult);
-                        logDebug(`[${requestId}] Background product email process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
-                      } catch (emailError) {
-                        logError(`[${requestId}] Error sending product order email:`, emailError);
-                      }
-                      
-                      // Wait for the keep-alive promise to resolve before finishing
-                      logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
-                      await keepAlivePromise;
-                      logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
-                      
-                      return { success: true };
-                    };
-                    
-                    // Execute the background process with explicit promise handling
-                    Promise.resolve().then(runProductEmailBackgroundTask).catch(err => {
-                      logError(`[${requestId}] Critical error in background product email processing:`, err);
-                    });
-                  }
-                } catch (stockError) {
-                  logError(`[${requestId}] Error updating product stock:`, stockError);
-                  // Continue execution - stock update is not critical
-                }
-              }
-            } catch (orderError) {
-              logError(`[${requestId}] Error creating art order:`, orderError);
-            }
           } else {
-            logDebug(`[${requestId}] Art order already exists:`, existingOrder);
-            
-            // Update the payment status
-            const { error: updateOrderError } = await supabase
-              .from('art_orders')
-              .update({ payment_status: status })
-              .eq('order_reference', reference);
-              
-            if (updateOrderError) {
-              logError(`[${requestId}] Error updating art order status:`, updateOrderError);
-            } else {
-              logDebug(`[${requestId}] Updated art order payment status to ${status}`);
-            }
+            logDebug(`[${requestId}] Gift card already exists for this payment`, { 
+              gift_card_id: existingGiftCard.id, 
+              code: existingGiftCard.code 
+            });
           }
-        } catch (artProductError) {
-          logError(`[${requestId}] Error processing art product:`, artProductError);
-          // Don't return an error response - we want to acknowledge the callback
+        } catch (error) {
+          logError(`[${requestId}] Error in gift card creation:`, error);
+          // Logg felet men returnera ändå 200 OK till Swish för att förhindra återförsök
         }
       }
     }
 
-    // Always return a success response to acknowledge the callback
-    logDebug(`[${requestId}] ===== SWISH CALLBACK COMPLETED SUCCESSFULLY =====`);
     return NextResponse.json({ success: true });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logError(`[${requestId}] ===== SWISH CALLBACK ERROR =====`);
-    logError(`[${requestId}] Error processing Swish callback:`, { error: errorMessage });
-    
-    // Always return a success response to Swish to prevent retries
-    // But log the error for our own tracking
-    return NextResponse.json({ success: true });
+    logError(`[${requestId}] Error processing Swish callback:`, error);
+    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
 }
-
-// Enkel ping-endpoint för att enkelt kontrollera om callback-endpointen är nåbar
-export async function GET(request: NextRequest) {
-  const requestId = uuidv4().substring(0, 8);
-  
-  logDebug(`[${requestId}] Swish callback ping received`);
-  
-  // Logga viktiga headers och information för felsökning
-  const sourceIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
-  const userAgent = request.headers.get('user-agent') || 'unknown';
-  
-  // Skapa en array av alla headers för loggning
-  const headers: Record<string, string> = {};
-  request.headers.forEach((value, key) => {
-    // Undvik att logga känsliga headers som Authorization eller Cookie
-    if (!['authorization', 'cookie'].includes(key.toLowerCase())) {
-      headers[key] = value;
-    }
-  });
-  
-  logDebug(`[${requestId}] Ping request source: IP=${sourceIp}, User-Agent=${userAgent}`);
-  
-  return NextResponse.json({
-    success: true,
-    message: 'Swish callback endpoint is reachable',
-    timestamp: new Date().toISOString(),
-    requestId: requestId,
-    source: {
-      ip: sourceIp,
-      userAgent: userAgent
-    }
-  });
-} 

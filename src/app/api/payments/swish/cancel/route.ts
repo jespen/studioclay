@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient, PostgrestError } from '@supabase/supabase-js';
 import { SwishService } from '@/services/swish/swishService';
 import { logDebug, logError } from '@/lib/logging';
+import { PAYMENT_STATUSES, getValidPaymentStatus } from '@/constants/statusCodes';
 
 // Initialize environment variables with detailed logging
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
     });
 
     // Only allow cancellation if payment is in CREATED state
-    if (payment.status !== 'CREATED') {
+    if (payment.status !== PAYMENT_STATUSES.CREATED) {
       logDebug(`[${requestId}] Cannot cancel payment - invalid status`, { 
         currentStatus: payment.status,
         paymentReference 
@@ -208,22 +209,23 @@ export async function POST(request: Request) {
       cleanMetadata = { cancellation: cancellationInfo };
     }
 
-    // Update payment status in database
-    logDebug(`[${requestId}] Updating payment status in database`, { 
-      paymentId: payment.id,
-      fromStatus: payment.status,
-      toStatus: 'DECLINED'
-    });
-    
-    // First attempt: Try with just the essential fields
+    // Update payment status in our database
+    logDebug(`[${requestId}] Updating payment status in database to DECLINED`);
     const updateStart = Date.now();
-    const { error: updateError } = await supabase
+    
+    const { data: updatedPayment, error: updateError } = await supabase
       .from('payments')
-      .update({ 
-        status: 'DECLINED',
-        updated_at: new Date().toISOString()
+      .update({
+        status: PAYMENT_STATUSES.DECLINED,
+        updated_at: new Date().toISOString(),
+        metadata: {
+          ...cleanMetadata,
+          cancellation: cancellationInfo
+        }
       })
-      .eq('id', payment.id);  // Using the ID instead of payment_reference for more precise matching
+      .eq('id', payment.id)
+      .select('*')
+      .single();
     
     const updateDuration = Date.now() - updateStart;
 
@@ -240,35 +242,6 @@ export async function POST(request: Request) {
         condition: `id = ${payment.id}`
       }
     });
-
-    // If the minimal update succeeds, try to update metadata in a separate call
-    let metadataUpdateError = null;
-    if (!updateError) {
-      try {
-        const metadataStart = Date.now();
-        const { error: metadataError } = await supabase
-          .from('payments')
-          .update({ 
-            metadata: cleanMetadata,
-            cancelled_by: cancelledBy || null,
-            cancelled_from: cancelledFrom || null
-          })
-          .eq('id', payment.id);
-          
-        const metadataDuration = Date.now() - metadataStart;
-        
-        logDebug(`[${requestId}] Metadata update result in ${metadataDuration}ms`, {
-          success: !metadataError,
-          errorCode: metadataError?.code,
-          errorMessage: metadataError?.message
-        });
-        
-        metadataUpdateError = metadataError;
-      } catch (error) {
-        logError(`[${requestId}] Exception during metadata update:`, error);
-        metadataUpdateError = error;
-      }
-    }
 
     if (updateError) {
       logError(`[${requestId}] Error updating payment status:`, updateError);

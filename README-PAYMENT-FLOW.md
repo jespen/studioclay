@@ -460,6 +460,47 @@ CREATE TABLE "public"."course_instances" (
    - För kursbokningar: Uppdaterar `current_participants` i `course_instances`
    - Avbryter betalningen i Swish API om den fortfarande är pågående
 
+### Central statushantering
+
+För att säkerställa konsistens i statushanteringen över hela systemet, används nu centrala definitioner av statusvärden. Dessa är definierade i `src/constants/statusCodes.ts` och inkluderar:
+
+#### Betalningsstatuskoder
+```typescript
+export const PAYMENT_STATUSES = {
+  CREATED: 'CREATED',   // Initial state when payment is created
+  PAID: 'PAID',         // Payment confirmed by Swish/Invoice
+  ERROR: 'ERROR',       // Payment failed
+  DECLINED: 'DECLINED'  // Payment declined by user or Swish
+} as const;
+```
+
+#### Bokningsstatuskoder
+```typescript
+export const BOOKING_STATUSES = {
+  PENDING: 'pending',       // Initial state when booking is created
+  CONFIRMED: 'confirmed',   // Booking is confirmed
+  CANCELLED: 'cancelled'    // Booking is cancelled
+} as const;
+```
+
+#### Orderstatuskoder
+```typescript
+export const ORDER_STATUSES = {
+  PENDING: 'pending',
+  COMPLETED: 'completed',
+  SHIPPED: 'shipped',
+  CANCELLED: 'cancelled'
+} as const;
+```
+
+Genom att använda dessa centrala definitioner tillsammans med hjälpfunktioner som `getValidPaymentStatus()` säkerställs att:
+
+1. **Konsistenta värden** används över hela systemet
+2. **Felaktiga statusvärden** fångas upp tidigt med tydlig loggning
+3. **Typvalidering** hjälper utvecklare att undvika misstag under kompilering
+
+Detta förhindrar att inkonsekventa statusvärden (t.ex. 'PENDING' när det borde vara 'CREATED') smyger sig in i systemet och orsakar felaktigt beteende.
+
 ### Rekommenderade SQL-förfrågningar för felsökning
 
 #### Hitta betalning med specifik referens

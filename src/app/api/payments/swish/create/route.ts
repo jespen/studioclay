@@ -11,6 +11,7 @@ import fetch from 'node-fetch';
 import { SwishService } from '@/services/swish/swishService';
 import { SwishPaymentData } from '@/services/swish/types';
 import { setupCertificate } from '../cert-helper';
+import { PAYMENT_STATUSES, getValidPaymentStatus } from '@/constants/statusCodes';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -361,7 +362,7 @@ export async function POST(request: Request) {
           payment_reference: paymentReference,
           product_type: product_type,
           product_id: product_id,
-          status: 'CREATED',
+          status: PAYMENT_STATUSES.CREATED,
           user_info: user_info,
           phone_number: phone_number,
           metadata: {
@@ -415,7 +416,7 @@ export async function POST(request: Request) {
           await supabase
             .from('payments')
             .update({ 
-              status: 'ERROR',
+              status: PAYMENT_STATUSES.ERROR,
               metadata: {
                 ...paymentData.metadata,
                 swish_error: result.error

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { logDebug, logError } from "@/lib/logging";
 import { SwishService } from "@/services/swish/swishService";
+import { getValidPaymentStatus, PAYMENT_STATUSES } from "@/constants/statusCodes";
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -52,7 +53,7 @@ export async function GET(
         return NextResponse.json({
           success: true,
           debug: { error: 'Payment not found yet', code: error.code },
-          data: { status: 'CREATED', callback_received: false }
+          data: { status: PAYMENT_STATUSES.CREATED, callback_received: false }
         }, { status: 200 });
       }
       
@@ -67,7 +68,7 @@ export async function GET(
       return NextResponse.json({
         success: true,
         debug: { message: 'Payment not found' },
-        data: { status: 'UNKNOWN', callback_received: false }
+        data: { status: PAYMENT_STATUSES.CREATED, callback_received: false }
       }, { status: 200 });
     }
 
@@ -82,7 +83,7 @@ export async function GET(
     // Return payment details in the new expected format
     return NextResponse.json({
       success: true,
-      status: payment.status,
+      status: getValidPaymentStatus(payment.status),
       debug: { 
         search_reference: reference,
         payment_id: payment.id,
@@ -93,10 +94,10 @@ export async function GET(
       },
       data: {
         id: payment.id,
-        status: payment.status,
+        status: getValidPaymentStatus(payment.status),
         created_at: payment.created_at,
         updated_at: payment.updated_at,
-        callback_received: payment.status !== 'CREATED',
+        callback_received: payment.status !== PAYMENT_STATUSES.CREATED,
         payment_reference: payment.payment_reference,
         swish_payment_id: payment.swish_payment_id,
         booking_id: payment.booking_id || booking?.id,
