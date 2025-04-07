@@ -345,7 +345,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         setPaymentStatus('DECLINED');
         setIsPolling(false);
         onPaymentFailure?.(status === 'DECLINED' ? 'DECLINED' : 'ERROR');
-      } else if (status === 'CREATED' || status === 'PENDING') {
+      } else if (status === 'CREATED') {
         console.log('Payment status is still pending:', status);
         // Continue polling if payment is still in progress
         if (isPolling) {

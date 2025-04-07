@@ -52,7 +52,7 @@ export async function GET(
         return NextResponse.json({
           success: true,
           debug: { error: 'Payment not found yet', code: error.code },
-          data: { status: 'PENDING', callback_received: false }
+          data: { status: 'CREATED', callback_received: false }
         }, { status: 200 });
       }
       
