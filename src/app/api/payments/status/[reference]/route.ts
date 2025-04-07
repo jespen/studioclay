@@ -75,7 +75,7 @@ export async function GET(
     const { data: booking } = await supabase
       .from('bookings')
       .select('*')
-      .or(`payment_id.eq.${payment.id},message.ilike.%${payment.id}%`)
+      .or(`booking_id.eq.${payment.id},booking_reference.ilike.%${payment.payment_reference}%`)
       .limit(1)
       .maybeSingle();
 
@@ -93,11 +93,11 @@ export async function GET(
         status: payment.status,
         created_at: payment.created_at,
         updated_at: payment.updated_at,
-        callback_received: payment.status === 'PAID',
+        callback_received: payment.status !== 'CREATED',
         payment_reference: payment.payment_reference,
         swish_payment_id: payment.swish_payment_id,
-        booking_id: booking?.id,
-        booking_reference: booking?.reference || booking?.booking_reference
+        booking_id: payment.booking_id || booking?.id,
+        booking_reference: booking?.booking_reference
       }
     });
 

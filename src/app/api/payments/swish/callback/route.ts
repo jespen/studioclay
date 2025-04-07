@@ -115,7 +115,7 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
       number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
       booking_date: bookingDate,
       status: 'confirmed',
-      payment_status: 'paid',
+      payment_status: 'PAID',
       payment_method: 'swish',
     })
     .select()

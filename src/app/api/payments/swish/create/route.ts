@@ -172,7 +172,7 @@ async function getProductTitle(productType: string, productId: string) {
         // Hämta kurstitel från databasen
         const { data: course, error: courseError } = await supabase
           .from('course_instances')
-          .select('*, course_templates:template_id(title)')
+          .select('*, course_templates:template_id(*)')
           .eq('id', productId)
           .single();
         
@@ -183,7 +183,7 @@ async function getProductTitle(productType: string, productId: string) {
 
         // Använd kursinstansens titel om den finns, annars template-titeln
         const courseTitle = course.title || 
-                          (course.course_templates?.title) || 
+                          (course.course_templates?.name) || 
                           'Kurs';
         return courseTitle;
         
