@@ -117,7 +117,6 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
       status: 'confirmed',
       payment_status: 'paid',
       payment_method: 'swish',
-      payment_id: paymentId // Store payment_id directly
     })
     .select()
     .single();
