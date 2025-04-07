@@ -58,6 +58,7 @@ async function verifySwishSignature(request: Request): Promise<boolean> {
 
 // Hjälpfunktion för att skapa bokning
 async function createBooking(paymentId: string, courseId: string, userInfo: any) {
+  // Generate a unique booking reference
   const bookingReference = crypto.randomUUID();
   
   // Get course price first
@@ -71,20 +72,20 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any)
     throw new Error(`Failed to fetch course price: ${courseError.message}`);
   }
   
+  // Insert booking WITH payment_id and reference fields as in the original version
   const { data: booking, error } = await supabase
     .from('bookings')
     .insert({
-      payment_reference: paymentId,
+      payment_id: paymentId,
       course_id: courseId,
-      booking_reference: bookingReference,
+      reference: bookingReference,
       status: 'CONFIRMED',
       customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
       customer_email: userInfo.email,
       customer_phone: userInfo.phone,
       number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
       unit_price: course.price,
-      total_price: course.price * (parseInt(userInfo.numberOfParticipants) || 1),
-      booking_date: new Date().toISOString()
+      total_price: course.price * (parseInt(userInfo.numberOfParticipants) || 1)
     })
     .select()
     .single();
@@ -425,40 +426,38 @@ export async function POST(request: NextRequest) {
       
       if (productType === 'course' && productId && userInfo) {
         try {
+          // Get payment reference from Swish callback
+          const payeePaymentReference = body.payeePaymentReference;
+          logDebug(`[${requestId}] Trying to find booking with reference: ${payeePaymentReference}`);
+
           // Check if we already have a booking for this payment to avoid duplicates
           const { data: existingBooking } = await supabase
             .from('bookings')
-            .select('id, booking_reference')
-            .eq('payment_reference', payment.id)
+            .select('id, reference')
+            .eq('payment_id', payment.id)
             .single();
             
           if (!existingBooking) {
             logDebug(`[${requestId}] No existing booking found, creating new booking`);
             
-            // Create a booking for this payment
+            // Create a booking for this payment - don't pass bookingReference parameter
             const booking = await createBooking(payment.id, productId, userInfo);
-            const bookingReference = booking.booking_reference;
+            const bookingReference = booking.reference;
             
             logDebug(`[${requestId}] Booking created with reference: ${bookingReference}`);
             
-            // CRITICAL DB OPERATIONS COMPLETE
-            // Early response could be sent here in a different architectural approach
-            
-            // CONTINUE PROCESSING IN THE BACKGROUND
-            // Create a promised-based background process for email sending
-            logDebug(`[${requestId}] Setting up background process for email sending`);
-            
-            const runEmailBackgroundTask = async () => {
-              logDebug(`[${requestId}] Starting background email process`);
-              const backgroundStartTime = Date.now();
+            // Try to send confirmation email with keep-alive
+            try {
+              logDebug(`[${requestId}] Sending booking confirmation email`);
               
-              // Create a keep-alive promise to delay function termination
-              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
+              const { sendServerBookingConfirmationEmail } = await import('@/utils/serverEmail');
+              
+              // Create a manual keep-alive promise to prevent the serverless function from terminating
               const keepAlivePromise = new Promise(resolve => {
                 const timerId = setTimeout(() => {
-                  logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
+                  logDebug(`[${requestId}] Email keep-alive timeout complete`);
                   resolve(true);
-                }, 45000);
+                }, 30000); // 30 seconds
                 
                 // Ensure timer isn't lost to garbage collection
                 global.setTimeout = global.setTimeout || setTimeout;
@@ -468,80 +467,55 @@ export async function POST(request: NextRequest) {
                 global.keepAliveTimers.push(timerId);
               });
               
-              try {
-                // Try to send confirmation email
-                logDebug(`[${requestId}] Sending booking confirmation email`);
+              // Fetch course details
+              const { data: courseData, error: courseError } = await supabase
+                .from('course_instances')
+                .select('*')
+                .eq('id', productId)
+                .single();
                 
-                const { sendServerBookingConfirmationEmail } = await import('@/utils/serverEmail');
-                
-                // Fetch course details
-                const { data: courseData, error: courseError } = await supabase
-                  .from('course_instances')
-                  .select('*')
-                  .eq('id', productId)
-                  .single();
-                  
-                if (courseError) {
-                  logError(`[${requestId}] Error fetching course details for email:`, courseError);
-                  throw new Error('Failed to fetch course details for email');
-                }
-                
-                logDebug(`[${requestId}] DIAGNOSTIC: About to attempt email sending for course booking`);
-                logDebug(`[${requestId}] DIAGNOSTIC: Email parameters:`, {
-                  recipientEmail: userInfo.email,
-                  courseTitle: courseData.title,
-                  bookingReference: bookingReference,
-                  paymentReference: reference
-                });
-                
-                const emailResult = await sendServerBookingConfirmationEmail({
-                  userInfo: {
-                    firstName: userInfo.firstName,
-                    lastName: userInfo.lastName,
-                    email: userInfo.email,
-                    phone: userInfo.phone,
-                    numberOfParticipants: userInfo.numberOfParticipants || "1",
-                    specialRequirements: userInfo.specialRequirements || ""
-                  },
-                  paymentDetails: {
-                    method: 'swish',
-                    status: 'PAID',
-                    paymentReference: reference
-                  },
-                  courseDetails: {
-                    id: productId,
-                    title: courseData.title,
-                    description: courseData.description,
-                    start_date: courseData.start_date,
-                    location: courseData.location,
-                    price: courseData.price
-                  },
-                  bookingReference: bookingReference
-                });
-                
-                logDebug(`[${requestId}] Email sending result:`, emailResult);
-                logDebug(`[${requestId}] Background email process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
-              } catch (emailError) {
-                logError(`[${requestId}] Error sending confirmation email:`, emailError);
-                // Don't fail the overall process if email sending fails
+              if (courseError) {
+                logError(`[${requestId}] Error fetching course details for email:`, courseError);
+                throw new Error('Failed to fetch course details for email');
               }
               
-              // Wait for the keep-alive promise to resolve before finishing
-              logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
-              await keepAlivePromise;
-              logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
+              const emailResult = await sendServerBookingConfirmationEmail({
+                userInfo: {
+                  firstName: userInfo.firstName,
+                  lastName: userInfo.lastName,
+                  email: userInfo.email,
+                  phone: userInfo.phone,
+                  numberOfParticipants: userInfo.numberOfParticipants || "1",
+                  specialRequirements: userInfo.specialRequirements || ""
+                },
+                paymentDetails: {
+                  method: 'swish',
+                  status: 'PAID',
+                  paymentReference: reference
+                },
+                courseDetails: {
+                  id: productId,
+                  title: courseData.title,
+                  description: courseData.description,
+                  start_date: courseData.start_date,
+                  location: courseData.location,
+                  price: courseData.price
+                },
+                bookingReference: bookingReference
+              });
               
-              return { success: true };
-            };
-            
-            // Execute the background process with explicit promise handling
-            Promise.resolve().then(runEmailBackgroundTask).catch(err => {
-              logError(`[${requestId}] Critical error in background email processing:`, err);
-            });
+              // Wait for the keep-alive promise to ensure the email has time to be sent
+              await keepAlivePromise;
+              
+              logDebug(`[${requestId}] Email sending result:`, emailResult);
+            } catch (emailError) {
+              logError(`[${requestId}] Error sending confirmation email:`, emailError);
+              // Don't fail the overall process if email sending fails
+            }
           } else {
             logDebug(`[${requestId}] Booking already exists for this payment`, { 
               booking_id: existingBooking.id, 
-              reference: existingBooking.booking_reference 
+              reference: existingBooking.reference 
             });
           }
         } catch (error) {
@@ -578,8 +552,8 @@ export async function POST(request: NextRequest) {
               logDebug(`[${requestId}] Starting background gift card process`);
               const backgroundStartTime = Date.now();
               
-              // Create a keep-alive promise to delay function termination
-              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
+              // Create a manual keep-alive promise to prevent the serverless function from terminating
+              logDebug(`[${requestId}] KEEP-ALIVE: Creating manual keep-alive promise for 45 seconds`);
               const keepAlivePromise = new Promise(resolve => {
                 const timerId = setTimeout(() => {
                   logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
@@ -791,8 +765,8 @@ export async function POST(request: NextRequest) {
                       logDebug(`[${requestId}] Starting background product email process`);
                       const backgroundStartTime = Date.now();
                       
-                      // Create a keep-alive promise to delay function termination
-                      logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
+                      // Create a manual keep-alive promise to prevent the serverless function from terminating
+                      logDebug(`[${requestId}] KEEP-ALIVE: Creating manual keep-alive promise for 45 seconds`);
                       const keepAlivePromise = new Promise(resolve => {
                         const timerId = setTimeout(() => {
                           logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
@@ -938,4 +912,4 @@ export async function GET(request: NextRequest) {
       userAgent: userAgent
     }
   });
-} 
+}
