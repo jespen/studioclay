@@ -15,11 +15,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Type declaration for global state
-declare global {
-  var keepAliveTimers: NodeJS.Timeout[];
-}
-
 // Hjälpfunktion för att verifiera Swish signatur
 async function verifySwishSignature(request: Request): Promise<boolean> {
   // I testmiljö skippar vi signaturverifiering
@@ -58,7 +53,6 @@ async function verifySwishSignature(request: Request): Promise<boolean> {
 
 // Hjälpfunktion för att skapa bokning
 async function createBooking(paymentId: string, courseId: string, userInfo: any) {
-  // Generate a unique booking reference
   const bookingReference = crypto.randomUUID();
   
   // Get course price first
@@ -72,7 +66,6 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any)
     throw new Error(`Failed to fetch course price: ${courseError.message}`);
   }
   
-  // Insert booking WITH payment_id and reference fields as in the original version
   const { data: booking, error } = await supabase
     .from('bookings')
     .insert({
@@ -426,10 +419,6 @@ export async function POST(request: NextRequest) {
       
       if (productType === 'course' && productId && userInfo) {
         try {
-          // Get payment reference from Swish callback
-          const payeePaymentReference = body.payeePaymentReference;
-          logDebug(`[${requestId}] Trying to find booking with reference: ${payeePaymentReference}`);
-
           // Check if we already have a booking for this payment to avoid duplicates
           const { data: existingBooking } = await supabase
             .from('bookings')
@@ -440,78 +429,109 @@ export async function POST(request: NextRequest) {
           if (!existingBooking) {
             logDebug(`[${requestId}] No existing booking found, creating new booking`);
             
-            // Create a booking for this payment - don't pass bookingReference parameter
+            // Create a booking for this payment
             const booking = await createBooking(payment.id, productId, userInfo);
             const bookingReference = booking.reference;
             
             logDebug(`[${requestId}] Booking created with reference: ${bookingReference}`);
             
-            // Try to send confirmation email with keep-alive
-            try {
-              logDebug(`[${requestId}] Sending booking confirmation email`);
+            // CRITICAL DB OPERATIONS COMPLETE
+            // Early response could be sent here in a different architectural approach
+            
+            // CONTINUE PROCESSING IN THE BACKGROUND
+            // Create a promised-based background process for email sending
+            logDebug(`[${requestId}] Setting up background process for email sending`);
+            
+            const runEmailBackgroundTask = async () => {
+              logDebug(`[${requestId}] Starting background email process`);
+              const backgroundStartTime = Date.now();
               
-              const { sendServerBookingConfirmationEmail } = await import('@/utils/serverEmail');
-              
-              // Create a manual keep-alive promise to prevent the serverless function from terminating
+              // Create a keep-alive promise to delay function termination
+              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
               const keepAlivePromise = new Promise(resolve => {
                 const timerId = setTimeout(() => {
-                  logDebug(`[${requestId}] Email keep-alive timeout complete`);
+                  logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
                   resolve(true);
-                }, 30000); // 30 seconds
+                }, 15000);
                 
                 // Ensure timer isn't lost to garbage collection
                 global.setTimeout = global.setTimeout || setTimeout;
-                if (!global.keepAliveTimers) {
+                if (global.keepAliveTimers === undefined) {
                   global.keepAliveTimers = [];
                 }
                 global.keepAliveTimers.push(timerId);
               });
               
-              // Fetch course details
-              const { data: courseData, error: courseError } = await supabase
-                .from('course_instances')
-                .select('*')
-                .eq('id', productId)
-                .single();
+              try {
+                // Try to send confirmation email
+                logDebug(`[${requestId}] Sending booking confirmation email`);
                 
-              if (courseError) {
-                logError(`[${requestId}] Error fetching course details for email:`, courseError);
-                throw new Error('Failed to fetch course details for email');
+                const { sendServerBookingConfirmationEmail } = await import('@/utils/serverEmail');
+                
+                // Fetch course details
+                const { data: courseData, error: courseError } = await supabase
+                  .from('course_instances')
+                  .select('*')
+                  .eq('id', productId)
+                  .single();
+                  
+                if (courseError) {
+                  logError(`[${requestId}] Error fetching course details for email:`, courseError);
+                  throw new Error('Failed to fetch course details for email');
+                }
+                
+                logDebug(`[${requestId}] DIAGNOSTIC: About to attempt email sending for course booking`);
+                logDebug(`[${requestId}] DIAGNOSTIC: Email parameters:`, {
+                  recipientEmail: userInfo.email,
+                  courseTitle: courseData.title,
+                  bookingReference: bookingReference,
+                  paymentReference: reference
+                });
+                
+                const emailResult = await sendServerBookingConfirmationEmail({
+                  userInfo: {
+                    firstName: userInfo.firstName,
+                    lastName: userInfo.lastName,
+                    email: userInfo.email,
+                    phone: userInfo.phone,
+                    numberOfParticipants: userInfo.numberOfParticipants || "1",
+                    specialRequirements: userInfo.specialRequirements || ""
+                  },
+                  paymentDetails: {
+                    method: 'swish',
+                    status: 'PAID',
+                    paymentReference: reference
+                  },
+                  courseDetails: {
+                    id: productId,
+                    title: courseData.title,
+                    description: courseData.description,
+                    start_date: courseData.start_date,
+                    location: courseData.location,
+                    price: courseData.price
+                  },
+                  bookingReference: bookingReference
+                });
+                
+                logDebug(`[${requestId}] Email sending result:`, emailResult);
+                logDebug(`[${requestId}] Background email process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
+              } catch (emailError) {
+                logError(`[${requestId}] Error sending confirmation email:`, emailError);
+                // Don't fail the overall process if email sending fails
               }
               
-              const emailResult = await sendServerBookingConfirmationEmail({
-                userInfo: {
-                  firstName: userInfo.firstName,
-                  lastName: userInfo.lastName,
-                  email: userInfo.email,
-                  phone: userInfo.phone,
-                  numberOfParticipants: userInfo.numberOfParticipants || "1",
-                  specialRequirements: userInfo.specialRequirements || ""
-                },
-                paymentDetails: {
-                  method: 'swish',
-                  status: 'PAID',
-                  paymentReference: reference
-                },
-                courseDetails: {
-                  id: productId,
-                  title: courseData.title,
-                  description: courseData.description,
-                  start_date: courseData.start_date,
-                  location: courseData.location,
-                  price: courseData.price
-                },
-                bookingReference: bookingReference
-              });
-              
-              // Wait for the keep-alive promise to ensure the email has time to be sent
+              // Wait for the keep-alive promise to resolve before finishing
+              logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
               await keepAlivePromise;
+              logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
               
-              logDebug(`[${requestId}] Email sending result:`, emailResult);
-            } catch (emailError) {
-              logError(`[${requestId}] Error sending confirmation email:`, emailError);
-              // Don't fail the overall process if email sending fails
-            }
+              return { success: true };
+            };
+            
+            // Execute the background process with explicit promise handling
+            Promise.resolve().then(runEmailBackgroundTask).catch(err => {
+              logError(`[${requestId}] Critical error in background email processing:`, err);
+            });
           } else {
             logDebug(`[${requestId}] Booking already exists for this payment`, { 
               booking_id: existingBooking.id, 
@@ -552,17 +572,17 @@ export async function POST(request: NextRequest) {
               logDebug(`[${requestId}] Starting background gift card process`);
               const backgroundStartTime = Date.now();
               
-              // Create a manual keep-alive promise to prevent the serverless function from terminating
-              logDebug(`[${requestId}] KEEP-ALIVE: Creating manual keep-alive promise for 45 seconds`);
+              // Create a keep-alive promise to delay function termination
+              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
               const keepAlivePromise = new Promise(resolve => {
                 const timerId = setTimeout(() => {
                   logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
                   resolve(true);
-                }, 45000);
+                }, 15000);
                 
                 // Ensure timer isn't lost to garbage collection
                 global.setTimeout = global.setTimeout || setTimeout;
-                if (!global.keepAliveTimers) {
+                if (global.keepAliveTimers === undefined) {
                   global.keepAliveTimers = [];
                 }
                 global.keepAliveTimers.push(timerId);
@@ -765,17 +785,17 @@ export async function POST(request: NextRequest) {
                       logDebug(`[${requestId}] Starting background product email process`);
                       const backgroundStartTime = Date.now();
                       
-                      // Create a manual keep-alive promise to prevent the serverless function from terminating
-                      logDebug(`[${requestId}] KEEP-ALIVE: Creating manual keep-alive promise for 45 seconds`);
+                      // Create a keep-alive promise to delay function termination
+                      logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 15 seconds`);
                       const keepAlivePromise = new Promise(resolve => {
                         const timerId = setTimeout(() => {
                           logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
                           resolve(true);
-                        }, 45000);
+                        }, 15000);
                         
                         // Ensure timer isn't lost to garbage collection
                         global.setTimeout = global.setTimeout || setTimeout;
-                        if (!global.keepAliveTimers) {
+                        if (global.keepAliveTimers === undefined) {
                           global.keepAliveTimers = [];
                         }
                         global.keepAliveTimers.push(timerId);
@@ -912,4 +932,4 @@ export async function GET(request: NextRequest) {
       userAgent: userAgent
     }
   });
-}
+} 
