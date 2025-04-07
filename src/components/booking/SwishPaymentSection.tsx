@@ -4,7 +4,7 @@ import { PaymentStatus } from '@/types/payment';
 import SwishPaymentForm from './SwishPaymentForm';
 import SwishPaymentDialog from './SwishPaymentDialog';
 import { useSwishPaymentStatus } from '@/hooks/useSwishPaymentStatus';
-import { getGiftCardDetails, getFlowType, setPaymentReference } from '@/utils/flowStorage';
+import { getGiftCardDetails, getFlowType, setPaymentReference, setPaymentInfo } from '@/utils/flowStorage';
 import { PAYMENT_STATUSES } from '@/constants/statusCodes';
 
 interface GiftCardDetails {
@@ -334,9 +334,21 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
   // Variabel för att hålla reda på misslyckade försök
   let failedAttempts = 0;
   const MAX_FAILED_ATTEMPTS = 5;
+  const MAX_POLLING_ATTEMPTS = 60; // 2 minuter med 2 sekunders intervall
+  let pollingAttempts = 0;
 
   const handlePaymentStatus = async (paymentReference: string) => {
     try {
+      // Om polling har pågått för länge (2 minuter), avbryt
+      if (pollingAttempts >= MAX_POLLING_ATTEMPTS) {
+        console.log(`⏹️ Stopping payment status check: reached maximum attempts (${MAX_POLLING_ATTEMPTS}, ${MAX_POLLING_ATTEMPTS * 2} seconds)`);
+        setIsPolling(false);
+        return;
+      }
+      
+      pollingAttempts++;
+      console.log(`🔍 Payment status check attempt ${pollingAttempts}/${MAX_POLLING_ATTEMPTS} (${pollingAttempts * 2} seconds)`);
+      
       // Vi provar BÅDA referenserna varje gång för att vara säkra
       console.log('Checking payment status with BOTH references');
       
@@ -352,7 +364,25 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         if (swishStatus === PAYMENT_STATUSES.PAID) {
           console.log('Found PAID status with swishPaymentReference!');
           setPaymentStatus(PAYMENT_STATUSES.PAID);
+          
+          // Uppdatera betalningsstatus i localStorage
+          try {
+            // Hämta nuvarande paymentInfo från localStorage
+            const paymentInfo = JSON.parse(localStorage.getItem('payment_info') || '{}');
+            
+            // Uppdatera status till PAID
+            paymentInfo.status = PAYMENT_STATUSES.PAID;
+            
+            // Spara tillbaka till localStorage
+            setPaymentInfo(paymentInfo);
+            
+            console.log('✅ Updated payment status in localStorage to PAID');
+          } catch (error) {
+            console.error('❌ Failed to update payment status in localStorage:', error);
+          }
+          
           setIsPolling(false);
+          console.log('✅ Payment confirmed as PAID - stopping all polling');
           onPaymentComplete(true);
           return; // Avbryt här om vi hittade PAID
         }
@@ -370,13 +400,34 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       if (status === PAYMENT_STATUSES.PAID) {
         console.log('Payment status is PAID, completing payment flow');
         setPaymentStatus(PAYMENT_STATUSES.PAID);
+        
+        // Uppdatera betalningsstatus i localStorage
+        try {
+          // Hämta nuvarande paymentInfo från localStorage
+          const paymentInfo = JSON.parse(localStorage.getItem('payment_info') || '{}');
+          
+          // Uppdatera status till PAID
+          paymentInfo.status = PAYMENT_STATUSES.PAID;
+          
+          // Spara tillbaka till localStorage
+          setPaymentInfo(paymentInfo);
+          
+          console.log('✅ Updated payment status in localStorage to PAID');
+        } catch (error) {
+          console.error('❌ Failed to update payment status in localStorage:', error);
+        }
+        
         setIsPolling(false);
+        console.log('✅ Payment confirmed as PAID - stopping all polling');
         onPaymentComplete(true);
+        return; // Avsluta direkt när betalningen är bekräftad
       } else if (status === PAYMENT_STATUSES.DECLINED || status === PAYMENT_STATUSES.ERROR) {
         console.log('Payment status is declined or error:', status);
         setPaymentStatus(status);
         setIsPolling(false);
+        console.log(`⏹️ Payment ${status} - stopping all polling`);
         onPaymentFailure?.(status === PAYMENT_STATUSES.DECLINED ? PAYMENT_STATUSES.DECLINED : PAYMENT_STATUSES.ERROR);
+        return; // Avsluta direkt vid error/declined
       } else if (status === PAYMENT_STATUSES.CREATED) {
         console.log('Payment status is still pending:', status);
         // Continue polling if payment is still in progress
@@ -390,58 +441,67 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           setTimeout(() => handlePaymentStatus(paymentReference), 2000);
         }
       }
-
-      // Om båda misslyckades, och vi har försökt tillräckligt många gånger, gör ett "SISTA FÖRSÖK"
-      if (
-        status !== PAYMENT_STATUSES.PAID && 
-        failedAttempts >= MAX_FAILED_ATTEMPTS && 
-        paymentReference
-      ) {
-        // Gör ett absolut sista försök direkt till API server
-        try {
-          console.log('LAST RESORT: Trying debug API to get payment status');
-          const debugResponse = await fetch('/api/payments/swish/debug', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              reference: paymentReference,
-              requestType: 'statusCheck'
-            }),
-          });
-          
-          if (debugResponse.ok) {
-            const debugData = await debugResponse.json();
-            console.log('Debug API response:', debugData);
-            
-            if (debugData.status === PAYMENT_STATUSES.PAID) {
-              console.log('Debug API returned PAID status! Updating local state');
-              setPaymentStatus(PAYMENT_STATUSES.PAID);
-              setIsPolling(false);
-              onPaymentComplete(true);
-              return;
-            }
-          }
-        } catch (debugError) {
-          console.error('Error with debug API call:', debugError);
-        }
-        
-        // Öka räknaren endast om vi fortfarande försöker
-        failedAttempts++;
-      } else if (status !== PAYMENT_STATUSES.PAID) {
-        // Öka räknaren om statuskollen misslyckades
-        failedAttempts++;
-      } else {
-        // Återställ räknaren om vi får något giltigt svar
-        failedAttempts = 0;
-      }
     } catch (error) {
       console.error('Error checking payment status:', error);
       // Don't stop polling on network errors, as the payment might still be processing
       if (isPolling) {
         setTimeout(() => handlePaymentStatus(paymentReference), 2000);
       }
+    }
+    
+    // Om vi har flera misslyckade försök, testa debug-API som sista utväg
+    if (status !== PAYMENT_STATUSES.PAID && 
+        failedAttempts >= MAX_FAILED_ATTEMPTS && 
+        isPolling && 
+        paymentReference) {
+      try {
+        console.log('🔍 LAST RESORT: Trying debug API after several failed attempts');
+        const debugResponse = await fetch('/api/payments/swish/debug', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            reference: paymentReference,
+            requestType: 'statusCheck'
+          }),
+        });
+        
+        if (debugResponse.ok) {
+          const debugData = await debugResponse.json();
+          console.log('Debug API response:', debugData);
+          
+          if (debugData.status === PAYMENT_STATUSES.PAID) {
+            console.log('🎉 Debug API returned PAID status! Updating payment state');
+            setPaymentStatus(PAYMENT_STATUSES.PAID);
+            
+            // Uppdatera localStorage
+            try {
+              const paymentInfo = JSON.parse(localStorage.getItem('payment_info') || '{}');
+              paymentInfo.status = PAYMENT_STATUSES.PAID;
+              setPaymentInfo(paymentInfo);
+              console.log('✅ Updated payment status in localStorage to PAID via debug API');
+            } catch (error) {
+              console.error('❌ Failed to update payment status in localStorage:', error);
+            }
+            
+            setIsPolling(false);
+            onPaymentComplete(true);
+            return;
+          }
+        }
+      } catch (debugError) {
+        console.error('Error with debug API call:', debugError);
+      }
+      
+      // Öka räknaren för misslyckade försök
+      failedAttempts++;
+    } else if (status !== PAYMENT_STATUSES.PAID) {
+      // Öka räknaren om statuskollen misslyckades
+      failedAttempts++;
+    } else {
+      // Återställ räknaren om vi får ett giltigt svar
+      failedAttempts = 0;
     }
   };
 

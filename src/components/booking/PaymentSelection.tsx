@@ -311,7 +311,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     // Create the payment info with correct status
     const paymentInfo = {
         reference: paymentData.reference || uuidv4(),
-        status: PAYMENT_STATUSES.CREATED,
+        // Använd PAID-status för Swish-betalningar som är bekräftade
+        status: paymentDetails.method === 'swish' ? PAYMENT_STATUSES.PAID : PAYMENT_STATUSES.CREATED,
         payment_method: paymentDetails.method,
         amount: calculatePrice(),
     };

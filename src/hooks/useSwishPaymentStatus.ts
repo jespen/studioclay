@@ -141,7 +141,7 @@ export const useSwishPaymentStatus = ({
     
     console.log('▶️ Starting payment polling');
     let attempts = 0;
-    const MAX_ATTEMPTS = 30;
+    const MAX_ATTEMPTS = 60;
     
     // Funktion för att polla status
     const pollStatus = async () => {
@@ -153,12 +153,12 @@ export const useSwishPaymentStatus = ({
       
       // Avbryt om max försök nåtts
       if (attempts >= MAX_ATTEMPTS) {
-        console.log(`⏹️ Stopping poll: max attempts (${MAX_ATTEMPTS}) reached`);
+        console.log(`⏹️ Stopping poll: max attempts (${MAX_ATTEMPTS}) reached (${MAX_ATTEMPTS * 2} seconds)`);
         return;
       }
       
       attempts++;
-      console.log(`🔄 Poll attempt ${attempts}/${MAX_ATTEMPTS}`);
+      console.log(`🔄 Poll attempt ${attempts}/${MAX_ATTEMPTS} (${attempts * 2} seconds)`);
       
       // Hämta status
       const status = await checkPaymentStatus();
@@ -168,6 +168,22 @@ export const useSwishPaymentStatus = ({
       if (status === PAYMENT_STATUSES.PAID) {
         console.log('💰 PAYMENT IS PAID! Updating status and preparing redirect');
         setPaymentStatus(PAYMENT_STATUSES.PAID);
+        
+        // NYTT: Uppdatera betalningsstatus i localStorage
+        try {
+          // Hämta nuvarande paymentInfo från localStorage
+          const paymentInfo = JSON.parse(localStorage.getItem('payment_info') || '{}');
+          
+          // Uppdatera status till PAID
+          paymentInfo.status = PAYMENT_STATUSES.PAID;
+          
+          // Spara tillbaka till localStorage
+          localStorage.setItem('payment_info', JSON.stringify(paymentInfo));
+          
+          console.log('🔄 Updated payment status in localStorage to PAID');
+        } catch (error) {
+          console.error('❌ Failed to update payment status in localStorage:', error);
+        }
         
         // Använd en timeout för att omdirigera användaren
         setTimeout(() => {
@@ -181,6 +197,7 @@ export const useSwishPaymentStatus = ({
           }
         }, 1500);
         
+        console.log('✅ Payment confirmed as PAID - stopping all polling');
         return; // Avsluta polling
       }
       
