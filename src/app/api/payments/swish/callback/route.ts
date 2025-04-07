@@ -387,7 +387,7 @@ export async function POST(request: NextRequest) {
       message,
       status,
       dateCreated,
-      datePaid,
+      payment_date,
       errorCode,
       errorMessage
     } = body;
@@ -485,7 +485,7 @@ export async function POST(request: NextRequest) {
         swish_payment_id: paymentReference,
         errorMessage: errorMessage,
         updated_at: new Date().toISOString(),
-        datePaid: status === PAYMENT_STATUSES.PAID ? datePaid : null,
+        payment_date: status === PAYMENT_STATUSES.PAID ? payment_date : null,
         // Spara callback-data för debugging
         metadata: {
           ...payment.metadata,
@@ -528,8 +528,8 @@ export async function POST(request: NextRequest) {
 
           const { data: existingBooking } = await supabase
             .from('bookings')
-            .select('id, booking_reference')
-            .eq('booking_reference', paymentSpecificBookingRef)
+            .select('id, reference')
+            .eq('reference', paymentSpecificBookingRef)
             .single();
             
           if (!existingBooking) {
@@ -669,7 +669,7 @@ export async function POST(request: NextRequest) {
           } else {
             logDebug(`[${requestId}] Booking already exists for this payment`, { 
               booking_id: existingBooking.id, 
-              reference: existingBooking.booking_reference 
+              reference: existingBooking.reference 
             });
           }
         } catch (error) {

@@ -220,6 +220,8 @@ export async function GET(request: NextRequest) {
       .from('payments')
       .update({
         status: params.status,
+        payment_date: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
         metadata: {
           ...payment.metadata,
           debug_callback: {
