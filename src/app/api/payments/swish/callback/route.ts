@@ -61,29 +61,44 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
   console.log(`Creating booking for course ${courseId} with payment ${paymentId}`);
   
   try {
-    // First get the course instance and template data
-    const { data: courseData, error: courseError } = await supabase
-    .from('course_instances')
-      .select(`
-        *,
-        course_templates:template_id (
-          id,
-          title,
-          description,
-          price
-        )
-      `)
-    .eq('id', courseId)
-    .single();
+    // First get the course instance data separately
+    const { data: courseInstance, error: courseInstanceError } = await supabase
+      .from('course_instances')
+      .select('*')
+      .eq('id', courseId)
+      .single();
 
-  if (courseError) {
-      console.error('Error fetching course data:', courseError);
-      throw new Error(`Failed to get course data: ${courseError.message}`);
+    if (courseInstanceError) {
+      console.error('Error fetching course instance data:', courseInstanceError);
+      throw new Error(`Failed to get course instance data: ${courseInstanceError.message}`);
     }
 
-    if (!courseData) {
-      throw new Error('Course not found');
+    if (!courseInstance) {
+      throw new Error('Course instance not found');
     }
+
+    // Then get template data separately if we have a template_id
+    let templateData = null;
+    if (courseInstance.template_id) {
+      const { data: template, error: templateError } = await supabase
+        .from('course_templates')
+        .select('*')
+        .eq('id', courseInstance.template_id)
+        .single();
+
+      if (templateError) {
+        console.error('Error fetching course template data:', templateError);
+        // Don't throw, we can continue with just the instance data
+      } else {
+        templateData = template;
+      }
+    }
+
+    // Combine the data
+    const courseData = {
+      ...courseInstance,
+      template: templateData
+    };
     
     // Format date using ISO format
     const bookingDate = new Date().toISOString();
@@ -92,18 +107,17 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
     const { data: booking, error: bookingError } = await supabase
     .from('bookings')
     .insert({
-        booking_reference: bookingReference,
+      reference: bookingReference, // Use 'reference' instead of 'booking_reference'
       course_id: courseId,
       customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
       customer_email: userInfo.email,
       customer_phone: userInfo.phone,
       number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
-        booking_date: bookingDate,
-        status: 'confirmed',
-        payment_status: 'paid',
-        payment_method: 'swish',
-        // Include the payment ID in a message or metadata if there's no direct column
-        message: `Payment ID: ${paymentId}`
+      booking_date: bookingDate,
+      status: 'confirmed',
+      payment_status: 'paid',
+      payment_method: 'swish',
+      payment_id: paymentId // Store payment_id directly
     })
     .select()
     .single();
@@ -114,13 +128,35 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
     }
 
     // Update course participants count
-    const { error: updateError } = await supabase.rpc('increment_course_participants', {
-      instance_id: courseId
-    });
-
-    if (updateError) {
-      console.error('Error updating course participants:', updateError);
+    const participantsToAdd = parseInt(userInfo.numberOfParticipants) || 1;
+    
+    // First get the current participants count
+    const { data: courseParticipantsData, error: getCourseError } = await supabase
+      .from('course_instances')
+      .select('current_participants')
+      .eq('id', courseId)
+      .single();
+      
+    if (getCourseError) {
+      console.error('Error getting current course participants:', getCourseError);
       // Don't throw here, as the booking is already created
+    } else {
+      // Calculate new participants count
+      const currentParticipants = courseParticipantsData.current_participants || 0;
+      const newParticipantsCount = currentParticipants + participantsToAdd;
+      
+      // Update the course_instances record
+      const { error: updateError } = await supabase
+        .from('course_instances')
+        .update({ 
+          current_participants: newParticipantsCount
+        })
+        .eq('id', courseId);
+        
+      if (updateError) {
+        console.error('Error updating course participants:', updateError);
+        // Don't throw here as booking is created
+      }
     }
 
     // Also update the payment record to link to the booking
@@ -134,9 +170,9 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
     if (paymentUpdateError) {
       console.error('Error linking payment to booking:', paymentUpdateError);
       // Don't throw here as booking is created
-  }
+    }
 
-  return booking;
+    return booking;
   } catch (error) {
     console.error('Error in booking creation:', error);
     throw error;
@@ -481,8 +517,8 @@ export async function POST(request: NextRequest) {
 
           const { data: existingBooking } = await supabase
             .from('bookings')
-            .select('id, booking_reference')
-            .eq('booking_reference', paymentSpecificBookingRef)
+            .select('id, reference')
+            .eq('reference', paymentSpecificBookingRef)
             .single();
             
           if (!existingBooking) {
@@ -490,7 +526,7 @@ export async function POST(request: NextRequest) {
             
             // Create a booking for this payment
             const booking = await createBooking(payment.id, productId, userInfo, paymentSpecificBookingRef);
-            const bookingReference = booking.booking_reference;
+            const bookingReference = booking.reference;
             
             logDebug(`[${requestId}] Booking created with reference: ${bookingReference}`);
             
@@ -523,16 +559,38 @@ export async function POST(request: NextRequest) {
               
               try {
                 // Get course details for email
-                const { data: courseDetails, error: courseDetailsError } = await supabase
+                const { data: courseInstance, error: courseInstanceError } = await supabase
                   .from('course_instances')
-                  .select('*, course_templates:template_id(title, description, price)')
+                  .select('*')
                   .eq('id', productId)
                   .single();
 
-                if (courseDetailsError) {
-                  console.error(`[${requestId}] Error fetching course details:`, courseDetailsError);
+                if (courseInstanceError) {
+                  logError(`[${requestId}] Error fetching course instance:`, courseInstanceError);
                   // Continue without course details
                 }
+
+                // Fetch template data if we have a template_id
+                let courseTemplate = null;
+                if (courseInstance?.template_id) {
+                  const { data: template, error: templateError } = await supabase
+                    .from('course_templates')
+                    .select('*')
+                    .eq('id', courseInstance.template_id)
+                    .single();
+
+                  if (templateError) {
+                    logError(`[${requestId}] Error fetching course template:`, templateError);
+                  } else {
+                    courseTemplate = template;
+                  }
+                }
+
+                // Combine instance and template data
+                const courseDetails = courseInstance ? {
+                  ...courseInstance,
+                  template: courseTemplate
+                } : null;
 
                 // We need to dynamically load the serverEmail module to avoid edge runtime errors
                 logDebug(`[${requestId}] Loading serverEmail module for email sending`);
@@ -544,7 +602,7 @@ export async function POST(request: NextRequest) {
                   logDebug(`[${requestId}] Setting up email data for booking confirmation`);
                   
                   const courseData = courseDetails || {
-                    course_templates: {
+                    template: {
                       title: 'Okänd kurs',
                       description: '',
                       price: 0
@@ -569,11 +627,11 @@ export async function POST(request: NextRequest) {
                     },
                     courseDetails: {
                       id: productId,
-                      title: courseData.course_templates?.title || courseData.title || 'Okänd kurs',
-                      description: courseData.course_templates?.description || courseData.description || '',
+                      title: courseData.template?.title || courseData.title || 'Okänd kurs',
+                      description: courseData.template?.description || courseData.description || '',
                       start_date: courseData.start_date,
                       location: courseData.location,
-                      price: courseData.course_templates?.price || courseData.price || 0
+                      price: courseData.template?.price || courseData.price || 0
                     },
                     bookingReference: bookingReference
                   });
@@ -600,7 +658,7 @@ export async function POST(request: NextRequest) {
           } else {
             logDebug(`[${requestId}] Booking already exists for this payment`, { 
               booking_id: existingBooking.id, 
-              reference: existingBooking.booking_reference 
+              reference: existingBooking.reference 
             });
           }
         } catch (error) {
