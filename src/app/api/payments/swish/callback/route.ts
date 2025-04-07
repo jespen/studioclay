@@ -58,49 +58,64 @@ async function verifySwishSignature(request: Request): Promise<boolean> {
 
 // Hjälpfunktion för att skapa bokning
 async function createBooking(paymentId: string, courseId: string, userInfo: any, bookingReference: string) {
-  // Using the provided booking reference instead of generating a new one
-  // This ensures we can check for duplicate bookings consistently
+  console.log(`Creating booking for course ${courseId} with payment ${paymentId}`);
   
-  // Get course price first
-  const { data: course, error: courseError } = await supabase
-    .from('course_instances')
-    .select('price')
-    .eq('id', courseId)
-    .single();
-
-  if (courseError) {
-    throw new Error(`Failed to fetch course price: ${courseError.message}`);
+  try {
+    // Get course information to save in booking
+    const { data: courseData, error: courseError } = await supabase
+      .from('course_instances')
+      .select('*, courses(name, price)')
+      .eq('id', courseId)
+      .single();
+    
+    if (courseError) {
+      console.error('Error fetching course data:', courseError);
+      throw new Error(`Failed to get course data: ${courseError.message}`);
+    }
+    
+    // Insert the booking record
+    const { data: bookingData, error: bookingError } = await supabase
+      .from('bookings')
+      .insert({
+        reference: bookingReference,
+        first_name: userInfo.firstName,
+        last_name: userInfo.lastName,
+        email: userInfo.email,
+        phone: userInfo.phone,
+        course_instance_id: courseId,
+        status: 'confirmed',
+        payment_method: 'swish',
+        payment_status: 'paid',
+        payment_id: paymentId, // Store payment_id directly as a column
+        amount: courseData.courses.price,
+        number_of_participants: parseInt(userInfo.numberOfParticipants) || 1
+      })
+      .select()
+      .single();
+    
+    if (bookingError) {
+      console.error('Error creating booking:', bookingError);
+      throw new Error(`Failed to create booking: ${bookingError.message}`);
+    }
+    
+    // Update course instance to increase participant count
+    const participantCount = parseInt(userInfo.numberOfParticipants) || 1;
+    
+    const { error: updateError } = await supabase.rpc('increment_course_participants', {
+      instance_id: courseId,
+      increment_by: participantCount
+    });
+    
+    if (updateError) {
+      console.error('Error updating course participant count:', updateError);
+      // Don't throw, as booking is created successfully
+    }
+    
+    return bookingData;
+  } catch (error) {
+    console.error('Error in booking creation:', error);
+    throw error;
   }
-  
-  // Insert booking with payment_id in metadata instead of as a column
-  const { data: booking, error } = await supabase
-    .from('bookings')
-    .insert({
-      course_id: courseId,
-      booking_reference: bookingReference,
-      status: 'CONFIRMED',
-      customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
-      customer_email: userInfo.email,
-      customer_phone: userInfo.phone,
-      number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
-      unit_price: course.price,
-      total_price: course.price * (parseInt(userInfo.numberOfParticipants) || 1),
-      booking_date: new Date().toISOString(),
-      payment_status: 'PAID', 
-      payment_method: 'swish',
-      metadata: {
-        payment_id: paymentId,
-        swish_reference: bookingReference
-      }
-    })
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to create booking: ${error.message}`);
-  }
-
-  return booking;
 }
 
 // Hjälpfunktion för att skapa presentkort
@@ -450,7 +465,7 @@ export async function POST(request: NextRequest) {
             
             // Create a booking for this payment
             const booking = await createBooking(payment.id, productId, userInfo, paymentSpecificBookingRef);
-            const bookingReference = booking.booking_reference;
+            const bookingReference = booking.reference;
             
             logDebug(`[${requestId}] Booking created with reference: ${bookingReference}`);
             
