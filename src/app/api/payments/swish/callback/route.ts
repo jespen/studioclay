@@ -15,6 +15,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Type declaration for global state
+declare global {
+  var keepAliveTimers: NodeJS.Timeout[];
+}
+
 // Hjälpfunktion för att verifiera Swish signatur
 async function verifySwishSignature(request: Request): Promise<boolean> {
   // I testmiljö skippar vi signaturverifiering
@@ -69,16 +74,17 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any)
   const { data: booking, error } = await supabase
     .from('bookings')
     .insert({
-      payment_id: paymentId,
+      payment_reference: paymentId,
       course_id: courseId,
-      reference: bookingReference,
+      booking_reference: bookingReference,
       status: 'CONFIRMED',
       customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
       customer_email: userInfo.email,
       customer_phone: userInfo.phone,
       number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
       unit_price: course.price,
-      total_price: course.price * (parseInt(userInfo.numberOfParticipants) || 1)
+      total_price: course.price * (parseInt(userInfo.numberOfParticipants) || 1),
+      booking_date: new Date().toISOString()
     })
     .select()
     .single();
@@ -422,8 +428,8 @@ export async function POST(request: NextRequest) {
           // Check if we already have a booking for this payment to avoid duplicates
           const { data: existingBooking } = await supabase
             .from('bookings')
-            .select('id, reference')
-            .eq('payment_id', payment.id)
+            .select('id, booking_reference')
+            .eq('payment_reference', payment.id)
             .single();
             
           if (!existingBooking) {
@@ -431,7 +437,7 @@ export async function POST(request: NextRequest) {
             
             // Create a booking for this payment
             const booking = await createBooking(payment.id, productId, userInfo);
-            const bookingReference = booking.reference;
+            const bookingReference = booking.booking_reference;
             
             logDebug(`[${requestId}] Booking created with reference: ${bookingReference}`);
             
@@ -456,7 +462,7 @@ export async function POST(request: NextRequest) {
                 
                 // Ensure timer isn't lost to garbage collection
                 global.setTimeout = global.setTimeout || setTimeout;
-                if (global.keepAliveTimers === undefined) {
+                if (!global.keepAliveTimers) {
                   global.keepAliveTimers = [];
                 }
                 global.keepAliveTimers.push(timerId);
@@ -535,7 +541,7 @@ export async function POST(request: NextRequest) {
           } else {
             logDebug(`[${requestId}] Booking already exists for this payment`, { 
               booking_id: existingBooking.id, 
-              reference: existingBooking.reference 
+              reference: existingBooking.booking_reference 
             });
           }
         } catch (error) {
@@ -582,7 +588,7 @@ export async function POST(request: NextRequest) {
                 
                 // Ensure timer isn't lost to garbage collection
                 global.setTimeout = global.setTimeout || setTimeout;
-                if (global.keepAliveTimers === undefined) {
+                if (!global.keepAliveTimers) {
                   global.keepAliveTimers = [];
                 }
                 global.keepAliveTimers.push(timerId);
@@ -795,7 +801,7 @@ export async function POST(request: NextRequest) {
                         
                         // Ensure timer isn't lost to garbage collection
                         global.setTimeout = global.setTimeout || setTimeout;
-                        if (global.keepAliveTimers === undefined) {
+                        if (!global.keepAliveTimers) {
                           global.keepAliveTimers = [];
                         }
                         global.keepAliveTimers.push(timerId);
