@@ -185,12 +185,6 @@ async function createBooking(paymentId: string, courseId: string, userInfo: any,
 
 // Hjälpfunktion för att skapa presentkort
 async function createGiftCard(paymentId: string, amount: number, userInfo: any, itemDetails: any = {}) {
-  // Generate a unique code for the gift card
-  const generateUniqueCode = () => {
-    const random = Math.random().toString(36).substring(2, 10).toUpperCase();
-    return `GC-${random}`;
-  };
-  
   console.log('Creating gift card with payment ID:', paymentId);
   console.log('Gift card amount:', amount);
   console.log('User info for gift card:', userInfo);
@@ -201,29 +195,28 @@ async function createGiftCard(paymentId: string, amount: number, userInfo: any, 
     message: itemDetails.message || userInfo.message
   });
   
-  // Create gift card data
+  // Import the gift card utilities
+  const { generateUniqueGiftCardCode, createGiftCardData } = await import('@/utils/giftCardUtils');
+  
+  // Generate a unique code using the centralized function
+  const code = await generateUniqueGiftCardCode(supabase);
+  
+  // Create gift card data using the centralized function
   const giftCardData = {
-    code: generateUniqueCode(),
-    amount: Number(amount),
+    code: code,
+    amount: amount,
     type: itemDetails.type || 'digital',
-    sender_name: `${userInfo.firstName} ${userInfo.lastName}`,
-    sender_email: userInfo.email,
-    sender_phone: userInfo.phone || null,
-    recipient_name: itemDetails.recipientName || userInfo.recipientName || 'Mottagare',
-    recipient_email: itemDetails.recipientEmail || userInfo.recipientEmail || null,
-    message: itemDetails.message || userInfo.message || null,
-    invoice_address: userInfo.invoiceDetails?.address || null,
-    invoice_postal_code: userInfo.invoiceDetails?.postalCode || null,
-    invoice_city: userInfo.invoiceDetails?.city || null,
-    payment_reference: paymentId,
-    payment_status: PAYMENT_STATUS.PAID,
-    status: 'active',
-    remaining_balance: Number(amount),
-    is_emailed: false,
-    is_printed: false,
-    is_paid: true, // Mark as paid since Swish payment was successful
-    expires_at: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(), // 1 year from now
-    payment_method: 'swish'
+    senderName: userInfo.firstName + ' ' + userInfo.lastName,
+    senderEmail: userInfo.email,
+    senderPhone: userInfo.phone || '',
+    recipientName: itemDetails.recipientName || '',
+    recipientEmail: itemDetails.recipientEmail || '',
+    message: itemDetails.message || '',
+    paymentReference: paymentId,
+    paymentStatus: 'PAID',
+    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    isPaid: true,
+    paymentMethod: 'swish'
   };
   
   console.log('Final gift card data to insert:', {
@@ -727,19 +720,19 @@ export async function POST(request: NextRequest) {
                   try {
                     logDebug(`[${requestId}] Generating gift card PDF`);
                     
-                    const giftCardData: GiftCardData = {
+                    const giftCardPdfData: GiftCardData = {
                       code: giftCard.code,
                       amount: giftCard.amount,
-                      recipientName: giftCard.recipient_name,
-                      recipientEmail: giftCard.recipient_email,
-                      senderName: giftCard.sender_name,
-                      senderEmail: giftCard.sender_email,
+                      recipientName: giftCard.recipientName || '',
+                      recipientEmail: giftCard.recipientEmail || '',
+                      senderName: giftCard.senderName || '',
+                      senderEmail: giftCard.senderEmail || '',
                       message: giftCard.message || '',
                       createdAt: new Date().toISOString(),
-                      expiresAt: giftCard.expires_at
+                      expiresAt: giftCard.expiresAt
                     };
                     
-                    const pdfBuffer = await generateGiftCardPDF(giftCardData);
+                    const pdfBuffer = await generateGiftCardPDF(giftCardPdfData);
                     
                     // Store PDF in Supabase storage
                     const { data: storageData, error: storageError } = await supabase
@@ -766,6 +759,22 @@ export async function POST(request: NextRequest) {
                           giftCardAmount: giftCard.amount
                         });
                         
+                        const emailData = {
+                          giftCard: {
+                            code: giftCard.code,
+                            amount: giftCard.amount,
+                            recipientName: giftCard.recipientName || '',
+                            recipientEmail: giftCard.recipientEmail || '',
+                            message: giftCard.message || '',
+                            expiresAt: giftCard.expiresAt
+                          },
+                          senderInfo: {
+                            name: giftCard.senderName,
+                            email: giftCard.senderEmail,
+                            phone: giftCard.senderPhone
+                          }
+                        };
+                        
                         const { sendServerGiftCardEmail } = await import('@/utils/serverEmail');
                         
                         // Convert Blob to Buffer for email attachment
@@ -773,18 +782,8 @@ export async function POST(request: NextRequest) {
                         
                         // Send email using the gift card data from database
                         const emailResult = await sendServerGiftCardEmail({
-                          giftCardData: {
-                            code: giftCard.code,
-                            amount: giftCard.amount,
-                            recipient_name: giftCard.recipient_name,
-                            recipient_email: giftCard.recipient_email || '',
-                            message: giftCard.message,
-                            expires_at: giftCard.expires_at
-                          },
-                          senderInfo: {
-                            name: giftCard.sender_name,
-                            email: giftCard.sender_email
-                          },
+                          giftCardData: emailData.giftCard,
+                          senderInfo: emailData.senderInfo,
                           pdfBuffer: buffer
                         });
                         
