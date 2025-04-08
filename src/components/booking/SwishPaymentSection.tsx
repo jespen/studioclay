@@ -88,13 +88,22 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
   const checkPaymentStatus = async (paymentReference: string, maxAttempts = 60) => {
     let attempts = 0;
     
+    // Set polling state to true BEFORE starting the polling function
+    setIsPolling(true);
+    console.log('[SwishPaymentSection] Starting payment polling:', { 
+      paymentReference,
+      isPolling: true,
+      timestamp: new Date().toISOString()
+    });
+    
     const pollStatus = async () => {
-      if (!isPolling || attempts >= maxAttempts) {
-        console.log('[SwishPaymentSection] Polling stopped:', { 
+      // Check if we should stop polling
+      if (attempts >= maxAttempts) {
+        console.log('[SwishPaymentSection] Max attempts reached:', { 
           attempts, 
-          maxAttempts, 
-          isPolling,
-          paymentReference 
+          maxAttempts,
+          paymentReference,
+          timestamp: new Date().toISOString()
         });
         setIsPolling(false);
         return;
@@ -109,56 +118,45 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         const response = await fetch(`/api/payments/status/${paymentReference}`);
         const data = await response.json();
         
-        console.log('[SwishPaymentSection] Raw API response:', data);
+        console.log('[SwishPaymentSection] Payment status response:', data);
         
-        // Kolla om betalningen är PAID först av allt
+        // Check for PAID status first
         if (
           data.data?.status === PAYMENT_STATUSES.PAID || 
           data.status === PAYMENT_STATUSES.PAID ||
           data?.payment?.status === PAYMENT_STATUSES.PAID
         ) {
-          console.log('💰 PAYMENT IS PAID!', {
+          console.log('💰 Payment is PAID:', {
             paymentReference,
             timestamp: new Date().toISOString(),
-            totalAttempts: attempts + 1,
-            responseData: data
+            attempts: attempts + 1
           });
           
-          // Uppdatera localStorage först
+          // Update localStorage first
           try {
             const paymentInfo = JSON.parse(localStorage.getItem('payment_info') || '{}');
             paymentInfo.status = PAYMENT_STATUSES.PAID;
             localStorage.setItem('payment_info', JSON.stringify(paymentInfo));
-            console.log('🔄 Updated payment status in localStorage to PAID');
           } catch (error) {
-            console.error('❌ Failed to update payment status in localStorage:', error);
+            console.error('Failed to update payment status in localStorage:', error);
           }
           
-          // Sen uppdatera state och avsluta polling
+          // Update state and stop polling
           setPaymentStatus(PAYMENT_STATUSES.PAID);
           setIsPolling(false);
           onPaymentComplete(true, PAYMENT_STATUSES.PAID);
           return;
         }
         
-        // För andra statusar, validera och uppdatera
+        // Handle other statuses
         const status = getValidPaymentStatus(data.data?.status || data.status || data?.payment?.status);
         
-        console.log('[SwishPaymentSection] Payment status response:', { 
-          status,
-          rawStatus: data.data?.status || data.status || data?.payment?.status,
-          paymentReference,
-          responseData: data,
-          attempt: attempts + 1,
-          timestamp: new Date().toISOString()
-        });
-
         if (status === PAYMENT_STATUSES.DECLINED || status === PAYMENT_STATUSES.ERROR) {
           console.warn('[SwishPaymentSection] Payment failed:', { 
             status, 
             paymentReference,
             timestamp: new Date().toISOString(),
-            totalAttempts: attempts + 1
+            attempts: attempts + 1
           });
           setPaymentStatus(status);
           setIsPolling(false);
@@ -166,27 +164,22 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           return;
         }
 
+        // Continue polling if no final status
         attempts++;
-        if (isPolling) {
-          setTimeout(pollStatus, 2000);
-        }
+        setTimeout(pollStatus, 2000);
       } catch (error) {
         console.error('[SwishPaymentSection] Error checking payment status:', { 
           error, 
-          attempt: attempts + 1,
+          attempts: attempts + 1,
           paymentReference,
           timestamp: new Date().toISOString()
         });
         attempts++;
-        if (isPolling) {
-          setTimeout(pollStatus, 2000);
-        }
+        setTimeout(pollStatus, 2000);
       }
     };
 
-    // Start polling
-    console.log('[SwishPaymentSection] Starting payment polling for:', paymentReference);
-    setIsPolling(true);
+    // Start polling immediately
     pollStatus();
   };
 
@@ -265,6 +258,8 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
 
       // Store payment reference and start polling
       setPaymentReference(data.paymentReference);
+      
+      // Start polling for payment status
       checkPaymentStatus(data.paymentReference);
       
       return true;
