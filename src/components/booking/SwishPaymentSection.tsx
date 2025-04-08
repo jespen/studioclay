@@ -108,32 +108,50 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         
         const response = await fetch(`/api/payments/status/${paymentReference}`);
         const data = await response.json();
-        const status = getValidPaymentStatus(data?.data?.status || data?.status);
-
+        
+        // Kolla om betalningen är PAID först av allt
+        if (
+          data.data?.status === PAYMENT_STATUSES.PAID || 
+          data.status === PAYMENT_STATUSES.PAID ||
+          data?.payment?.status === PAYMENT_STATUSES.PAID
+        ) {
+          console.log('💰 PAYMENT IS PAID!', {
+            paymentReference,
+            timestamp: new Date().toISOString(),
+            totalAttempts: attempts + 1,
+            responseData: data
+          });
+          
+          // Uppdatera localStorage först
+          try {
+            const paymentInfo = JSON.parse(localStorage.getItem('payment_info') || '{}');
+            paymentInfo.status = PAYMENT_STATUSES.PAID;
+            localStorage.setItem('payment_info', JSON.stringify(paymentInfo));
+            console.log('🔄 Updated payment status in localStorage to PAID');
+          } catch (error) {
+            console.error('❌ Failed to update payment status in localStorage:', error);
+          }
+          
+          // Sen uppdatera state och avsluta polling
+          setPaymentStatus(PAYMENT_STATUSES.PAID);
+          setIsPolling(false);
+          onPaymentComplete(true, PAYMENT_STATUSES.PAID);
+          return;
+        }
+        
+        // För andra statusar, validera och uppdatera
+        const status = getValidPaymentStatus(data.data?.status || data.status || data?.payment?.status);
+        
         console.log('[SwishPaymentSection] Payment status response:', { 
           status,
-          rawStatus: data?.data?.status || data?.status,
+          rawStatus: data.data?.status || data.status || data?.payment?.status,
           paymentReference,
           responseData: data,
           attempt: attempts + 1,
           timestamp: new Date().toISOString()
         });
 
-        if (status === PAYMENT_STATUSES.PAID) {
-          console.log('[SwishPaymentSection] Payment PAID detected:', {
-            paymentReference,
-            timestamp: new Date().toISOString(),
-            totalAttempts: attempts + 1
-          });
-          setPaymentStatus(PAYMENT_STATUSES.PAID);
-          setIsPolling(false);
-          
-          // Update payment info in localStorage
-          setPaymentInfo({ status: PAYMENT_STATUSES.PAID });
-          
-          onPaymentComplete(true, status);
-          return;
-        } else if (status === PAYMENT_STATUSES.DECLINED || status === PAYMENT_STATUSES.ERROR) {
+        if (status === PAYMENT_STATUSES.DECLINED || status === PAYMENT_STATUSES.ERROR) {
           console.warn('[SwishPaymentSection] Payment failed:', { 
             status, 
             paymentReference,
