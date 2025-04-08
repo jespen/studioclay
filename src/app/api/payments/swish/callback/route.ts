@@ -206,17 +206,17 @@ async function createGiftCard(paymentId: string, amount: number, userInfo: any, 
     code: code,
     amount: amount,
     type: itemDetails.type || 'digital',
-    senderName: userInfo.firstName + ' ' + userInfo.lastName,
-    senderEmail: userInfo.email,
-    senderPhone: userInfo.phone || '',
-    recipientName: itemDetails.recipientName || '',
-    recipientEmail: itemDetails.recipientEmail || '',
+    sender_name: userInfo.firstName + ' ' + userInfo.lastName,
+    sender_email: userInfo.email,
+    sender_phone: userInfo.phone || '',
+    recipient_name: itemDetails.recipientName || '',
+    recipient_email: itemDetails.recipientEmail || '',
     message: itemDetails.message || '',
-    paymentReference: paymentId,
-    paymentStatus: 'PAID',
-    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-    isPaid: true,
-    paymentMethod: 'swish'
+    payment_reference: paymentId,
+    payment_status: 'PAID',
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    is_paid: true,
+    payment_method: 'swish'
   };
   
   console.log('Final gift card data to insert:', {
@@ -763,10 +763,10 @@ export async function POST(request: NextRequest) {
                           giftCard: {
                             code: giftCard.code,
                             amount: giftCard.amount,
-                            recipientName: giftCard.recipientName || '',
-                            recipientEmail: giftCard.recipientEmail || '',
-                            message: giftCard.message || '',
-                            expiresAt: giftCard.expiresAt
+                            recipient_name: giftCard.recipient_name,
+                            recipient_email: giftCard.recipient_email,
+                            message: giftCard.message,
+                            expires_at: giftCard.expires_at
                           },
                           senderInfo: {
                             name: giftCard.senderName,
@@ -782,7 +782,14 @@ export async function POST(request: NextRequest) {
                         
                         // Send email using the gift card data from database
                         const emailResult = await sendServerGiftCardEmail({
-                          giftCardData: emailData.giftCard,
+                          giftCardData: {
+                            code: emailData.giftCard.code,
+                            amount: emailData.giftCard.amount,
+                            recipient_name: emailData.giftCard.recipient_name,
+                            recipient_email: emailData.giftCard.recipient_email,
+                            message: emailData.giftCard.message,
+                            expires_at: emailData.giftCard.expires_at
+                          },
                           senderInfo: emailData.senderInfo,
                           pdfBuffer: buffer
                         });
