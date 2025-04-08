@@ -26,127 +26,68 @@ export async function GET(
 
     console.log(`Status API: Checking payment status for reference: ${reference}`);
     
-    // SUPERMEGASIMPEL VERSION - söker betalningar på ALLA sätt samtidigt
-    
-    // 1. Hämta ALLA betalningar som kan matcha på NÅGOT sätt
-    const { data: allPayments, error: allError } = await supabase
+    // Find the payment by reference
+    const { data: payment, error } = await supabase
       .from('payments')
       .select('*')
-      .or(`payment_reference.eq.${reference},swish_payment_id.eq.${reference},id.eq.${reference}`);
+      .eq('payment_reference', reference)
+      .maybeSingle();
+      
+    if (error) {
+      console.error('Error fetching payment:', error);
+      throw error;
+    }
     
-    console.log(`Status API: Search for ${reference} found ${allPayments?.length || 0} possible matches`);
-    
-    // Om vi hittade något, kolla om någon betalning är PAID
-    if (allPayments && allPayments.length > 0) {
-      // Sortera betalningar så PAID kommer först
-      const sortedPayments = [...allPayments].sort((a, b) => {
-        if (a.status === 'PAID') return -1;
-        if (b.status === 'PAID') return 1;
-        return 0;
-      });
-      
-      const payment = sortedPayments[0];
-      console.log(`Status API: Using payment with ID=${payment.id}, status=${payment.status}`);
-      
-      // Hämta bokning om det finns
-      const { data: booking } = await supabase
-        .from('bookings')
-        .select('*')
-        .or(`booking_id.eq.${payment.id},id.eq.${payment.booking_id}`)
-        .maybeSingle();
-      
-      // Bygg svar
+    if (!payment) {
+      console.log(`Status API: No payment found for reference: ${reference}`);
       return NextResponse.json({
         success: true,
-        status: payment.status,
-        debug: { 
-          payment_id: payment.id,
-          payment_reference: payment.payment_reference,
-          swish_payment_id: payment.swish_payment_id,
-          status: payment.status,
-          found_method: "direct_search",
-          booking_found: !!booking
-        },
-        data: {
-          id: payment.id,
-          status: payment.status,
-          created_at: payment.created_at,
-          updated_at: payment.updated_at,
-          callback_received: payment.status !== PAYMENT_STATUSES.CREATED,
-          payment_reference: payment.payment_reference,
-          swish_payment_id: payment.swish_payment_id,
-          booking_id: payment.booking_id || booking?.id,
-          booking_reference: booking?.booking_reference,
-          product_type: payment.product_type,
-          product_id: payment.product_id,
-          payment_method: payment.payment_method,
-          amount: payment.amount
+        debug: { message: "Payment not found" },
+        data: { 
+          status: PAYMENT_STATUSES.CREATED,
+          callback_received: false 
         }
       });
     }
+
+    // Log the actual status from database
+    console.log(`Status API: Found payment status=${payment.status} for reference=${reference}`);
     
-    // 2. Fallback - sök efter ALLA som har status="PAID" från senaste 10 min
-    console.log("Status API: No exact match found, looking for recent PAID payments");
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    
-    const { data: recentPaid } = await supabase
-      .from('payments')
+    // Get associated booking if exists
+    const { data: booking } = await supabase
+      .from('bookings')
       .select('*')
-      .eq('status', 'PAID')
-      .gt('updated_at', tenMinutesAgo)
-      .order('updated_at', { ascending: false });
+      .or(`booking_id.eq.${payment.id},id.eq.${payment.booking_id}`)
+      .maybeSingle();
     
-    if (recentPaid && recentPaid.length > 0) {
-      console.log(`Status API: Found ${recentPaid.length} recent PAID payments`);
-      const payment = recentPaid[0]; // Använd den senaste
-      
-      // Hämta bokning om det finns
-      const { data: booking } = await supabase
-        .from('bookings')
-        .select('*')
-        .or(`booking_id.eq.${payment.id},id.eq.${payment.booking_id}`)
-        .maybeSingle();
-      
-      // Bygg svar
-      return NextResponse.json({
-        success: true,
-        status: payment.status,
-        debug: { 
-          payment_id: payment.id,
-          payment_reference: payment.payment_reference,
-          swish_payment_id: payment.swish_payment_id,
-          status: payment.status,
-          found_method: "recent_paid_search",
-          booking_found: !!booking
-        },
-        data: {
-          id: payment.id,
-          status: payment.status,
-          created_at: payment.created_at,
-          updated_at: payment.updated_at,
-          callback_received: true,
-          payment_reference: payment.payment_reference,
-          swish_payment_id: payment.swish_payment_id,
-          booking_id: payment.booking_id || booking?.id,
-          booking_reference: booking?.booking_reference,
-          product_type: payment.product_type,
-          product_id: payment.product_id,
-          payment_method: payment.payment_method,
-          amount: payment.amount
-        }
-      });
-    }
-    
-    // Ingen betalning hittades
-    console.log(`Status API: No payments found at all for reference: ${reference}`);
+    // Return the actual status from the database
     return NextResponse.json({
       success: true,
-      debug: { message: "No payment found matching the reference" },
-      data: { 
-        status: PAYMENT_STATUSES.CREATED, 
-        callback_received: false 
+      status: payment.status,
+      debug: { 
+        payment_id: payment.id,
+        payment_reference: payment.payment_reference,
+        swish_payment_id: payment.swish_payment_id,
+        status: payment.status,
+        found_method: "payment_reference",
+        booking_found: !!booking
+      },
+      data: {
+        id: payment.id,
+        status: payment.status,
+        created_at: payment.created_at,
+        updated_at: payment.updated_at,
+        callback_received: payment.status !== PAYMENT_STATUSES.CREATED,
+        payment_reference: payment.payment_reference,
+        swish_payment_id: payment.swish_payment_id,
+        booking_id: payment.booking_id || booking?.id,
+        booking_reference: booking?.booking_reference,
+        product_type: payment.product_type,
+        product_id: payment.product_id,
+        payment_method: payment.payment_method,
+        amount: payment.amount
       }
-    }, { status: 200 });
+    });
 
   } catch (error) {
     console.error('Error in status check:', error);
