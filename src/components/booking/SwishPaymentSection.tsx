@@ -3,7 +3,8 @@ import { Box } from '@mui/material';
 import { PaymentStatus, PAYMENT_STATUSES, getValidPaymentStatus } from '@/constants/statusCodes';
 import SwishPaymentForm from './SwishPaymentForm';
 import SwishPaymentDialog from './SwishPaymentDialog';
-import { setPaymentReference, setPaymentInfo, getFlowType } from '@/utils/flowStorage';
+import { setPaymentReference, setPaymentInfo, getFlowType, getGiftCardDetails } from '@/utils/flowStorage';
+import { GiftCardDetails } from '@/utils/dataFetcher';
 
 export interface SwishPaymentSectionRef {
   handleCreatePayment: () => Promise<boolean>;
@@ -24,6 +25,20 @@ interface SwishPaymentSectionProps {
   onPaymentCancelled?: () => void;
   onValidationError?: (error: string) => void;
   disabled?: boolean;
+}
+
+interface GiftCardDetails {
+  amount: number;
+  type: string;
+  recipientName: string;
+  recipientEmail: string;
+  message: string;
+}
+
+interface PaymentMetadata {
+  item_details: Partial<GiftCardDetails>;
+  product_type: string;
+  course_id?: string;
 }
 
 const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSectionProps>(({
@@ -210,6 +225,33 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       
       const productId = courseId === 'gift-card' ? crypto.randomUUID() : courseId;
       
+      // Get gift card details if this is a gift card purchase
+      const defaultItemDetails: Partial<GiftCardDetails> = {
+        amount: Number(amount),
+        type: 'digital',
+        recipientName: '',
+        recipientEmail: '',
+        message: ''
+      };
+      let metadata: PaymentMetadata = {
+        item_details: defaultItemDetails,
+        product_type: productType || 'course',
+        ...(courseId && { course_id: courseId })
+      };
+      
+      if (productType === 'gift_card') {
+        const giftCardDetails = getGiftCardDetails();
+        if (giftCardDetails) {
+          metadata.item_details = {
+            type: giftCardDetails.type || 'digital',
+            recipientName: giftCardDetails.recipientName || '',
+            recipientEmail: giftCardDetails.recipientEmail || '',
+            message: giftCardDetails.message || ''
+          };
+        }
+        console.log('[SwishPaymentSection] Gift card details:', metadata);
+      }
+      
       const requestData = {
         phone_number: swishPhoneNumber,
         payment_method: 'swish',
@@ -221,7 +263,8 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           ...userInfo,
           phone: cleanPhoneNumber,
           numberOfParticipants: userInfo.numberOfParticipants || '1'
-        }
+        },
+        metadata // Include metadata in request
       };
 
       console.log('[SwishPaymentSection] Sending payment request:', requestData);
