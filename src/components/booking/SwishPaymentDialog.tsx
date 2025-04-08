@@ -11,14 +11,14 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import ErrorIcon from '@mui/icons-material/Error';
-import { PaymentStatus, PAYMENT_STATUS } from '@/services/swish/types';
+import { PaymentStatus, PAYMENT_STATUSES } from '@/constants/statusCodes';
 import { FaSpinner } from 'react-icons/fa';
 
 interface SwishPaymentDialogProps {
   open: boolean;
   onClose: () => void;
-  onCancel: () => void;  // New prop for handling cancellation
-  paymentStatus: PaymentStatus | null;
+  onCancel: () => void;
+  paymentStatus: PaymentStatus;
 }
 
 const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
@@ -30,39 +30,63 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
   const [processingTime, setProcessingTime] = useState(0);
   const [showError, setShowError] = useState(false);
   
+  // Enhanced logging for props changes
+  useEffect(() => {
+    console.log('[SwishPaymentDialog] Props updated:', {
+      open,
+      paymentStatus,
+      processingTime,
+      showError
+    });
+  }, [open, paymentStatus, processingTime, showError]);
+
   // Timer to show waiting time
   useEffect(() => {
     let timer: NodeJS.Timeout;
     
-    if (open && paymentStatus === PAYMENT_STATUS.CREATED) {
-      // Start timer to show how long payment has been processing
+    if (open && paymentStatus === PAYMENT_STATUSES.CREATED) {
+      console.log('[SwishPaymentDialog] Starting processing timer');
       timer = setInterval(() => {
         setProcessingTime(prev => prev + 1);
-      }, 1000); // Update every second
+      }, 1000);
     } else {
-      // Reset timer if dialog closes or status changes
+      console.log('[SwishPaymentDialog] Resetting processing timer:', {
+        open,
+        status: paymentStatus
+      });
       setProcessingTime(0);
     }
     
     return () => {
-      if (timer) clearInterval(timer);
+      if (timer) {
+        console.log('[SwishPaymentDialog] Clearing processing timer');
+        clearInterval(timer);
+      }
     };
   }, [open, paymentStatus]);
 
-  // Only show error state after a delay to avoid flickering
+  // Only show error state after a delay
   useEffect(() => {
     let errorTimer: NodeJS.Timeout;
     
-    if (paymentStatus === PAYMENT_STATUS.ERROR) {
+    if (paymentStatus === PAYMENT_STATUSES.ERROR) {
+      console.log('[SwishPaymentDialog] Starting error timer');
       errorTimer = setTimeout(() => {
+        console.log('[SwishPaymentDialog] Showing error state');
         setShowError(true);
-      }, 3000); // Show error only if it persists for 3 seconds
+      }, 3000);
     } else {
+      console.log('[SwishPaymentDialog] Resetting error state:', {
+        status: paymentStatus
+      });
       setShowError(false);
     }
     
     return () => {
-      if (errorTimer) clearTimeout(errorTimer);
+      if (errorTimer) {
+        console.log('[SwishPaymentDialog] Clearing error timer');
+        clearTimeout(errorTimer);
+      }
     };
   }, [paymentStatus]);
   
@@ -75,25 +99,34 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
   
   // Handle user-initiated cancellation
   const handleCancel = () => {
+    console.log('[SwishPaymentDialog] User initiated cancel');
     if (window.confirm('Är du säker på att du vill avbryta betalningen?')) {
+      console.log('[SwishPaymentDialog] Cancel confirmed');
       onCancel();
     }
   };
   
-  // I början av komponenten, lägg till loggning av statusändringar
-  useEffect(() => {
-    console.log(`SwishPaymentDialog: Payment status changed to: ${paymentStatus}`);
-    
-    // Extra check för PAID-status
-    if (paymentStatus === PAYMENT_STATUS.PAID) {
-      console.log('SwishPaymentDialog: PAID status detected, dialog should show success view!');
-    }
-  }, [paymentStatus]);
+  const handleClose = () => {
+    console.log('[SwishPaymentDialog] Attempting to close dialog:', {
+      status: paymentStatus,
+      canClose: paymentStatus !== PAYMENT_STATUSES.CREATED
+    });
+    onClose();
+  };
   
+  // Log render state
+  console.log('[SwishPaymentDialog] Rendering with state:', {
+    open,
+    paymentStatus,
+    processingTime,
+    showError,
+    canClose: paymentStatus !== PAYMENT_STATUSES.CREATED
+  });
+
   return (
     <Dialog 
       open={open} 
-      onClose={paymentStatus !== PAYMENT_STATUS.CREATED ? onClose : undefined}  // Only allow closing if not in CREATED state
+      onClose={paymentStatus !== PAYMENT_STATUSES.CREATED ? handleClose : undefined}
       maxWidth="sm"
       fullWidth
     >
@@ -101,12 +134,11 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
         Swish-betalning
       </DialogTitle>
       <DialogContent>
-        {paymentStatus === PAYMENT_STATUS.CREATED && (
+        {paymentStatus === PAYMENT_STATUSES.CREATED && (
           <div className="flex flex-col items-center p-4">
             <FaSpinner className="animate-spin text-primary text-2xl mb-4" />
             <h3 className="text-lg font-semibold mb-2">Betalning behandlas</h3>
             <p className="text-center mb-4">
-              {/* Din betalning behandlas för närvarande.  */}
               <br />
               <strong>Öppna Swish-appen och godkänn betalningen.</strong>
             </p>
@@ -140,7 +172,7 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
           </div>
         )}
 
-        {paymentStatus === PAYMENT_STATUS.PAID && (
+        {paymentStatus === PAYMENT_STATUSES.PAID && (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
             <CheckCircleIcon color="success" sx={{ fontSize: 48, mb: 2 }} />
             <Typography variant="body1" gutterBottom>
@@ -152,7 +184,7 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
           </Box>
         )}
 
-        {paymentStatus === PAYMENT_STATUS.DECLINED && (
+        {paymentStatus === PAYMENT_STATUSES.DECLINED && (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
             <CancelIcon color="error" sx={{ fontSize: 48, mb: 2 }} />
             <Typography variant="body1" gutterBottom>
@@ -164,7 +196,7 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
           </Box>
         )}
 
-        {(paymentStatus === PAYMENT_STATUS.ERROR && showError) && (
+        {(paymentStatus === PAYMENT_STATUSES.ERROR && showError) && (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
             <ErrorIcon color="error" sx={{ fontSize: 48, mb: 2 }} />
             <Typography variant="body1" gutterBottom>
@@ -177,7 +209,7 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
         )}
       </DialogContent>
       <DialogActions>
-        {paymentStatus === PAYMENT_STATUS.CREATED && (
+        {paymentStatus === PAYMENT_STATUSES.CREATED && (
           <Button 
             onClick={handleCancel}
             color="error"
@@ -186,12 +218,14 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
             Avbryt betalning
           </Button>
         )}
-        {(paymentStatus === PAYMENT_STATUS.DECLINED || paymentStatus === PAYMENT_STATUS.ERROR || paymentStatus === PAYMENT_STATUS.PAID) && (
+        {(paymentStatus === PAYMENT_STATUSES.DECLINED || 
+          paymentStatus === PAYMENT_STATUSES.ERROR || 
+          paymentStatus === PAYMENT_STATUSES.PAID) && (
           <Button 
-            onClick={onClose}
+            onClick={handleClose}
             variant="contained"
           >
-            {paymentStatus === PAYMENT_STATUS.PAID ? 'Fortsätt' : 'Stäng'}
+            {paymentStatus === PAYMENT_STATUSES.PAID ? 'Fortsätt' : 'Stäng'}
           </Button>
         )}
       </DialogActions>

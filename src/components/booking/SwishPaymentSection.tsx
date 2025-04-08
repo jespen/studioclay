@@ -101,7 +101,10 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       }
 
       try {
-        console.log(`[SwishPaymentSection] Checking payment status (attempt ${attempts + 1}/${maxAttempts}):`, { paymentReference });
+        console.log(`[SwishPaymentSection] Checking payment status (attempt ${attempts + 1}/${maxAttempts}):`, { 
+          paymentReference,
+          timestamp: new Date().toISOString()
+        });
         
         const response = await fetch(`/api/payments/status/${paymentReference}`);
         const data = await response.json();
@@ -111,11 +114,17 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           status,
           rawStatus: data?.data?.status || data?.status,
           paymentReference,
-          responseData: data 
+          responseData: data,
+          attempt: attempts + 1,
+          timestamp: new Date().toISOString()
         });
 
         if (status === PAYMENT_STATUSES.PAID) {
-          console.log('[SwishPaymentSection] Payment PAID detected');
+          console.log('[SwishPaymentSection] Payment PAID detected:', {
+            paymentReference,
+            timestamp: new Date().toISOString(),
+            totalAttempts: attempts + 1
+          });
           setPaymentStatus(PAYMENT_STATUSES.PAID);
           setIsPolling(false);
           
@@ -125,7 +134,12 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           onPaymentComplete(true, status);
           return;
         } else if (status === PAYMENT_STATUSES.DECLINED || status === PAYMENT_STATUSES.ERROR) {
-          console.warn('[SwishPaymentSection] Payment failed:', { status, paymentReference });
+          console.warn('[SwishPaymentSection] Payment failed:', { 
+            status, 
+            paymentReference,
+            timestamp: new Date().toISOString(),
+            totalAttempts: attempts + 1
+          });
           setPaymentStatus(status);
           setIsPolling(false);
           onPaymentFailure?.(status);
@@ -139,8 +153,9 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
       } catch (error) {
         console.error('[SwishPaymentSection] Error checking payment status:', { 
           error, 
-          attempt: attempts, 
-          paymentReference 
+          attempt: attempts + 1,
+          paymentReference,
+          timestamp: new Date().toISOString()
         });
         if (isPolling) {
           setTimeout(pollStatus, 2000);
