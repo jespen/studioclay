@@ -5,6 +5,7 @@ import { UserInfo, PaymentDetails } from '@/types/booking';
 import { generateInvoicePDF } from '@/utils/invoicePDF';
 import { generateBookingReference } from '@/utils/booking';
 import { generateGiftCardPDF, GiftCardData } from '@/utils/giftCardPDF';
+import { generateUniqueGiftCardCode } from '@/utils/giftCardUtils';
 
 // Create a Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -340,8 +341,8 @@ export async function POST(request: Request) {
         const giftCardAmount = parseFloat(itemDetails.amount || amount);
         console.log('Gift card amount:', giftCardAmount);
         
-        // Generate a unique gift card code
-        const giftCardCode = `GC-${dateStr}-${Math.floor(1000 + Math.random() * 9000)}`;
+        // Generate a unique gift card code using the centralized function
+        const giftCardCode = await generateUniqueGiftCardCode(supabase);
         console.log('Generated gift card code:', giftCardCode);
         responseData.giftCardCode = giftCardCode;
         

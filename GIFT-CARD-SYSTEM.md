@@ -70,7 +70,7 @@ Presentkortsinformation lagras i följande tabeller:
 
 ### `gift_cards` tabell
 - `id`: Unikt presentkorts-ID (UUID)
-- `code`: Unik presentkortskod (format: GC-XXXXXX)
+- `code`: Unik presentkortskod (format: GC-XXXXXXXX)
 - `amount`: Presentkortsbelopp (SEK)
 - `type`: Typ av presentkort (digital/fysisk)
 - `sender_name`: Avsändarens namn

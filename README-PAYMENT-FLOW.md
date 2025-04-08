@@ -115,7 +115,7 @@ Systemet stödjer för närvarande två betalningsmetoder:
 
 1. **Kritiska databassoperationer först**
    - Skapa post i gift_cards-tabellen med all relevant information
-   - Generera unik presentkortskod (GC-YYYYMMDD-XXXX)
+   - Generera unik presentkortskod (GC-XXXXXXXX)
    - Returnera svar till klienten med giftCardId och giftCardCode
 
 2. **Bakgrundsprocesser**

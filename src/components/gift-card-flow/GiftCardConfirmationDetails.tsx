@@ -16,13 +16,6 @@ interface GiftCardConfirmationDetailsProps {
   userInfo: any;
 }
 
-// Generate a random gift card number
-const generateGiftCardNumber = () => {
-  // Format: GC-XXXXXXXX (matching backend format)
-  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-  return `GC-${random}`;
-};
-
 // Format date to Swedish format
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -48,8 +41,13 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
   const [error, setError] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
-  // Get or generate gift card number
-  const giftCardNumber = giftCardDetails?.code || giftCardDetails?.card_number || generateGiftCardNumber();
+  // Use only the code from the database
+  const giftCardNumber = giftCardDetails?.code;
+  
+  if (!giftCardNumber) {
+    console.error('No gift card code found in details:', giftCardDetails);
+  }
+
   const purchaseDate = giftCardDetails?.created_at 
     ? formatDate(giftCardDetails.created_at)
     : formatDate(new Date().toISOString());
