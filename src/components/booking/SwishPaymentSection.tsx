@@ -109,6 +109,8 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         const response = await fetch(`/api/payments/status/${paymentReference}`);
         const data = await response.json();
         
+        console.log('[SwishPaymentSection] Raw API response:', data);
+        
         // Kolla om betalningen är PAID först av allt
         if (
           data.data?.status === PAYMENT_STATUSES.PAID || 
@@ -175,12 +177,15 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
           paymentReference,
           timestamp: new Date().toISOString()
         });
+        attempts++;
         if (isPolling) {
           setTimeout(pollStatus, 2000);
         }
       }
     };
 
+    // Start polling
+    console.log('[SwishPaymentSection] Starting payment polling for:', paymentReference);
     setIsPolling(true);
     pollStatus();
   };
@@ -258,6 +263,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
         return false;
       }
 
+      // Store payment reference and start polling
       setPaymentReference(data.paymentReference);
       checkPaymentStatus(data.paymentReference);
       
