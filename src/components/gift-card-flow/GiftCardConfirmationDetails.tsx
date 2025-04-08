@@ -18,14 +18,9 @@ interface GiftCardConfirmationDetailsProps {
 
 // Generate a random gift card number
 const generateGiftCardNumber = () => {
-  // Format: SC-XXXX-XXXX-XXXX
-  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = 'SC-';
-  for (let i = 0; i < 12; i++) {
-    if (i % 4 === 0 && i > 0) result += '-';
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-  return result;
+  // Format: GC-XXXXXXXX (matching backend format)
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `GC-${random}`;
 };
 
 // Format date to Swedish format
