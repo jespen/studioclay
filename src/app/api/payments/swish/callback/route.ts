@@ -721,162 +721,98 @@ export async function POST(request: NextRequest) {
                 global.keepAliveTimers.push(timerId);
               });
               
-              // Track process stages for debugging
-              let processStage = 'started';
-              const startTime = Date.now();
-              
               try {
                 // Generate gift card PDF if digital
                 if (giftCard.type === 'digital' && giftCard.recipient_email) {
-                  processStage = 'generating_pdf';
-                  logDebug(`[${requestId}] [STAGE: ${processStage}] Generating gift card PDF`);
+                  try {
+                    logDebug(`[${requestId}] Generating gift card PDF`);
                     
-                  const giftCardData: GiftCardData = {
-                    code: giftCard.code,
-                    amount: giftCard.amount,
-                    recipientName: giftCard.recipient_name,
-                    recipientEmail: giftCard.recipient_email,
-                    senderName: giftCard.sender_name,
-                    senderEmail: giftCard.sender_email,
-                    message: giftCard.message || '',
-                    createdAt: new Date().toISOString(),
-                    expiresAt: giftCard.expires_at
-                  };
+                    const giftCardData: GiftCardData = {
+                      code: giftCard.code,
+                      amount: giftCard.amount,
+                      recipientName: giftCard.recipient_name,
+                      recipientEmail: giftCard.recipient_email,
+                      senderName: giftCard.sender_name,
+                      senderEmail: giftCard.sender_email,
+                      message: giftCard.message || '',
+                      createdAt: new Date().toISOString(),
+                      expiresAt: giftCard.expires_at
+                    };
                     
-                  const pdfBuffer = await generateGiftCardPDF(giftCardData);
-                  logDebug(`[${requestId}] [STAGE: ${processStage}] PDF generated successfully`);
-                  
-                  processStage = 'checking_storage';
-                  // Store PDF in Supabase storage
-                  const bucketName = 'giftcards'; // Changed from 'gift-cards' to match bucket name in invoice API
-                  const fileName = `gift-card-${giftCard.code}.pdf`;
+                    const pdfBuffer = await generateGiftCardPDF(giftCardData);
                     
-                  logDebug(`[${requestId}] [STAGE: ${processStage}] Checking if ${bucketName} bucket exists`);
-                  const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-                    
-                  if (bucketsError) {
-                    logError(`[${requestId}] [STAGE: ${processStage}] Error listing buckets: ${bucketsError}`);
-                  } else {
-                    // Check if bucket exists
-                    const bucketExists = buckets.some(b => b.name === bucketName);
-                    logDebug(`[${requestId}] [STAGE: ${processStage}] Buckets: ${buckets.map(b => b.name).join(', ')}`);
-                    logDebug(`[${requestId}] [STAGE: ${processStage}] Bucket ${bucketName} exists: ${bucketExists}`);
-                      
-                    // Create bucket if it doesn't exist
-                    if (!bucketExists) {
-                      logDebug(`[${requestId}] [STAGE: ${processStage}] Creating ${bucketName} bucket`);
-                      try {
-                        const { error: createError } = await supabase.storage.createBucket(bucketName, {
-                          public: true
-                        });
-                          
-                        if (createError) {
-                          logError(`[${requestId}] [STAGE: ${processStage}] Error creating bucket: ${createError.message}`);
-                        } else {
-                          logDebug(`[${requestId}] [STAGE: ${processStage}] Successfully created ${bucketName} bucket`);
-                        }
-                      } catch (bucketError) {
-                        logError(`[${requestId}] [STAGE: ${processStage}] Unexpected error creating bucket: ${bucketError instanceof Error ? bucketError.message : String(bucketError)}`);
-                      }
-                    }
-                  }
-                    
-                  // Store the PDF - converts the Blob returned by generateGiftCardPDF to Buffer
-                  processStage = 'uploading_pdf';
-                  const pdfArrayBuffer = await pdfBuffer.arrayBuffer();
-                  const pdfNodeBuffer = Buffer.from(pdfArrayBuffer);
-                    
-                  logDebug(`[${requestId}] [STAGE: ${processStage}] Uploading PDF (${pdfNodeBuffer.length} bytes) to ${bucketName}/${fileName}`);
-                    
-                  const { data: storageData, error: storageError } = await supabase.storage
-                    .from(bucketName)
-                    .upload(fileName, pdfNodeBuffer, {
-                      contentType: 'application/pdf',
-                      upsert: true
-                    });
+                    // Store PDF in Supabase storage
+                    const { data: storageData, error: storageError } = await supabase
+                .storage
+                      .from('gift-cards')
+                      .upload(`${giftCard.code}.pdf`, pdfBuffer, {
+                  contentType: 'application/pdf',
+                  upsert: true
+                });
                 
-                  if (storageError) {
-                    logError(`[${requestId}] [STAGE: ${processStage}] Error storing gift card PDF: ${storageError.message}`);
-                  } else {
-                    logDebug(`[${requestId}] [STAGE: ${processStage}] Gift card PDF stored successfully: ${storageData.path}`);
+                    if (storageError) {
+                      logError(`[${requestId}] Error storing gift card PDF:`, storageError);
+              } else {
+                      logDebug(`[${requestId}] Gift card PDF stored:`, storageData);
                       
-                    // Get public URL for the PDF
-                    const { data: urlData } = await supabase.storage
-                      .from(bucketName)
-                      .getPublicUrl(fileName);
-                      
-                    logDebug(`[${requestId}] [STAGE: ${processStage}] PDF public URL: ${urlData?.publicUrl || 'not available'}`);
-                      
-                    // Try to send gift card email
-                    processStage = 'sending_email';
-                    try {
-                      logDebug(`[${requestId}] [STAGE: ${processStage}] Sending gift card email`);
-                      logDebug(`[${requestId}] [STAGE: ${processStage}] Email parameters:`, {
-                        senderEmail: giftCard.sender_email,
-                        recipientEmail: giftCard.recipient_email,
-                        giftCardCode: giftCard.code,
-                        giftCardAmount: giftCard.amount,
-                        pdfSize: pdfNodeBuffer.length
-                      });
+                      // Try to send gift card email
+                      try {
+                        logDebug(`[${requestId}] Sending gift card email`);
+                        logDebug(`[${requestId}] DIAGNOSTIC: About to attempt email sending for gift card`);
+                        logDebug(`[${requestId}] DIAGNOSTIC: Email parameters:`, {
+                          senderEmail: giftCard.sender_email,
+                          recipientEmail: giftCard.recipient_email,
+                          giftCardCode: giftCard.code,
+                          giftCardAmount: giftCard.amount
+                        });
                         
-                      const { sendServerGiftCardEmail } = await import('@/utils/serverEmail');
+                        const { sendServerGiftCardEmail } = await import('@/utils/serverEmail');
                         
-                      // Send email using the gift card data from database
-                      const emailResult = await sendServerGiftCardEmail({
-                        giftCardData: {
-                          code: giftCard.code,
-                          amount: giftCard.amount,
-                          recipient_name: giftCard.recipient_name,
-                          recipient_email: giftCard.recipient_email || '',
-                          message: giftCard.message,
-                          expires_at: giftCard.expires_at
-                        },
-                        senderInfo: {
-                          name: giftCard.sender_name,
-                          email: giftCard.sender_email
-                        },
-                        pdfBuffer: pdfNodeBuffer
-                      });
+                        // Convert Blob to Buffer for email attachment
+                        const buffer = Buffer.from(await pdfBuffer.arrayBuffer());
                         
-                      logDebug(`[${requestId}] [STAGE: ${processStage}] Email sending result:`, emailResult);
+                        // Send email using the gift card data from database
+                        const emailResult = await sendServerGiftCardEmail({
+                          giftCardData: {
+                            code: giftCard.code,
+                            amount: giftCard.amount,
+                            recipient_name: giftCard.recipient_name,
+                            recipient_email: giftCard.recipient_email || '',
+                            message: giftCard.message,
+                            expires_at: giftCard.expires_at
+                          },
+                          senderInfo: {
+                            name: giftCard.sender_name,
+                            email: giftCard.sender_email
+                          },
+                          pdfBuffer: buffer
+                        });
                         
-                      // Mark as emailed
-                      processStage = 'updating_database';
-                      if (emailResult.success) {
+                        logDebug(`[${requestId}] Email sending result:`, emailResult);
+                        
+                        // Mark as emailed
                         await supabase
-                          .from('gift_cards')
-                          .update({ 
-                            is_emailed: true,
-                            metadata: {
-                              ...giftCard.metadata,
-                              email_sent: true,
-                              email_sent_at: new Date().toISOString(),
-                              pdf_url: urlData?.publicUrl,
-                              processing_time_ms: Date.now() - startTime
-                            }
-                          })
+                  .from('gift_cards')
+                          .update({ is_emailed: true })
                           .eq('id', giftCard.id);
-                            
-                        logDebug(`[${requestId}] [STAGE: ${processStage}] Gift card marked as emailed`);
+                      } catch (emailError) {
+                        logError(`[${requestId}] Error sending gift card email:`, emailError);
                       }
-                      processStage = 'completed';
-                    } catch (emailError) {
-                      processStage = 'email_error';
-                      logError(`[${requestId}] [STAGE: ${processStage}] Error sending gift card email: ${emailError instanceof Error ? emailError.message : String(emailError)}`);
                     }
+                  } catch (pdfError) {
+                    logError(`[${requestId}] Error generating gift card PDF:`, pdfError);
                   }
-                } else {
-                  processStage = 'skipped_physical_gift_card';
-                  logDebug(`[${requestId}] [STAGE: ${processStage}] Skipping PDF generation - gift card type: ${giftCard.type}, recipient email: ${giftCard.recipient_email || 'none'}`);
                 }
                 
-                logDebug(`[${requestId}] [STAGE: ${processStage}] Background gift card process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
+                logDebug(`[${requestId}] Background gift card process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
               } catch (backgroundError) {
-                processStage = 'unhandled_error';
-                logError(`[${requestId}] [STAGE: ${processStage}] Error in gift card background processing:`, backgroundError);
-              } finally {
-                logDebug(`[${requestId}] [STAGE: ${processStage}] Final processing stage after ${Date.now() - startTime}ms`);
+                logError(`[${requestId}] Error in gift card background processing:`, backgroundError);
               }
+              
+              // Wait for the keep-alive promise to resolve before finishing
+              logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
+              await keepAlivePromise;
+              logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
             };
             
             // Execute the background process with explicit promise handling

@@ -33,7 +33,6 @@ export const useSwishPaymentStatus = ({
   const sessionIdRef = useRef(`session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
   const sessionId = sessionIdRef.current;
   const isCancelledRef = useRef(false);
-  const paidStatusDetectedRef = useRef(false);
 
   // Check payment status
   const checkPaymentStatus = async (reference?: string): Promise<PaymentStatus | null> => {
@@ -45,64 +44,64 @@ export const useSwishPaymentStatus = ({
     }
     
     try {
-      console.log(`🔄 [${sessionId}] Checking status for payment: ${paymentRef}`);
+      console.log(`🔄 Checking status for payment: ${paymentRef}`);
       
+      // Enkel fetch, simpel URL
       const response = await fetch(`/api/payments/status/${paymentRef}`);
       if (!response.ok) {
-        console.log(`❌ [${sessionId}] API request failed: ${response.status}`);
+        console.log(`❌ API request failed: ${response.status}`);
         return null;
       }
       
       const data = await response.json();
-      console.log(`📥 [${sessionId}] API response:`, data);
+      console.log('📥 Got API response:', data);
       
-      // Extract status from various possible locations in the response
-      const status = data.data?.status || data.status;
-      
-      // If we have a status, validate and return it
-      if (status) {
-        const validStatus = getValidPaymentStatus(status);
-        console.log(`📊 [${sessionId}] Extracted status: ${validStatus}`);
-        return validStatus;
+      // Kolla om betalningen är PAID först av allt
+      if (
+        data.data?.status === PAYMENT_STATUSES.PAID || 
+        data.status === PAYMENT_STATUSES.PAID
+      ) {
+        console.log('💰 PAYMENT IS PAID!');
+        return PAYMENT_STATUSES.PAID;
       }
       
-      console.log(`⚠️ [${sessionId}] No status found in API response`);
+      // För andra statusar, returnera dem direkt
+      const status = data.data?.status || data.status;
+      if (status) {
+        return getValidPaymentStatus(status);
+      }
+      
+      // Om inget svar, returnera null
+      console.log('⚠️ No status found in API response');
       return null;
     } catch (error) {
-      console.error(`❌ [${sessionId}] Error checking payment status:`, error);
+      console.error('❌ Error checking payment status:', error);
       return null;
     }
   };
 
   // Handle closing the payment dialog
   const handleClosePaymentDialog = () => {
-    console.log(`🔒 [${sessionId}] Closing payment dialog, current status: ${paymentStatus}`);
-    
     // Always stop polling when dialog is closed
     if (pollingRef.current) {
-      clearTimeout(pollingRef.current);
+      clearInterval(pollingRef.current);
       pollingRef.current = null;
-      console.log(`⏹️ [${sessionId}] Polling stopped`);
     }
     
     // Set cancelled flag if payment was not completed
-    if (paymentStatus !== PAYMENT_STATUSES.PAID) {
+    if (paymentStatus === PAYMENT_STATUS.ERROR || 
+        paymentStatus === PAYMENT_STATUS.DECLINED || 
+        paymentStatus === PAYMENT_STATUS.CREATED) {
       isCancelledRef.current = true;
-      console.log(`🚫 [${sessionId}] Marking payment as cancelled`);
     }
     
     // Reset state
     setShowPaymentDialog(false);
-    
-    // Only reset payment status if not PAID
-    if (paymentStatus !== PAYMENT_STATUSES.PAID) {
-      setPaymentStatus(null);
-    }
+    setPaymentStatus(null);
     
     // Clear the payment reference from flowStorage only if payment was not successful
-    if (paymentStatus !== PAYMENT_STATUSES.PAID) {
+    if (paymentStatus !== PAYMENT_STATUS.PAID) {
       setPaymentReference("");
-      console.log(`🗑️ [${sessionId}] Cleared payment reference`);
     }
   };
 
@@ -115,7 +114,7 @@ export const useSwishPaymentStatus = ({
 
     // Otherwise, use correct redirect page based on product type
     const flowType = getFlowType();
-    console.log(`🛣️ [${sessionId}] Current flow type: ${flowType}`);
+    console.log(`[${sessionId}] Current flow type:`, flowType);
 
     switch (flowType) {
       case FlowType.GIFT_CARD:
@@ -132,109 +131,100 @@ export const useSwishPaymentStatus = ({
     }
   };
 
-  // Process a detected payment status update
-  const processStatusUpdate = (newStatus: PaymentStatus | null) => {
-    // If no status or already detected PAID, do nothing
-    if (!newStatus || paidStatusDetectedRef.current) return;
-    
-    console.log(`📝 [${sessionId}] Processing status update: ${newStatus}`);
-    
-    // If PAID status detected
-    if (newStatus === PAYMENT_STATUSES.PAID) {
-      console.log(`💰 [${sessionId}] PAID status detected!`);
-      paidStatusDetectedRef.current = true;
-      
-      // Update localStorage
-      try {
-        const paymentInfo = JSON.parse(localStorage.getItem('payment_info') || '{}');
-        paymentInfo.status = PAYMENT_STATUSES.PAID;
-        localStorage.setItem('payment_info', JSON.stringify(paymentInfo));
-        console.log(`💾 [${sessionId}] Updated localStorage payment status to PAID`);
-      } catch (error) {
-        console.error(`❌ [${sessionId}] Failed to update localStorage:`, error);
-      }
-      
-      // Handle successful payment
-      setTimeout(() => {
-        console.log(`🚀 [${sessionId}] Handling successful payment completion`);
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          const redirectUrl = getRedirectPath();
-          console.log(`🔀 [${sessionId}] Redirecting to ${redirectUrl}`);
-          router.push(redirectUrl);
-        }
-      }, 1500);
-    }
-    
-    // Always update state with new status
-    setPaymentStatus(newStatus);
-  };
-
   // Start polling payment status
   useEffect(() => {
-    // Reset cancellation flag when dialog opens
-    if (showPaymentDialog) {
-      isCancelledRef.current = false;
-    }
-    
-    // If dialog not open or already detected PAID, don't poll
-    if (!showPaymentDialog || paidStatusDetectedRef.current) {
-      console.log(`⏹️ [${sessionId}] Not polling: dialog closed or payment already PAID`);
+    // Om dialog inte är öppen eller betalning avbruten, gör inget
+    if (!showPaymentDialog || isCancelledRef.current) {
+      console.log('⏹️ Not polling: dialog closed or payment canceled');
       return;
     }
     
-    console.log(`▶️ [${sessionId}] Starting payment polling`);
+    console.log('▶️ Starting payment polling');
     let attempts = 0;
     const MAX_ATTEMPTS = 60;
     
-    // Simple polling function
+    // Funktion för att polla status
     const pollStatus = async () => {
-      // Stop conditions
-      if (!showPaymentDialog || isCancelledRef.current || paidStatusDetectedRef.current) {
-        console.log(`⏹️ [${sessionId}] Stopping poll: dialog closed, payment canceled, or PAID detected`);
+      // Avbryt om dialog stängts eller betalning avbrutits
+      if (!showPaymentDialog || isCancelledRef.current) {
+        console.log('⏹️ Stopping poll: dialog closed or payment canceled');
         return;
       }
       
+      // Avbryt om max försök nåtts
       if (attempts >= MAX_ATTEMPTS) {
-        console.log(`⏹️ [${sessionId}] Stopping poll: max attempts (${MAX_ATTEMPTS}) reached`);
+        console.log(`⏹️ Stopping poll: max attempts (${MAX_ATTEMPTS}) reached (${MAX_ATTEMPTS * 2} seconds)`);
         return;
       }
       
       attempts++;
-      console.log(`🔄 [${sessionId}] Poll attempt ${attempts}/${MAX_ATTEMPTS}`);
+      console.log(`🔄 Poll attempt ${attempts}/${MAX_ATTEMPTS} (${attempts * 2} seconds)`);
       
-      // Check status
+      // Hämta status
       const status = await checkPaymentStatus();
+      console.log(`📊 Status received: ${status || 'null'}`);
       
-      // Process the status update
-      processStatusUpdate(status);
-      
-      // Stop polling if payment is completed or failed
-      if (status === PAYMENT_STATUSES.PAID || 
-          status === PAYMENT_STATUSES.DECLINED || 
-          status === PAYMENT_STATUSES.ERROR) {
-        console.log(`⏹️ [${sessionId}] Stopping poll: status=${status}`);
-        return;
+      // MYCKET VIKTIG ÄNDRING: ALLTID uppdatera om vi får PAID
+      if (status === PAYMENT_STATUSES.PAID) {
+        console.log('💰 PAYMENT IS PAID! Updating status and preparing redirect');
+        setPaymentStatus(PAYMENT_STATUSES.PAID);
+        
+        // NYTT: Uppdatera betalningsstatus i localStorage
+        try {
+          // Hämta nuvarande paymentInfo från localStorage
+          const paymentInfo = JSON.parse(localStorage.getItem('payment_info') || '{}');
+          
+          // Uppdatera status till PAID
+          paymentInfo.status = PAYMENT_STATUSES.PAID;
+          
+          // Spara tillbaka till localStorage
+          localStorage.setItem('payment_info', JSON.stringify(paymentInfo));
+          
+          console.log('🔄 Updated payment status in localStorage to PAID');
+        } catch (error) {
+          console.error('❌ Failed to update payment status in localStorage:', error);
+        }
+        
+        // Använd en timeout för att omdirigera användaren
+        setTimeout(() => {
+          console.log('🚀 Redirecting after successful payment');
+          if (onSuccess) {
+            onSuccess();
+          } else {
+            const redirectUrl = redirectPath || getRedirectPath();
+            console.log(`🔀 Redirecting to ${redirectUrl}`);
+            router.push(redirectUrl);
+          }
+        }, 1500);
+        
+        console.log('✅ Payment confirmed as PAID - stopping all polling');
+        return; // Avsluta polling
       }
       
-      // Continue polling if needed
-      if (showPaymentDialog && !isCancelledRef.current && !paidStatusDetectedRef.current) {
-        pollingRef.current = setTimeout(pollStatus, 2000);
+      // För andra statusar
+      if (status && status !== paymentStatus) {
+        console.log(`📈 Updating status from ${paymentStatus} to ${status}`);
+        setPaymentStatus(status);
+        
+        // Om declined eller error, stoppa polling
+        if (status === PAYMENT_STATUSES.DECLINED || status === PAYMENT_STATUSES.ERROR) {
+          console.log('⏹️ Payment declined or error, stopping poll');
+          return;
+        }
+      }
+      
+      // Fortsätt polla om vi inte har avbrutit
+      if (showPaymentDialog && !isCancelledRef.current) {
+        setTimeout(pollStatus, 2000);
       }
     };
     
-    // Start polling immediately
+    // Starta polling direkt
     pollStatus();
     
-    // Cleanup
-    return () => {
-      if (pollingRef.current) {
-        clearTimeout(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
-  }, [showPaymentDialog, paymentReference]);
+    // Cleanup: inget att göra
+    return () => {};
+  }, [showPaymentDialog, paymentReference, paymentStatus, courseId, router, onSuccess, redirectPath]);
 
   return {
     paymentStatus,
