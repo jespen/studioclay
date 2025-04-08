@@ -744,8 +744,8 @@ export async function POST(request: NextRequest) {
                     // Store PDF in Supabase storage
                     const { data: storageData, error: storageError } = await supabase
                 .storage
-                      .from('gift-cards')
-                      .upload(`${giftCard.code}.pdf`, pdfBuffer, {
+                      .from('giftcards')
+                      .upload(`gift-card-${giftCard.code}.pdf`, pdfBuffer, {
                   contentType: 'application/pdf',
                   upsert: true
                 });
