@@ -3,13 +3,13 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { logDebug, logError } from '@/lib/logging';
+import { logDebug, logError, logInfo } from '@/lib/logging';
 import https from 'https';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import fetch from 'node-fetch';
 import { SwishService } from '@/services/swish/swishService';
-import { SwishPaymentData } from '@/services/swish/types';
+import { SwishPaymentData, SwishRequestSchema } from '@/services/swish/types';
 import { setupCertificate } from '../cert-helper';
 import { PAYMENT_STATUSES, getValidPaymentStatus } from '@/constants/statusCodes';
 
@@ -290,195 +290,97 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+/**
+ * POST handler for creating Swish payments
+ */
+export async function POST(request: NextRequest) {
+  const requestId = uuidv4();
+  const startTime = Date.now();
+
   try {
-    // Konfigurera certifikat i produktionsmiljö om vi använder Swish i produktionsläge
-    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_SWISH_TEST_MODE !== 'true') {
-      logDebug('Setting up Swish certificates from environment variables in create endpoint');
-      const certSetupResult = setupCertificate();
-      
-      if (!certSetupResult.success) {
-        logError('Failed to set up Swish certificates in create endpoint:', certSetupResult);
-        return NextResponse.json({
-          success: false,
-          error: 'Failed to set up Swish certificates',
-          details: 'Configuration error'
-        }, { status: 500 });
+    // Log the incoming request
+    logInfo(`[${requestId}] Creating Swish payment`, {
+      method: request.method,
+      url: request.url
+    });
+
+    // Parse the request body
+    const requestData = await request.json();
+
+    // Log the request data (masking sensitive information)
+    logInfo(`[${requestId}] Request data`, {
+      ...requestData,
+      phoneNumber: requestData.phoneNumber ? `${requestData.phoneNumber.substring(0, 4)}****${requestData.phoneNumber.slice(-2)}` : undefined
+    });
+
+    // Get SwishService instance
+    const swishService = SwishService.getInstance();
+
+    // Create payment
+    const transaction = await swishService.createPayment({
+      amount: requestData.amount,
+      phoneNumber: requestData.phoneNumber,
+      message: requestData.message,
+      paymentReference: `SC-${uuidv4().substring(0, 8).toUpperCase()}`,
+      metadata: {
+        productType: requestData.productType,
+        productId: requestData.productId,
+        userInfo: requestData.userInfo
       }
-    }
-    
-    const body = await request.json();
-    
-    try {
-      // Validate the request body
-      const validatedData = SwishPaymentSchema.parse(body);
-      const { phone_number, product_id, product_type, user_info, amount, quantity } = validatedData;
+    });
 
-      // Get idempotency key from headers
-      const idempotencyKey = request.headers.get('Idempotency-Key');
-      
-      // Check for existing payment with this idempotency key
-      if (idempotencyKey) {
-        logDebug('Checking idempotency key:', { idempotencyKey });
-        const existingPayment = await checkIdempotency(idempotencyKey);
-        
-        if (existingPayment) {
-          logDebug('Found existing payment with same idempotency key:', { 
-            paymentReference: existingPayment.payment_reference,
-            status: existingPayment.status
-          });
-          
-          // If payment already exists, return it instead of creating a new one
-          return NextResponse.json({
-            success: true,
-            paymentReference: existingPayment.payment_reference,
-            data: {
-              id: existingPayment.id,
-              status: existingPayment.status,
-              amount: existingPayment.amount,
-              currency: existingPayment.currency,
-              already_exists: true
-            }
-          });
-        }
-        
-        logDebug('No existing payment found with this idempotency key');
-      } else {
-        logDebug('No idempotency key provided in request');
-      }
+    // Log processing time
+    const processingTime = Date.now() - startTime;
+    logInfo(`[${requestId}] Payment created successfully`, {
+      processingTime: `${processingTime}ms`,
+      swishPaymentId: transaction.swishPaymentId
+    });
 
-      // Generate payment reference
-      const timestamp = new Date().getTime().toString().slice(-6);
-      const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-      const paymentReference = `SC-${timestamp}-${randomNum}`;
-
-      // Create generic payment record
-      const { data: paymentData, error: paymentError } = await supabase
-        .from('payments')
-        .insert({
-          payment_method: 'swish',
-          amount: amount,
-          currency: 'SEK',
-          payment_reference: paymentReference,
-          product_type: product_type,
-          product_id: product_id,
-          status: PAYMENT_STATUSES.CREATED,
-          user_info: user_info,
-          phone_number: phone_number,
-          metadata: {
-            idempotency_key: request.headers.get('Idempotency-Key'),
-            quantity: quantity
-          }
-        })
-        .select()
-        .single();
-
-      if (paymentError) {
-        throw new Error(`Failed to create payment record: ${paymentError.message}`);
-      }
-
-      // Get base URL and create callback URL
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-      let callbackUrl = baseUrl.replace('http://', 'https://');
-      
-      // Use non-www domain in production
-      if (process.env.NODE_ENV === 'production' && callbackUrl.includes('www.studioclay.se')) {
-        callbackUrl = callbackUrl.replace('www.studioclay.se', 'studioclay.se');
-      }
-      
-      // Add callback path
-      const callbackPath = '/api/payments/swish/callback';
-      callbackUrl = callbackUrl.endsWith('/') 
-        ? callbackUrl + callbackPath.substring(1)
-        : callbackUrl + callbackPath;
-
-      try {
-        // Format phone number and get product title
-        const swishService = SwishService.getInstance();
-        const formattedPhone = swishService.formatPhoneNumber(phone_number);
-        const productTitle = await getProductTitle(product_type, product_id);
-
-        // Create Swish payment request
-        const swishPaymentData = {
-          payeePaymentReference: paymentReference,
-          callbackUrl: callbackUrl,
-          payeeAlias: swishService.getPayeeAlias(),
-          amount: amount.toString(),
-          currency: "SEK",
-          message: `studioclay.se - ${productTitle}`.substring(0, 50),
-          payerAlias: formattedPhone
-        };
-
-        const result = await swishService.createPayment(swishPaymentData);
-
-        if (!result.success) {
-          // Update payment status to ERROR if Swish request fails
-          await supabase
-            .from('payments')
-            .update({ 
-              status: PAYMENT_STATUSES.ERROR,
-              metadata: {
-                ...paymentData.metadata,
-                swish_error: result.error
-              }
-            })
-            .eq('payment_reference', paymentReference);
-
-          return NextResponse.json({
-            success: false,
-            error: result.error,
-            details: result.data
-          }, { status: 400 });
-        }
-
-        // Update payment with Swish details
-        if (result.data?.reference) {
-          await supabase
-            .from('payments')
-            .update({
-              swish_payment_id: result.data.reference,
-              swish_callback_url: callbackUrl,
-              metadata: {
-                ...paymentData.metadata,
-                swish_request: {
-                  sent_at: new Date().toISOString(),
-                  data: {
-                    ...swishPaymentData,
-                    payerAlias: `${swishPaymentData.payerAlias.substring(0, 4)}****${swishPaymentData.payerAlias.slice(-2)}`
-                  }
-                }
-              }
-            })
-            .eq('payment_reference', paymentReference);
-        }
-
-        return NextResponse.json({
-          success: true,
-          paymentReference: paymentData.payment_reference,
-          swishPaymentReference: result.data?.reference,
-          data: {
-            id: paymentData.id,
-            status: paymentData.status,
-            amount: paymentData.amount,
-            currency: paymentData.currency,
-            swish_payment_id: result.data?.reference
-          }
-        });
-
-      } catch (swishError) {
-        throw swishError;
-      }
-    } catch (validationError) {
-      return NextResponse.json({
-        success: false,
-        error: validationError instanceof Error ? validationError.message : 'Validation error',
-        validationError: true
-      }, { status: 400 });
-    }
-  } catch (error) {
+    // Return success response
     return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+      status: 'OK',
+      paymentId: transaction.paymentId,
+      swishPaymentId: transaction.swishPaymentId
+    }, { status: 200 });
+
+  } catch (error) {
+    // Log the error
+    logError(`[${requestId}] Error creating Swish payment:`, error);
+
+    // Try to log the error to Supabase
+    try {
+      await supabase.from('error_logs').insert({
+        request_id: requestId,
+        error_type: 'swish_create',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        error_stack: error instanceof Error ? error.stack : undefined,
+        request_data: await request.json().catch(() => null),
+        processing_time: Date.now() - startTime
+      });
+    } catch (loggingError) {
+      logError(`[${requestId}] Failed to log error to database:`, loggingError);
+    }
+
+    // Return error response
+    return NextResponse.json(
+      { 
+        status: 'ERROR',
+        message: 'Failed to create payment',
+        requestId
+      },
+      { status: 500 }
+    );
   }
+}
+
+/**
+ * Generate a unique payment reference based on product type and ID
+ */
+function generatePaymentReference(productType: string, productId: string): string {
+  const prefix = productType === 'course' ? 'SC' 
+               : productType === 'gift_card' ? 'GC'
+               : 'SP'; // Shop product
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 6);
+  return `${prefix}-${timestamp}-${random}`;
 } 

@@ -75,6 +75,7 @@ import {
 } from '@/utils/flowStorage';
 import { getPreviousStepUrl, getNextStepUrl } from '@/utils/flowNavigation';
 import { PAYMENT_STATUSES } from '@/constants/statusCodes';
+import { PaymentService } from '@/services/payment/paymentService';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -104,13 +105,19 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [submitError, setSubmitError] = useState<string | null>(null);
   
-  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails>({
-    method: 'swish'
-  });
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('swish');
+  const [error, setError] = useState<string | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<any>(null);
   
   const [formErrors, setFormErrors] = useState<BaseFormErrors>({});
   const swishPaymentRef = useRef<SwishPaymentSectionRef>(null);
   const invoicePaymentRef = useRef<InvoicePaymentSectionRef>(null);
+
+  // Add invoice detail states
+  const [invoiceAddress, setInvoiceAddress] = useState<string>('');
+  const [invoicePostalCode, setInvoicePostalCode] = useState<string>('');
+  const [invoiceCity, setInvoiceCity] = useState<string>('');
+  const [invoiceReference, setInvoiceReference] = useState<string>('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -143,19 +150,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
 
   const handleRadioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setPaymentDetails(prev => ({ 
-      ...prev, 
-      [name]: value,
-      // Initialize invoiceDetails when switching to invoice
-      ...(value === 'invoice' && !prev.invoiceDetails ? {
-        invoiceDetails: {
-          address: '',
-          postalCode: '',
-          city: '',
-          reference: ''
-        }
-      } : {})
-    }));
+    setSelectedPaymentMethod(value as string);
     // Clear error when user selects
     if (formErrors[name as keyof BaseFormErrors]) {
       setFormErrors(prev => ({ ...prev, [name]: undefined }));
@@ -166,25 +161,13 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     const { name, value } = e.target;
     console.log('Invoice detail change:', name, value);
     
-    setPaymentDetails(prev => ({
-      ...prev,
-      invoiceDetails: {
-        ...prev.invoiceDetails as InvoiceDetails,
-        [name]: value
-      }
-    }));
-    
-    // Clear error when user types
-    const errorKey = `invoiceDetails.${name}` as keyof BaseFormErrors;
-    if (formErrors[errorKey]) {
-      setFormErrors(prev => ({ ...prev, [errorKey]: undefined }));
-    }
+    // No need to update formErrors here as this is handled by InvoicePaymentSection
   };
 
   const validateForm = (): boolean => {
     const newErrors: BaseFormErrors = {};
     
-    if (!paymentDetails.method) {
+    if (!selectedPaymentMethod) {
       newErrors.paymentMethod = 'Välj betalningsmetod';
     }
 
@@ -193,73 +176,220 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log('PaymentSelection.handleSubmit called');
+    console.log('[PaymentSelection] Form submitted, payment method:', selectedPaymentMethod);
     
-    // Prevent double-submits
-    if (isSubmitting) {
-      console.log('Submission already in progress, ignoring click');
-      return;
-    }
-    
-    if (!validateForm()) {
-      console.log('Form validation failed');
-      return;
-    }
-
-    console.log('Setting isSubmitting to true');
     setIsSubmitting(true);
     setSubmitError(null);
-
+    
     try {
-      console.log('Processing payment with method:', paymentDetails.method);
-      let success = false;
-      
-      if (paymentDetails.method === 'swish') {
-        // For Swish, we trigger the payment creation
-        console.log('Starting Swish payment flow');
-        // The dialog and status handling is managed by SwishPaymentSection
-        success = await swishPaymentRef.current?.handleCreatePayment() || false;
-        console.log('Swish payment creation result:', success);
-        
-        // Important: We don't immediately redirect for Swish
-        // The SwishPaymentSection will handle the payment status and redirect
-        // through its onPaymentComplete callback when payment is confirmed
-        if (!success) {
-          console.log('Swish payment creation failed');
-          setSubmitError('Det gick inte att skapa Swish-betalningen. Försök igen senare.');
-        }
-        // Don't call handlePaymentComplete here - it will be called from SwishPaymentSection
-      } else if (paymentDetails.method === 'invoice') {
-        // For Invoice, we trigger the payment creation and wait for success
-        console.log('Starting Invoice payment flow');
-        // The InvoicePaymentSection handles the validation and creation
-        success = await invoicePaymentRef.current?.handleCreatePayment() || false;
-        console.log('Invoice payment creation result:', success);
-        
-        if (success) {
-          // Store payment info and redirect for invoice payments
-          const paymentInfo = {
-            status: PAYMENT_STATUSES.CREATED,
-            amount: calculatePrice(),
-            payment_method: 'invoice',
-            reference: uuidv4()
-          };
-          console.log('Invoice payment successful, storing payment info:', paymentInfo);
-          handlePaymentSuccess(paymentInfo);
-        } else {
-          console.log('Invoice payment creation failed');
-          setSubmitError('Det gick inte att skapa fakturan. Försök igen senare.');
-        }
+      if (!userInfo) {
+        console.error('[PaymentSelection] No user info available');
+        throw new Error('Användaruppgifter saknas');
       }
-    } catch (error) {
-      console.error('Error in payment processing:', error);
-      setSubmitError('Ett oväntat fel uppstod. Försök igen senare.');
-    } finally {
-      console.log('Setting isSubmitting to false');
+      
+      console.log('[PaymentSelection] Flow type:', flowType);
+      
+      // Handle different payment methods
+      if (selectedPaymentMethod === 'swish') {
+        console.log('[PaymentSelection] Processing Swish payment');
+        if (swishPaymentRef.current) {
+          const success = await swishPaymentRef.current.submitSwishPayment();
+          console.log('[PaymentSelection] Swish payment submission result:', success);
+          
+          if (success) {
+            setIsSubmitting(false);
+            return;
+          } else {
+            throw new Error('Betalningen kunde inte genomföras');
+          }
+        } else {
+          console.error('[PaymentSelection] Swish section ref not available');
+          throw new Error('Swish-betalningssektionen kunde inte initialiseras');
+        }
+      } else if (selectedPaymentMethod === 'invoice') {
+        console.log('[PaymentSelection] Processing Invoice payment');
+        if (invoicePaymentRef.current) {
+          const isValid = invoicePaymentRef.current.validateForm();
+          console.log('[PaymentSelection] Invoice form validation result:', isValid);
+          
+          if (isValid) {
+            const success = await handleInvoicePayment();
+            console.log('[PaymentSelection] Invoice payment result:', success);
+            
+            if (success) {
+              setIsSubmitting(false);
+              return;
+            }
+          } else {
+            console.error('[PaymentSelection] Invoice form validation failed');
+            throw new Error('Fyll i alla obligatoriska fält');
+          }
+        } else {
+          console.error('[PaymentSelection] Invoice section ref not available');
+          throw new Error('Fakturasektionen kunde inte initialiseras');
+        }
+      } else {
+        console.error('[PaymentSelection] Invalid payment method selected:', selectedPaymentMethod);
+        throw new Error('Välj en giltig betalningsmetod');
+      }
+    } catch (err) {
+      console.error('[PaymentSelection] Payment submission error:', err);
+      setSubmitError(err instanceof Error ? err.message : 'Ett fel uppstod');
       setIsSubmitting(false);
     }
+  };
+
+  const handleInvoicePayment = async (): Promise<boolean> => {
+    try {
+      setIsSubmitting(true);
+      setSubmitError(null);
+
+      // Validate form
+      if (!invoicePaymentRef.current) {
+        throw new Error('Invoice payment form reference is undefined');
+      }
+
+      const isInvoiceFormValid = invoicePaymentRef.current.validateForm();
+      if (!isInvoiceFormValid) {
+        setSubmitError('Vänligen fyll i alla obligatoriska fält för fakturering.');
+        return false;
+      }
+
+      // Determine product type and get details
+      let amount = 0;
+      let productId = '';
+      let productType = '';
+
+      if (flowType === FlowType.GIFT_CARD) {
+        // For gift card flow
+        if (!flowData?.itemDetails) {
+          throw new Error('Gift card details are missing');
+        }
+        amount = flowData.itemDetails.amount;
+        productId = flowData.itemDetails.id;
+        productType = 'gift_card';
+      } else if (flowType === FlowType.ART_PURCHASE) {
+        // For art purchase flow
+        if (!flowData?.itemDetails) {
+          throw new Error('Art product details are missing');
+        }
+        amount = flowData.itemDetails.price;
+        productId = flowData.itemDetails.id;
+        productType = 'art_product';
+      } else {
+        // For course booking flow
+        if (!courseId) {
+          throw new Error('Course ID is missing');
+        }
+        amount = calculatePrice();
+        productId = courseId;
+        productType = 'course';
+      }
+
+      if (!userInfo) {
+        throw new Error('User information is missing');
+      }
+
+      // Get invoice details from the ref
+      const invoiceDetails = invoicePaymentRef.current.getInvoiceDetails();
+      
+      // Generate a unique payment reference and idempotency key
+      const paymentRef = `${productType.substring(0, 1)}-inv-${Date.now()}`;
+      const idempotencyKey = uuidv4();
+      
+      // Construct the request body
+      const requestBody = {
+        payment_method: "invoice",
+        amount,
+        product_id: productId,
+        product_type: productType,
+        payment_reference: paymentRef,
+        idempotency_key: idempotencyKey,
+        userInfo: {
+          firstName: userInfo.firstName,
+          lastName: userInfo.lastName,
+          email: userInfo.email,
+          phone: userInfo.phone,
+          numberOfParticipants: userInfo.numberOfParticipants
+        },
+        invoiceDetails: invoiceDetails
+      };
+
+      console.log('Creating invoice payment with: ', requestBody);
+      console.log('Invoice request stringified:', JSON.stringify(requestBody));
+
+      // Make API call to create invoice payment. This endpoint should never ever be changed. this is very important. dont change it!!!
+      const response = await fetch('/api/payments/invoice/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('Invoice API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Invoice API error details:', errorData);
+        throw new Error(errorData.message || errorData.error || 'Failed to process invoice payment');
+      }
+
+      const data = await response.json();
+      console.log('Invoice payment created:', data);
+
+      // Handle success
+      if (onNext) {
+        onNext({
+          paymentStatus: 'PAID',
+          paymentMethod: selectedPaymentMethod,
+          paymentReference: data.paymentId
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Invoice payment error:', error);
+      setSubmitError(error instanceof Error ? error.message : 'Ett fel uppstod vid behandling av fakturan.');
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePaymentComplete = (paymentData: any) => {
+    console.log('[PaymentSelection] Payment complete with data:', paymentData);
+    
+    // Store the payment reference if available
+    if (paymentData && paymentData.payment_reference) {
+      console.log('[PaymentSelection] Storing payment reference:', paymentData.payment_reference);
+      setPaymentReference(paymentData.payment_reference);
+    }
+    
+    // Determine where to redirect based on the flow type
+    let redirectPath = '';
+    
+    if (flowType === FlowType.COURSE_BOOKING) {
+      redirectPath = '/booking/confirmation';
+      console.log('[PaymentSelection] Redirecting to course confirmation page');
+    } else if (flowType === FlowType.GIFT_CARD) {
+      redirectPath = '/gift-card/confirmation';
+      console.log('[PaymentSelection] Redirecting to gift card confirmation page');
+    } else if (flowType === FlowType.ART_PURCHASE) {
+      redirectPath = '/art/confirmation';
+      console.log('[PaymentSelection] Redirecting to art product confirmation page');
+    } else {
+      console.error('[PaymentSelection] Unknown flow type for redirect:', flowType);
+      redirectPath = '/';
+    }
+    
+    // Give a small delay before redirecting to let things settle
+    setTimeout(() => {
+      console.log('[PaymentSelection] Executing redirect to:', redirectPath);
+      router.push(redirectPath);
+    }, 500);
   };
 
   const handleBack = () => {
@@ -301,98 +431,33 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   }, []);
 
   const handlePaymentSuccess = (paymentData: any) => {
-    console.log('Payment success handler called with data:', paymentData);
-    
-    // If paymentData is false, it means payment was cancelled or failed
-    if (paymentData === false) {
-        return handlePaymentFailure('DECLINED');
-    }
+    // Store payment info using PaymentService instead of direct call
+    PaymentService.completePayment({
+      paymentMethod: selectedPaymentMethod,
+      productData: flowData?.itemDetails || courseDetail,
+      userData: userInfo,
+      paymentReference: paymentData.paymentId,
+      amount: calculatePrice(),
+      additionalData: paymentData
+    });
 
-    // Create the payment info with correct status
-    const paymentInfo = {
-        reference: paymentData.reference || uuidv4(),
-        // Använd PAID-status för Swish-betalningar som är bekräftade
-        status: paymentDetails.method === 'swish' ? PAYMENT_STATUSES.PAID : PAYMENT_STATUSES.CREATED,
-        payment_method: paymentDetails.method,
-        amount: calculatePrice(),
-    };
-    
-    console.log('Saving successful payment info:', paymentInfo);
-    
-    // Save payment info to flowStorage
-    setPaymentInfo(paymentInfo);
-    
-    // Navigate to confirmation page only for successful payments
+    // Proceed to next step
     if (onNext) {
-        onNext(paymentInfo);
-    } else {
-        const nextUrl = getNextStepUrl(
-            GenericStep.PAYMENT, 
-            flowType === FlowType.GIFT_CARD ? FlowType.GIFT_CARD : FlowType.COURSE_BOOKING, 
-            courseId
-        );
-        if (nextUrl) {
-            router.push(nextUrl);
-        }
+      onNext({
+        paymentStatus: 'PAID',
+        paymentMethod: selectedPaymentMethod,
+        paymentReference: paymentData.paymentId
+      });
     }
   };
 
-  // New handler for failed payments
-  const handlePaymentFailure = (status: 'DECLINED' | 'ERROR') => {
-    console.log('Payment failure handler called with status:', status);
-    
-    const paymentInfo = {
-        reference: getPaymentReference() || uuidv4(),
-        status: status === 'ERROR' ? PAYMENT_STATUSES.ERROR : PAYMENT_STATUSES.DECLINED,
-        payment_method: paymentDetails.method,
-        amount: calculatePrice(),
-        error: status === 'ERROR' ? 'Payment processing error' : 'Payment declined'
-    };
-    
-    console.log('Saving failed payment info:', paymentInfo);
-    
-    // Save the failed status
-    setPaymentInfo(paymentInfo);
-    
-    // Show error message to user
-    setSubmitError(
-        status === 'ERROR' 
-            ? 'Ett fel uppstod vid betalningen. Försök igen senare.' 
-            : 'Betalningen avbröts.'
-    );
-    
-    // Reset payment state
-    setPaymentDetails(prev => ({
-        ...prev,
-        status: null
-    }));
+  const handlePaymentError = (error: Error) => {
+    console.error('Payment error:', error);
+    setError(error.message);
   };
 
-  // New handler for cancelled payments
   const handlePaymentCancellation = () => {
-    console.log('Payment cancellation handler called');
-    
-    const paymentInfo = {
-        reference: getPaymentReference() || uuidv4(),
-        status: PAYMENT_STATUSES.DECLINED,
-        payment_method: paymentDetails.method,
-        amount: calculatePrice(),
-        cancelled_by_user: true
-    };
-    
-    console.log('Saving cancelled payment info:', paymentInfo);
-    
-    // Save the cancelled status
-    setPaymentInfo(paymentInfo);
-    
-    // Reset payment state
-    setPaymentDetails(prev => ({
-        ...prev,
-        status: null
-    }));
-    
-    // Show message to user
-    setSubmitError('Betalningen avbröts. Du kan välja en annan betalningsmetod eller försöka igen.');
+    setSubmitError('Betalningen avbröts');
   };
 
   // Helper function to get gift card amount from localStorage
@@ -455,7 +520,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             <RadioGroup
               aria-label="payment-method"
               name="method"
-              value={paymentDetails.method}
+              value={selectedPaymentMethod}
               onChange={handleRadioChange}
             >
               {/* Swish Payment Option */}
@@ -463,8 +528,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                 variant="outlined" 
                 sx={{ 
                   mb: 2, 
-                  border: paymentDetails.method === 'swish' ? '2px solid' : '1px solid', 
-                  borderColor: paymentDetails.method === 'swish' ? 'var(--primary)' : 'divider',
+                  border: selectedPaymentMethod === 'swish' ? '2px solid' : '1px solid', 
+                  borderColor: selectedPaymentMethod === 'swish' ? 'var(--primary)' : 'divider',
                   transition: 'all 0.2s ease-in-out'
                 }}
               >
@@ -493,18 +558,25 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                     } 
                     sx={{ width: '100%' }}
                   />      
-                  {paymentDetails.method === 'swish' && userInfo && (
+                  {selectedPaymentMethod === 'swish' && userInfo && (
                     <SwishPaymentSection
-                      ref={swishPaymentRef}
+                      amount={calculatePrice()}
+                      productType={
+                        flowType === FlowType.GIFT_CARD ? 'gift_card' : 
+                        flowType === FlowType.ART_PURCHASE ? 'art_product' : 
+                        'course'
+                      }
+                      productId={courseId}
                       userInfo={userInfo}
-                      courseId={courseId}
-                      amount={flowType === FlowType.GIFT_CARD 
-                        ? (flowData?.itemDetails?.amount || getGiftCardAmount())
-                        : calculatePrice()}
-                      onPaymentComplete={handlePaymentSuccess}
-                      onPaymentFailure={handlePaymentFailure}
-                      onPaymentCancelled={handlePaymentCancellation}
-                      disabled={isSubmitting}
+                      onPaymentComplete={handlePaymentComplete}
+                      onPaymentError={(error) => {
+                        console.error('Swish payment error:', error);
+                        setSubmitError('Ett fel uppstod vid Swish-betalningen. Försök igen eller kontakta support.');
+                      }}
+                      onPaymentCancelled={() => {
+                        console.log('Swish payment cancelled');
+                        setSubmitError('Betalningen avbröts. Försök igen eller välj en annan betalningsmetod.');
+                      }}
                     />
                   )}
                 </CardContent>
@@ -515,8 +587,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                 variant="outlined" 
                 sx={{ 
                   mb: 2, 
-                  border: paymentDetails.method === 'invoice' ? '2px solid' : '1px solid', 
-                  borderColor: paymentDetails.method === 'invoice' ? 'var(--primary)' : 'divider',
+                  border: selectedPaymentMethod === 'invoice' ? '2px solid' : '1px solid', 
+                  borderColor: selectedPaymentMethod === 'invoice' ? 'var(--primary)' : 'divider',
                   transition: 'all 0.2s ease-in-out'
                 }}
               >
@@ -542,16 +614,15 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                     sx={{ width: '100%' }}
                   />
                   
-                  {paymentDetails.method === 'invoice' && userInfo && (
+                  {selectedPaymentMethod === 'invoice' && userInfo && (
                     <InvoicePaymentSection
                       ref={invoicePaymentRef}
                       userInfo={userInfo}
                       courseId={courseId}
                       amount={calculatePrice()}
-                      product_type={flowType === FlowType.GIFT_CARD ? 'gift_card' : flowType === FlowType.ART_PURCHASE ? 'art_product' : 'course'}
+                      product_type={flowType === FlowType.GIFT_CARD ? 'gift_card' : 'course'}
                       onPaymentComplete={handlePaymentSuccess}
                       onValidationError={(error) => setFormErrors(prev => ({ ...prev, invoice: error }))}
-                      disabled={isSubmitting}
                     />
                   )}
                 </CardContent>
@@ -837,20 +908,10 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
         </StyledButton>
         
         <StyledButton
-          onClick={(e) => {
-            // Disable the button immediately when clicked
-            if (!isSubmitting) {
-              console.log('Submit button clicked');
-              console.log('Current payment method:', paymentDetails.method);
-              console.log('Current form state:', { userInfo, courseId, paymentDetails, isSubmitting });
-              handleSubmit(e);
-            } else {
-              console.log('Button clicked but submission already in progress');
-            }
-          }}
+          type="submit"
+          onClick={(e) => handleSubmit(e as unknown as React.FormEvent<HTMLFormElement>)}
           disabled={isSubmitting}
-          startIcon={isSubmitting ? <CircularProgress size={20} sx={{ color: 'white' }} /> : undefined}
-          fullWidth={isMobile}
+          endIcon={isSubmitting ? <CircularProgress size={20} /> : null}
         >
           {isSubmitting ? 'Bearbetar...' : 'Slutför bokning'}
         </StyledButton>

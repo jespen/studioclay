@@ -5,6 +5,7 @@ import FlowStepWrapper from '@/components/common/FlowStepWrapper';
 import { FlowType, GenericStep } from '@/components/common/BookingStepper';
 import GenericConfirmation from '@/components/common/GenericConfirmation';
 import { FlowStateData } from '@/components/common/FlowStepWrapper';
+import { createFlowValidatorFunction } from '@/utils/validation';
 
 interface ShopConfirmationWrapperProps {
   productId: string;
@@ -22,13 +23,9 @@ const ShopConfirmationWrapper: React.FC<ShopConfirmationWrapperProps> = ({
       expectedPreviousSteps={[GenericStep.USER_INFO, GenericStep.PAYMENT]}
       title="Bekräftelse"
       subtitle="Din beställning är bekräftad"
-      validateData={(data: FlowStateData) => {
-        // For confirmation, allow access even without complete data (for page reloads)
-        // This is a fallback for when users reload the confirmation page
-        return true;
-      }}
+      validateData={createFlowValidatorFunction(GenericStep.CONFIRMATION, { isStrict: true })}
       itemId={productId}
-      redirectOnInvalid={false} // Allow viewing confirmation even if data is missing
+      redirectOnInvalid={true} // Change to true so we are consistent with gift card
     >
       {({ flowData }) => (
         <GenericConfirmation

@@ -1,364 +1,363 @@
-import React, { useState, forwardRef, useImperativeHandle } from 'react';
-import { Box } from '@mui/material';
-import { PaymentStatus, PAYMENT_STATUSES, getValidPaymentStatus } from '@/constants/statusCodes';
+import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
+import { Box, CircularProgress, Typography, Alert } from '@mui/material';
+import { PaymentStatus, PAYMENT_STATUSES } from '@/constants/statusCodes';
 import SwishPaymentForm from './SwishPaymentForm';
 import SwishPaymentDialog from './SwishPaymentDialog';
-import { setPaymentReference, setPaymentInfo, getFlowType, getGiftCardDetails } from '@/utils/flowStorage';
-import { GiftCardDetails } from '@/utils/dataFetcher';
+import { isValidSwishPhoneNumber } from '@/utils/swish/phoneNumberFormatter';
+import { setPaymentReference } from '@/utils/flowStorage';
+import { v4 as uuidv4 } from 'uuid';
 
+// Add the ref interface export
 export interface SwishPaymentSectionRef {
-  handleCreatePayment: () => Promise<boolean>;
+  submitSwishPayment: () => Promise<boolean>;
 }
 
 interface SwishPaymentSectionProps {
-  userInfo: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone: string;
-    numberOfParticipants: string;
-  };
-  courseId: string;
   amount: number;
-  onPaymentComplete: (success: boolean, status: PaymentStatus) => void;
-  onPaymentFailure?: (status: PaymentStatus) => void;
-  onPaymentCancelled?: () => void;
-  onValidationError?: (error: string) => void;
-  disabled?: boolean;
+  productType: 'course' | 'gift_card' | 'art_product';
+  productId: string;
+  userInfo: any;
+  onPaymentComplete: (data: any) => void;
+  onPaymentError: (error: any) => void;
+  onPaymentCancelled: () => void;
 }
 
-interface GiftCardDetails {
-  amount: number;
-  type: string;
-  recipientName: string;
-  recipientEmail: string;
-  message: string;
-}
-
-interface PaymentMetadata {
-  item_details: Partial<GiftCardDetails>;
-  product_type: string;
-  course_id?: string;
-}
-
+// Convert to forwardRef implementation
 const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSectionProps>(({
-  userInfo,
-  courseId,
   amount,
+  productType,
+  productId,
+  userInfo,
   onPaymentComplete,
-  onPaymentFailure,
-  onPaymentCancelled,
-  onValidationError,
-  disabled = false,
+  onPaymentError,
+  onPaymentCancelled
 }, ref) => {
-  // Initialize phone number from userInfo, ensuring it starts with '0'
-  const initialPhoneNumber = userInfo.phone || '';
-  const [phoneNumber, setPhoneNumber] = useState(
-    initialPhoneNumber.startsWith('0') ? initialPhoneNumber : `0${initialPhoneNumber}`
-  );
-  const [error, setError] = useState<string>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(PAYMENT_STATUSES.CREATED);
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-  const [isPolling, setIsPolling] = useState(false);
+  const [paymentReference, setPaymentReferenceState] = useState<string>('');
+  const [phoneNumber, setPhoneNumber] = useState<string>(userInfo?.phone || '');
+  const [phoneNumberError, setPhoneNumberError] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState<string>('');
+  const [swishPaymentId, setSwishPaymentId] = useState<string>();
+  const [pollInterval, setPollInterval] = useState<NodeJS.Timeout>();
 
-  // Add logging for component initialization
-  console.log('[SwishPaymentSection] Initialized with:', {
-    courseId,
+  console.log('[SwishPaymentSection] Initializing with props:', {
     amount,
-    initialPhoneNumber,
-    disabled
+    productType,
+    productId,
+    userPhone: userInfo?.phone,
+    hasPaymentCompleteCallback: !!onPaymentComplete,
+    hasErrorCallback: !!onPaymentError,
+    hasCancelCallback: !!onPaymentCancelled
   });
-
-  const validatePhoneNumber = (phone: string): boolean => {
-    if (!phone) {
-      const error = 'Telefonnummer är obligatoriskt för Swish-betalning';
-      console.warn('[SwishPaymentSection] Phone validation failed: Empty phone number');
-      setError(error);
-      onValidationError?.(error);
-      return false;
+  
+  // Set phone number from user info when available
+  useEffect(() => {
+    if (userInfo?.phone && !phoneNumber) {
+      console.log('[SwishPaymentSection] Setting phone from userInfo:', userInfo.phone);
+      setPhoneNumber(userInfo.phone);
     }
+  }, [userInfo, phoneNumber]);
 
-    const cleanPhone = phone.replace(/[- ]/g, '');
-    if (!/^0\d{8,9}$/.test(cleanPhone)) {
-      const error = 'Ange ett giltigt svenskt mobilnummer (9-10 siffror som börjar med 0)';
-      console.warn('[SwishPaymentSection] Phone validation failed:', { phone, cleanPhone });
-      setError(error);
-      onValidationError?.(error);
-      return false;
+  // Create idempotency key if needed
+  useEffect(() => {
+    if (!idempotencyKey) {
+      const newKey = uuidv4();
+      console.log('[SwishPaymentSection] Generated new idempotency key:', newKey);
+      setIdempotencyKey(newKey);
     }
+  }, [idempotencyKey]);
 
-    console.log('[SwishPaymentSection] Phone validation passed:', { cleanPhone });
-    setError(undefined);
-    return true;
-  };
-
-  const handlePhoneNumberChange = (value: string) => {
-    const formattedValue = value.startsWith('0') ? value : `0${value}`;
-    setPhoneNumber(formattedValue);
-    if (error) {
-      validatePhoneNumber(formattedValue);
-    }
-  };
-
-  const checkPaymentStatus = async (paymentReference: string, maxAttempts = 60) => {
-    let attempts = 0;
+  // Poll for payment status updates
+  useEffect(() => {
+    let statusPollInterval: NodeJS.Timeout;
     
-    // Set polling state to true BEFORE starting the polling function
-    setIsPolling(true);
-    console.log('[SwishPaymentSection] Starting payment polling:', { 
-      paymentReference,
-      isPolling: true,
-      timestamp: new Date().toISOString()
-    });
-    
-    const pollStatus = async () => {
-      // Check if we should stop polling
-      if (attempts >= maxAttempts) {
-        console.log('[SwishPaymentSection] Max attempts reached:', { 
-          attempts, 
-          maxAttempts,
-          paymentReference,
-          timestamp: new Date().toISOString()
-        });
-        setIsPolling(false);
-        return;
-      }
-
-      try {
-        console.log(`[SwishPaymentSection] Checking payment status (attempt ${attempts + 1}/${maxAttempts}):`, { 
-          paymentReference,
-          timestamp: new Date().toISOString()
-        });
-        
-        const response = await fetch(`/api/payments/status/${paymentReference}`);
-        const data = await response.json();
-        
-        console.log('[SwishPaymentSection] Payment status response:', data);
-        
-        // Check for PAID status first
-        if (
-          data.data?.status === PAYMENT_STATUSES.PAID || 
-          data.status === PAYMENT_STATUSES.PAID ||
-          data?.payment?.status === PAYMENT_STATUSES.PAID
-        ) {
-          console.log('💰 Payment is PAID:', {
-            paymentReference,
-            timestamp: new Date().toISOString(),
-            attempts: attempts + 1
-          });
+    if (paymentDialogOpen && paymentReference && paymentStatus === PAYMENT_STATUSES.CREATED) {
+      console.log('[SwishPaymentSection] Starting payment status polling for reference:', paymentReference);
+      
+      statusPollInterval = setInterval(async () => {
+        try {
+          console.log('[SwishPaymentSection] Polling payment status...');
+          const response = await fetch(`/api/payments/status/${paymentReference}`);
           
-          // Update localStorage first
-          try {
-            const paymentInfo = JSON.parse(localStorage.getItem('payment_info') || '{}');
-            paymentInfo.status = PAYMENT_STATUSES.PAID;
-            localStorage.setItem('payment_info', JSON.stringify(paymentInfo));
-          } catch (error) {
-            console.error('Failed to update payment status in localStorage:', error);
+          if (!response.ok) {
+            console.warn('[SwishPaymentSection] Status API returned non-OK response:', response.status);
+            const errorText = await response.text();
+            console.warn('Response text:', errorText);
+            return;
           }
           
-          // Update state and stop polling
-          setPaymentStatus(PAYMENT_STATUSES.PAID);
-          setIsPolling(false);
-          onPaymentComplete(true, PAYMENT_STATUSES.PAID);
-          return;
+          const data = await response.json();
+          console.log('[SwishPaymentSection] Payment status update:', data);
+          
+          if (data.data && data.data.status) {
+            const newStatus = data.data.status;
+            console.log('[SwishPaymentSection] Status changed to:', newStatus);
+            
+            if (newStatus !== paymentStatus) {
+              console.log('[SwishPaymentSection] Updating payment status from', paymentStatus, 'to', newStatus);
+              setPaymentStatus(newStatus);
+              
+              // Handle successful payment
+              if (newStatus === PAYMENT_STATUSES.PAID) {
+                console.log('[SwishPaymentSection] Payment successful, stopping polling');
+                clearInterval(statusPollInterval);
+                
+                // Allow some time for the dialog to show success before proceeding
+                setTimeout(() => {
+                  handlePaymentSuccess(data.data);
+                }, 1500);
+              } 
+              
+              // Handle declined payment
+              if (newStatus === PAYMENT_STATUSES.DECLINED) {
+                console.log('[SwishPaymentSection] Payment declined, stopping polling');
+                clearInterval(statusPollInterval);
+                
+                setTimeout(() => {
+                  handlePaymentCancellation();
+                }, 1500);
+              }
+              
+              // Handle error
+              if (newStatus === PAYMENT_STATUSES.ERROR) {
+                console.log('[SwishPaymentSection] Payment error, stopping polling');
+                clearInterval(statusPollInterval);
+                
+                setTimeout(() => {
+                  handlePaymentError(new Error('Payment failed with status ERROR'));
+                }, 1500);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('[SwishPaymentSection] Error polling payment status:', error);
         }
-        
-        // Handle other statuses
-        const status = getValidPaymentStatus(data.data?.status || data.status || data?.payment?.status);
-        
-        if (status === PAYMENT_STATUSES.DECLINED || status === PAYMENT_STATUSES.ERROR) {
-          console.warn('[SwishPaymentSection] Payment failed:', { 
-            status, 
-            paymentReference,
-            timestamp: new Date().toISOString(),
-            attempts: attempts + 1
-          });
-          setPaymentStatus(status);
-          setIsPolling(false);
-          onPaymentFailure?.(status);
-          return;
-        }
-
-        // Continue polling if no final status
-        attempts++;
-        setTimeout(pollStatus, 2000);
-      } catch (error) {
-        console.error('[SwishPaymentSection] Error checking payment status:', { 
-          error, 
-          attempts: attempts + 1,
-          paymentReference,
-          timestamp: new Date().toISOString()
-        });
-        attempts++;
-        setTimeout(pollStatus, 2000);
+      }, 3000);
+    }
+    
+    return () => {
+      if (statusPollInterval) {
+        console.log('[SwishPaymentSection] Clearing status polling interval');
+        clearInterval(statusPollInterval);
       }
     };
+  }, [paymentDialogOpen, paymentReference, paymentStatus]);
 
-    // Start polling immediately
-    pollStatus();
+  // Handle phone number validation
+  const handlePhoneChange = (value: string) => {
+    setPhoneNumber(value);
+    if (value && !isValidSwishPhoneNumber(value)) {
+      setPhoneNumberError('Ange ett giltigt svenskt mobilnummer');
+    } else {
+      setPhoneNumberError(undefined);
+    }
   };
 
-  const handleCreatePayment = async (): Promise<boolean> => {
-    console.log('[SwishPaymentSection] Creating payment:', { 
-      phoneNumber,
-      courseId,
-      amount 
-    });
-
-    if (!validatePhoneNumber(phoneNumber)) {
-      return false;
+  // Start polling for payment status
+  const startPolling = useCallback((paymentId: string) => {
+    // Clear any existing polling
+    if (pollInterval) {
+      clearInterval(pollInterval);
     }
 
-    setPaymentStatus(PAYMENT_STATUSES.CREATED);
-    setShowPaymentDialog(true);
+    // Start new polling
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/payments/status/${paymentId}`);
+        const data = await response.json();
 
-    try {
-      const cleanPhoneNumber = phoneNumber.replace(/[- ]/g, '');
-      const swishPhoneNumber = cleanPhoneNumber.startsWith('0') 
-        ? `46${cleanPhoneNumber.substring(1)}` 
-        : cleanPhoneNumber;
-      
-      const flowType = getFlowType();
-      const productType = flowType === 'gift_card' ? 'gift_card' 
-                       : flowType === 'art_purchase' ? 'art_product' 
-                       : 'course';
-      
-      const productId = courseId === 'gift-card' ? crypto.randomUUID() : courseId;
-      
-      // Get gift card details if this is a gift card purchase
-      const defaultItemDetails: Partial<GiftCardDetails> = {
-        amount: Number(amount),
-        type: 'digital',
-        recipientName: '',
-        recipientEmail: '',
-        message: ''
-      };
-      let metadata: PaymentMetadata = {
-        item_details: defaultItemDetails,
-        product_type: productType || 'course',
-        ...(courseId && { course_id: courseId })
-      };
-      
-      if (productType === 'gift_card') {
-        const giftCardDetails = getGiftCardDetails();
-        if (giftCardDetails) {
-          metadata.item_details = {
-            type: giftCardDetails.type || 'digital',
-            recipientName: giftCardDetails.recipientName || '',
-            recipientEmail: giftCardDetails.recipientEmail || '',
-            message: giftCardDetails.message || ''
-          };
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to fetch payment status');
         }
-        console.log('[SwishPaymentSection] Gift card details:', metadata);
+
+        setPaymentStatus(data.paymentStatus);
+
+        // Handle different payment statuses
+        if (data.paymentStatus === PAYMENT_STATUSES.PAID) {
+          clearInterval(interval);
+          onPaymentComplete(data);
+        } else if (data.paymentStatus === PAYMENT_STATUSES.DECLINED) {
+          clearInterval(interval);
+          onPaymentCancelled();
+        } else if (data.paymentStatus === PAYMENT_STATUSES.ERROR) {
+          clearInterval(interval);
+          onPaymentError(new Error(data.errorMessage || 'Payment failed'));
+        }
+      } catch (error) {
+        console.error('Error polling payment status:', error);
+        clearInterval(interval);
+        onPaymentError(error);
       }
+    }, 2000); // Poll every 2 seconds
+
+    setPollInterval(interval);
+  }, [onPaymentComplete, onPaymentCancelled, onPaymentError]);
+
+  // Cleanup polling on unmount
+  React.useEffect(() => {
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [pollInterval]);
+
+  // Handle payment initiation
+  const handleSubmit = async () => {
+    console.log('[SwishPaymentSection] Submit button clicked');
+    if (!validateForm()) {
+      console.log('[SwishPaymentSection] Form validation failed');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      console.log('[SwishPaymentSection] Creating payment with data:', {
+        phoneNumber,
+        amount,
+        productType,
+        productId,
+        idempotencyKey
+      });
       
-      const requestData = {
-        phone_number: swishPhoneNumber,
-        payment_method: 'swish',
+      // Generate a unique reference for this payment
+      const paymentRef = `${productType.substring(0, 1)}-${Date.now()}`;
+      console.log('[SwishPaymentSection] Generated payment reference:', paymentRef);
+      
+      // Store the reference 
+      setPaymentReference(paymentRef);
+      setPaymentReferenceState(paymentRef);
+      
+      // Construct request body
+      const requestBody = {
+        phone_number: phoneNumber,
+        payment_method: "swish",
         product_type: productType,
         product_id: productId,
         amount: amount,
-        quantity: parseInt(userInfo.numberOfParticipants || '1'),
-        user_info: {
-          ...userInfo,
-          phone: cleanPhoneNumber,
-          numberOfParticipants: userInfo.numberOfParticipants || '1'
-        },
-        metadata // Include metadata in request
+        quantity: 1,
+        user_info: userInfo,
+        idempotency_key: idempotencyKey
       };
-
-      console.log('[SwishPaymentSection] Sending payment request:', requestData);
-
+      
+      // Finalize by making the API request
       const response = await fetch('/api/payments/swish/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': crypto.randomUUID()
         },
-        body: JSON.stringify(requestData),
+        body: JSON.stringify(requestBody),
       });
-
+      
+      console.log('[SwishPaymentSection] API response status:', response.status);
+      const jsonResponse = await response.json();
+      console.log('[SwishPaymentSection] API response data:', jsonResponse);
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('[SwishPaymentSection] Payment creation failed:', { 
-          status: response.status,
-          errorData 
-        });
-        setPaymentStatus(PAYMENT_STATUSES.ERROR);
-        setError(errorData.message || 'Ett fel uppstod vid skapande av betalning');
-        return false;
+        throw new Error(jsonResponse.message || jsonResponse.error || 'Ett fel uppstod vid betalningen');
       }
-
-      const data = await response.json();
-      console.log('[SwishPaymentSection] Payment created successfully:', data);
       
-      if (!data.paymentReference) {
-        console.error('[SwishPaymentSection] No payment reference received');
-        setPaymentStatus(PAYMENT_STATUSES.ERROR);
-        setError('Ett fel uppstod vid skapande av betalning (ingen referens)');
-        return false;
-      }
-
-      // Store payment reference and start polling
-      setPaymentReference(data.paymentReference);
+      // Open the payment status dialog
+      console.log('[SwishPaymentSection] Opening payment dialog with initial status CREATED');
+      setPaymentDialogOpen(true);
       
-      // Start polling for payment status
-      checkPaymentStatus(data.paymentReference);
-      
-      return true;
     } catch (error) {
       console.error('[SwishPaymentSection] Payment creation error:', error);
-      setPaymentStatus(PAYMENT_STATUSES.ERROR);
-      setError('Ett fel uppstod vid skapande av betalning');
-      return false;
+      setError(error instanceof Error ? error.message : 'Ett fel uppstod vid betalningen');
+      setIsSubmitting(false);
     }
   };
 
-  const handleCancelPayment = async () => {
-    console.log('[SwishPaymentSection] Cancelling payment');
-    setPaymentStatus(PAYMENT_STATUSES.DECLINED);
-    setShowPaymentDialog(false);
-    setIsPolling(false);
+  const handlePaymentSuccess = (paymentData: any) => {
+    console.log('[SwishPaymentSection] Payment success handler called with data:', paymentData);
+    setIsSubmitting(false);
+    
+    if (onPaymentComplete) {
+      console.log('[SwishPaymentSection] Calling onPaymentComplete callback');
+      onPaymentComplete(paymentData);
+    } else {
+      console.warn('[SwishPaymentSection] No onPaymentComplete callback provided');
+    }
+  };
+
+  const handlePaymentError = (error: Error) => {
+    console.error('[SwishPaymentSection] Payment error handler called:', error);
+    setIsSubmitting(false);
+    setPaymentDialogOpen(false);
+    setError(error.message);
+    
+    if (onPaymentError) {
+      console.log('[SwishPaymentSection] Calling onPaymentError callback');
+      onPaymentError(error);
+    } else {
+      console.warn('[SwishPaymentSection] No onPaymentError callback provided');
+    }
+  };
+
+  const handlePaymentCancellation = () => {
+    console.log('[SwishPaymentSection] Payment cancellation handler called');
+    setIsSubmitting(false);
+    setPaymentDialogOpen(false);
     
     if (onPaymentCancelled) {
+      console.log('[SwishPaymentSection] Calling onPaymentCancelled callback');
       onPaymentCancelled();
     } else {
-      onPaymentComplete(false, PAYMENT_STATUSES.DECLINED);
+      console.warn('[SwishPaymentSection] No onPaymentCancelled callback provided');
     }
   };
 
-  const handleClosePaymentDialog = () => {
-    console.log('[SwishPaymentSection] Closing payment dialog:', { 
-      currentStatus: paymentStatus 
-    });
+  // Handle dialog close
+  const handleCloseDialog = () => {
     if (paymentStatus !== PAYMENT_STATUSES.CREATED) {
-      setShowPaymentDialog(false);
+      setPaymentDialogOpen(false);
     }
   };
 
+  const validateForm = () => {
+    if (!phoneNumber || !isValidSwishPhoneNumber(phoneNumber)) {
+      setPhoneNumberError('Ange ett giltigt svenskt mobilnummer');
+      return false;
+    }
+    return true;
+  };
+
+  // Expose methods via ref
   useImperativeHandle(ref, () => ({
-    handleCreatePayment
+    submitSwishPayment: async () => {
+      console.log('[SwishPaymentSection] submitSwishPayment called via ref');
+      try {
+        await handleSubmit();
+        return true;
+      } catch (error) {
+        console.error('[SwishPaymentSection] Error in submitSwishPayment:', error);
+        return false;
+      }
+    }
   }));
 
   return (
     <Box>
       <SwishPaymentForm
         phoneNumber={phoneNumber}
-        onPhoneNumberChange={handlePhoneNumberChange}
-        error={error}
-        disabled={disabled}
+        onPhoneNumberChange={handlePhoneChange}
+        error={phoneNumberError}
+        disabled={isSubmitting}
       />
-      
+
       <SwishPaymentDialog
-        open={showPaymentDialog}
-        onClose={handleClosePaymentDialog}
-        onCancel={handleCancelPayment}
+        open={paymentDialogOpen}
+        onClose={handleCloseDialog}
+        onCancel={handlePaymentCancellation}
         paymentStatus={paymentStatus}
       />
     </Box>
   );
 });
-
-SwishPaymentSection.displayName = 'SwishPaymentSection';
 
 export default SwishPaymentSection; 
