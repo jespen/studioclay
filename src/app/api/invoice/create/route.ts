@@ -198,9 +198,8 @@ export async function POST(request: Request) {
         // CONTINUE PROCESSING IN THE BACKGROUND
         // The code below will continue executing but won't block the response
         
-        // Start asynchronous PDF generation and email sending
-        // This is "fire and forget" - we don't await this Promise
-        (async () => {
+        // Define the background process as a separate function for clarity
+        const runBackgroundTasks = async () => {
           try {
             console.log('10. Starting background PDF generation and email sending');
             const backgroundStartTime = Date.now();
@@ -262,7 +261,7 @@ export async function POST(request: Request) {
 
               // Send invoice email
               console.log('18. Sending art product invoice email in background');
-              console.log('18a. DIAGNOSTIC: About to attempt email sending');
+              console.log('18a. DIAGNOSTIC: About to attempt email sending for art product');
               console.log('18b. DIAGNOSTIC: Email parameters:', {
                 recipientEmail: userInfo.email,
                 hasBuffer: !!pdfBuffer,
@@ -309,10 +308,18 @@ export async function POST(request: Request) {
             await keepAlivePromise;
             console.log('21b. KEEP-ALIVE: Keep-alive timer finished, ending background process');
             
+            return { success: true };
           } catch (backgroundError) {
             console.error('Background processing error:', backgroundError);
+            return { success: false, error: backgroundError };
           }
-        })();
+        };
+        
+        // Execute the background process with explicit promise handling
+        console.log('9a. Executing background process with Promise.resolve');
+        Promise.resolve().then(runBackgroundTasks).catch(err => {
+          console.error('Critical error in background processing:', err);
+        });
         
         // Return the success response to the client
         return NextResponse.json(responseData);

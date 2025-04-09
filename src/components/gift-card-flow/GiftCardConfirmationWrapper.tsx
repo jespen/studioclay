@@ -5,6 +5,7 @@ import FlowStepWrapper from '../common/FlowStepWrapper';
 import { FlowType, GenericStep } from '../common/BookingStepper';
 import GenericConfirmation from '@/components/common/GenericConfirmation';
 import { FlowStateData } from '../common/FlowStepWrapper';
+import { createFlowValidatorFunction } from '@/utils/validation';
 
 export default function GiftCardConfirmationWrapper() {
   return (
@@ -14,15 +15,7 @@ export default function GiftCardConfirmationWrapper() {
       expectedPreviousSteps={[GenericStep.PAYMENT]}
       title="Bekräftelse"
       subtitle="Din beställning av presentkort är klar"
-      validateData={(data: FlowStateData) => {
-        const { itemDetails, userInfo, paymentInfo } = data;
-        console.log("Validating gift card confirmation data:", {
-          hasItemDetails: Boolean(itemDetails),
-          hasUserInfo: Boolean(userInfo),
-          hasPaymentInfo: Boolean(paymentInfo)
-        });
-        return !!itemDetails && !!userInfo && !!paymentInfo;
-      }}
+      validateData={createFlowValidatorFunction(GenericStep.CONFIRMATION, { isStrict: true })}
     >
       {({ flowData }) => (
         <GenericConfirmation 

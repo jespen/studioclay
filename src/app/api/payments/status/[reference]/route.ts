@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { logDebug, logError } from "@/lib/logging";
-import { SwishService } from "@/services/swish/swishService";
+import { logDebug, logError, logInfo } from "@/lib/logging";
+import { SwishService } from "@/services/swish/SwishService";
 import { getValidPaymentStatus, PAYMENT_STATUSES } from "@/constants/statusCodes";
+import { v4 as uuidv4 } from 'uuid';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -14,7 +15,17 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { reference: string } }
 ) {
+  const requestId = uuidv4();
+  const startTime = Date.now();
+
   try {
+    // Log the incoming request
+    logInfo(`[${requestId}] Checking payment status`, {
+      method: request.method,
+      url: request.url,
+      reference: params.reference
+    });
+
     const reference = params.reference;
     
     if (!reference) {
@@ -90,11 +101,31 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('Error in status check:', error);
-    return NextResponse.json({
-      success: false,
-      error: 'Internal server error',
-      debug: { error_details: error }
-    }, { status: 500 });
+    // Log the error
+    logError(`[${requestId}] Error checking payment status:`, error);
+
+    // Try to log the error to Supabase
+    try {
+      await supabase.from('error_logs').insert({
+        request_id: requestId,
+        error_type: 'swish_status',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        error_stack: error instanceof Error ? error.stack : undefined,
+        request_data: { reference: params.reference },
+        processing_time: Date.now() - startTime
+      });
+    } catch (loggingError) {
+      logError(`[${requestId}] Failed to log error to database:`, loggingError);
+    }
+
+    // Return error response
+    return NextResponse.json(
+      { 
+        status: 'ERROR',
+        message: 'Failed to check payment status',
+        requestId
+      },
+      { status: 500 }
+    );
   }
 } 

@@ -1,322 +1,76 @@
-import { NextResponse } from 'next/server';
-import { createClient, PostgrestError } from '@supabase/supabase-js';
-import { SwishService } from '@/services/swish/swishService';
-import { logDebug, logError } from '@/lib/logging';
-import { PAYMENT_STATUSES, getValidPaymentStatus } from '@/constants/statusCodes';
+import { NextRequest, NextResponse } from 'next/server';
+import { SwishService } from '@/services/swish/SwishService';
+import { logError, logInfo } from '@/lib/logging';
+import { v4 as uuidv4 } from 'uuid';
+import { createClient } from '@supabase/supabase-js';
 
-// Initialize environment variables with detailed logging
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+// Initialize Supabase client for error logging
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
-// Log environment variable status
-logDebug('Environment check in cancel endpoint', { 
-  hasSupabaseUrl: !!supabaseUrl,
-  supabaseUrlLength: supabaseUrl?.length || 0,
-  hasServiceKey: !!supabaseServiceKey,
-  serviceKeyPrefix: supabaseServiceKey ? supabaseServiceKey.substring(0, 5) + '...' : 'not-set',
-  nodeEnv: process.env.NODE_ENV,
-  timestamp: new Date().toISOString()
-});
+export async function POST(request: NextRequest) {
+  const requestId = uuidv4();
+  const startTime = Date.now();
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  logError('Missing required environment variables for Supabase in cancel endpoint');
-}
-
-// Create Supabase client and log its creation
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-logDebug('Supabase client created in cancel endpoint');
-
-// Helper function to detect specific database constraint errors
-function isConstraintError(error: PostgrestError, constraintName: string): boolean {
-  return error.code === '23514' && error.message.includes(constraintName);
-}
-
-export async function POST(request: Request) {
-  const requestId = `cancel-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  logDebug(`[${requestId}] Cancel payment request received`);
-  
   try {
-    // Parse request body
-    const requestBody = await request.json();
-    const { paymentReference, cancelledBy, cancelledFrom } = requestBody;
-    
-    logDebug(`[${requestId}] Request body parsed`, { 
-      paymentReference, 
-      cancelledBy, 
-      cancelledFrom,
-      hasPaymentReference: !!paymentReference
-    });
-    
-    if (!paymentReference) {
-      logError(`[${requestId}] Payment reference is missing in request`);
-      return NextResponse.json(
-        { success: false, error: 'Payment reference is required' },
-        { status: 400 }
-      );
-    }
-
-    logDebug(`[${requestId}] Cancelling payment`, { paymentReference, cancelledBy, cancelledFrom });
-
-    // Get payment details from database
-    logDebug(`[${requestId}] Fetching payment details from database`, { paymentReference });
-    const fetchStart = Date.now();
-    const { data: payment, error: fetchError } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('payment_reference', paymentReference)
-      .single();
-    const fetchDuration = Date.now() - fetchStart;
-
-    logDebug(`[${requestId}] Fetch payment result in ${fetchDuration}ms`, { 
-      success: !fetchError, 
-      hasPayment: !!payment,
-      errorCode: fetchError?.code,
-      errorMessage: fetchError?.message,
-      paymentId: payment?.id,
-      paymentStatus: payment?.status
+    // Log the incoming request
+    logInfo(`[${requestId}] Cancelling Swish payment`, {
+      method: request.method,
+      url: request.url
     });
 
-    if (fetchError) {
-      logError(`[${requestId}] Error fetching payment:`, fetchError);
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Database error when fetching payment', 
-          details: fetchError.message,
-          code: fetchError.code
-        },
-        { status: 500 }
-      );
-    }
+    // Parse the request body
+    const requestData = await request.json();
 
-    if (!payment) {
-      logError(`[${requestId}] Payment not found with reference: ${paymentReference}`);
-      return NextResponse.json(
-        { success: false, error: 'Payment not found' },
-        { status: 404 }
-      );
-    }
-
-    logDebug(`[${requestId}] Found payment`, { 
-      id: payment.id, 
-      status: payment.status,
-      method: payment.payment_method,
-      hasSwishId: !!payment.swish_payment_id,
-      swishId: payment.swish_payment_id,
-      productType: payment.product_type
+    // Log the request data
+    logInfo(`[${requestId}] Request data`, {
+      swishPaymentId: requestData.swishPaymentId
     });
 
-    // Only allow cancellation if payment is in CREATED state
-    if (payment.status !== PAYMENT_STATUSES.CREATED) {
-      logDebug(`[${requestId}] Cannot cancel payment - invalid status`, { 
-        currentStatus: payment.status,
-        paymentReference 
-      });
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Payment cannot be cancelled - invalid status',
-          status: payment.status
-        },
-        { status: 400 }
-      );
-    }
+    // Get SwishService instance
+    const swishService = SwishService.getInstance();
 
-    // Try to cancel in Swish first if we have a Swish payment ID
-    let swishCancelled = false;
-    let swishError = null;
-    
-    if (payment.swish_payment_id) {
-      try {
-        logDebug(`[${requestId}] Attempting to cancel payment in Swish`, {
-          swishPaymentId: payment.swish_payment_id
-        });
-        
-        const swishService = SwishService.getInstance();
-        const swishStart = Date.now();
-        
-        // Wrap the cancelPayment call in a Promise.race with a timeout
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Swish cancellation timed out after 8 seconds')), 8000);
-        });
-        
-        await Promise.race([
-          swishService.cancelPayment(payment.swish_payment_id),
-          timeoutPromise
-        ]);
-        
-        const swishDuration = Date.now() - swishStart;
-        
-        logDebug(`[${requestId}] Successfully cancelled payment in Swish in ${swishDuration}ms`, { 
-          paymentReference,
-          swishPaymentId: payment.swish_payment_id 
-        });
-        swishCancelled = true;
+    // Cancel payment
+    await swishService.cancelPayment(requestData.swishPaymentId);
+
+    // Log processing time
+    const processingTime = Date.now() - startTime;
+    logInfo(`[${requestId}] Payment cancelled successfully`, {
+      processingTime: `${processingTime}ms`,
+      swishPaymentId: requestData.swishPaymentId
+    });
+
+    // Return success response
+    return NextResponse.json({
+      status: 'OK',
+      message: 'Payment cancelled successfully'
+    }, { status: 200 });
+
       } catch (error) {
-        swishError = error;
-        logError(`[${requestId}] Error cancelling payment in Swish:`, error);
-        logDebug(`[${requestId}] Will continue to update database despite Swish API error`);
-        // Continue to update our database even if Swish call fails
-      }
-    } else {
-      logDebug(`[${requestId}] No Swish payment ID available, skipping Swish cancellation`);
-    }
+    // Log the error
+    logError(`[${requestId}] Error cancelling Swish payment:`, error);
 
-    // Prepare metadata for update - safely handle null/undefined values
-    let cleanMetadata = payment.metadata || {};
-    // Ensure metadata is a valid object
-    if (typeof cleanMetadata !== 'object' || cleanMetadata === null) {
-      cleanMetadata = {};
-    }
-    
-    // Create cancellation info object
-    interface CancellationInfo {
-      cancelled_at: string;
-      cancelled_by: string;
-      cancelled_from: string;
-      previous_status: string;
-      swish_cancelled: boolean;
-      swish_error?: {
-        message: string;
-        name: string;
-        time: string;
-      };
-    }
-    
-    const cancellationInfo: CancellationInfo = {
-      cancelled_at: new Date().toISOString(),
-      cancelled_by: cancelledBy || 'unknown',
-      cancelled_from: cancelledFrom || 'unknown',
-      previous_status: payment.status,
-      swish_cancelled: swishCancelled,
-    };
-    
-    // Add error info only if it exists
-    if (swishError) {
-      cancellationInfo.swish_error = {
-        message: swishError instanceof Error ? swishError.message : 'Unknown error',
-        name: swishError instanceof Error ? swishError.name : 'UnknownError',
-        time: new Date().toISOString()
-      };
-    }
-
-    // Try to safely merge with existing metadata
+    // Try to log the error to Supabase
     try {
-      cleanMetadata.cancellation = cancellationInfo;
-    } catch (metadataError) {
-      logError(`[${requestId}] Error updating metadata:`, metadataError);
-      // If merging fails, just use the cancellation info
-      cleanMetadata = { cancellation: cancellationInfo };
+      await supabase.from('error_logs').insert({
+        request_id: requestId,
+        error_type: 'swish_cancel',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        error_stack: error instanceof Error ? error.stack : undefined,
+        request_data: await request.json().catch(() => null),
+        processing_time: Date.now() - startTime
+      });
+    } catch (loggingError) {
+      logError(`[${requestId}] Failed to log error to database:`, loggingError);
     }
 
-    // Update payment status in our database
-    logDebug(`[${requestId}] Updating payment status in database to DECLINED`);
-    const updateStart = Date.now();
-    
-    const { data: updatedPayment, error: updateError } = await supabase
-      .from('payments')
-      .update({
-        status: PAYMENT_STATUSES.DECLINED,
-        updated_at: new Date().toISOString(),
-        metadata: {
-          ...cleanMetadata,
-          cancellation: cancellationInfo
-        }
-      })
-      .eq('id', payment.id)
-      .select('*')
-      .single();
-    
-    const updateDuration = Date.now() - updateStart;
-
-    // Detailed logging of the update attempt
-    logDebug(`[${requestId}] Update payment status result in ${updateDuration}ms`, { 
-      success: !updateError,
-      errorCode: updateError?.code,
-      errorMessage: updateError?.message,
-      paymentId: payment.id,
-      paymentReference,
-      fullQuery: {
-        table: 'payments',
-        updateFields: ['status', 'updated_at'],
-        condition: `id = ${payment.id}`
-      }
-    });
-
-    if (updateError) {
-      logError(`[${requestId}] Error updating payment status:`, updateError);
-      
-      // If there's an error but the Swish cancellation succeeded,
-      // we should still return success to the client
-      if (swishCancelled) {
-        logDebug(`[${requestId}] Returning success despite database error because Swish cancellation succeeded`);
-        return NextResponse.json({ 
-          success: true,
-          message: 'Payment was cancelled in Swish, but database update failed',
-          details: {
-            swishCancelled: true,
-            databaseUpdated: false,
-            error: updateError.message
-          },
-          data: { 
-            paymentReference,
-            status: 'DECLINED'
-          }
-        });
-      }
-      
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Database error when updating payment',
-          details: updateError.message,
-          code: updateError.code,
-          hint: updateError.hint,
-          swishAttempted: payment.swish_payment_id ? true : false,
-          swishCancelled
-        },
-        { status: 500 }
-      );
-    }
-
-    logDebug(`[${requestId}] Payment cancelled successfully`, { 
-      paymentReference,
-      newStatus: 'DECLINED',
-      swishCancelled
-    });
-
-    return NextResponse.json({ 
-      success: true,
-      message: 'Payment cancelled successfully',
-      details: {
-        swishCancelled,
-        databaseUpdated: true
-      },
-      data: { 
-        paymentReference,
-        status: 'DECLINED'
-      }
-    });
-
-  } catch (error: any) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const errorStack = error instanceof Error ? error.stack : undefined;
-    
-    logError(`[${requestId}] Unexpected error in cancel payment endpoint:`, error);
-    logDebug(`[${requestId}] Error details:`, {
-      message: errorMessage,
-      stack: errorStack,
-      name: error?.name,
-      code: error?.code
-    });
-    
-    // Always return a meaningful response, even in case of unhandled exceptions
+    // Return error response
     return NextResponse.json(
       { 
-        success: false, 
-        error: 'Server error during payment cancellation',
-        message: errorMessage,
-        timestamp: new Date().toISOString(),
+        status: 'ERROR',
+        message: 'Failed to cancel payment',
         requestId
       },
       { status: 500 }

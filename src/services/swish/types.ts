@@ -82,48 +82,134 @@ export interface SwishPaymentResponse {
 }
 
 /**
- * Custom error class for Swish validation errors.
- * Used when payment request data fails validation.
+ * Swish payment statuses
  */
-export class SwishValidationError extends Error {
-  constructor(message: string) {
+export const SwishStatus = {
+  CREATED: 'CREATED',
+  PAID: 'PAID',
+  DECLINED: 'DECLINED',
+  ERROR: 'ERROR',
+} as const;
+
+export type SwishStatus = typeof SwishStatus[keyof typeof SwishStatus];
+
+/**
+ * Base Swish error class
+ */
+export class SwishError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly details?: any
+  ) {
     super(message);
+    this.name = 'SwishError';
+  }
+}
+
+/**
+ * Swish validation error
+ */
+export class SwishValidationError extends SwishError {
+  constructor(message: string, details?: any) {
+    super(message, 'VALIDATION_ERROR', details);
     this.name = 'SwishValidationError';
   }
 }
 
 /**
- * Custom error class for Swish API errors.
- * Used when the Swish API returns an error response.
+ * Swish API error
  */
-export class SwishApiError extends Error {
-  constructor(message: string, public statusCode?: number) {
-    super(message);
+export class SwishApiError extends SwishError {
+  constructor(message: string, public readonly status?: number, details?: any) {
+    super(message, 'API_ERROR', details);
     this.name = 'SwishApiError';
   }
 }
 
 /**
- * Custom error class for Swish certificate errors.
- * Used when there are issues with SSL certificates.
+ * Swish certificate error
  */
-export class SwishCertificateError extends Error {
+export class SwishCertificateError extends SwishError {
   constructor(message: string) {
-    super(message);
+    super(message, 'CERTIFICATE_ERROR');
     this.name = 'SwishCertificateError';
   }
 }
 
 /**
- * Base class for all Swish-related errors.
- * Used for type checking and error handling.
+ * Schema for creating a Swish payment
  */
-export class SwishError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'SwishError';
-  }
-}
+export const CreateSwishPaymentSchema = z.object({
+  amount: z.number().positive(),
+  phoneNumber: z.string().regex(/^0[0-9]{8,9}$/),
+  paymentReference: z.string(),
+  message: z.string().max(50).optional(),
+  metadata: z.record(z.unknown()).optional()
+});
+
+export type CreateSwishPaymentDTO = z.infer<typeof CreateSwishPaymentSchema>;
+
+/**
+ * Schema for Swish callback data
+ */
+export const SwishCallbackSchema = z.object({
+  id: z.string(),
+  payeePaymentReference: z.string(),
+  paymentReference: z.string(),
+  callbackUrl: z.string().url(),
+  payerAlias: z.string(),
+  payeeAlias: z.string(),
+  amount: z.string(),
+  currency: z.string(),
+  message: z.string().optional(),
+  status: z.enum(['PAID', 'DECLINED', 'ERROR']),
+  dateCreated: z.string(),
+  datePaid: z.string().optional(),
+  errorCode: z.string().optional(),
+  errorMessage: z.string().optional()
+});
+
+export type SwishCallbackData = z.infer<typeof SwishCallbackSchema>;
+
+/**
+ * Schema for Swish transaction
+ */
+export const SwishTransactionSchema = z.object({
+  id: z.string().uuid(),
+  paymentId: z.string().uuid(),
+  swishPaymentId: z.string(),
+  swishStatus: z.enum(['CREATED', 'PAID', 'DECLINED', 'ERROR']),
+  amount: z.number(),
+  phoneNumber: z.string(),
+  callbackUrl: z.string().url(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  callbackReceivedAt: z.date().optional(),
+  callbackData: z.record(z.unknown()).optional(),
+  errorMessage: z.string().optional()
+});
+
+export type SwishTransaction = z.infer<typeof SwishTransactionSchema>;
+
+/**
+ * Schema for async job
+ */
+export const AsyncJobSchema = z.object({
+  id: z.string().uuid(),
+  type: z.string(),
+  status: z.enum(['pending', 'processing', 'completed', 'failed', 'cancelled']),
+  payload: z.record(z.unknown()),
+  retries: z.number().int().min(0),
+  maxRetries: z.number().int().min(0),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  nextRetryAt: z.date().optional(),
+  errorMessage: z.string().optional(),
+  result: z.record(z.unknown()).optional()
+});
+
+export type AsyncJob = z.infer<typeof AsyncJobSchema>;
 
 // Swish payment request data structure
 export interface SwishPaymentData {
@@ -140,18 +226,6 @@ export interface SwishPaymentData {
     phone: string;
     numberOfParticipants: string;
   };
-}
-
-// Swish callback data structure (from Swish API)
-export interface SwishCallbackData {
-  payeePaymentReference: string;  // Our payment reference
-  paymentReference: string;       // Swish payment reference
-  status: 'PAID' | 'DECLINED' | 'ERROR';
-  amount: string;
-  currency: string;
-  timestamp: string;
-  errorCode?: string;
-  errorMessage?: string;
 }
 
 // Import central definitions

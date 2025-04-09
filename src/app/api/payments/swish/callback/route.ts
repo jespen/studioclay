@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { logDebug, logError } from '@/lib/logging';
+import { logDebug, logError, logInfo } from '@/lib/logging';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -10,6 +10,8 @@ import { generateGiftCardPDF, GiftCardData } from '@/utils/giftCardPDF';
 import { setupCertificate } from '../cert-helper';
 import { PAYMENT_STATUSES, getValidPaymentStatus } from '@/constants/statusCodes';
 import { sendServerBookingConfirmationEmail } from '@/utils/serverEmail';
+import { SwishService } from '@/services/swish/SwishService';
+import { SwishCallbackSchema } from '@/services/swish/types';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -241,606 +243,77 @@ async function createGiftCard(paymentId: string, amount: number, userInfo: any, 
   return giftCard;
 }
 
+/**
+ * POST handler for Swish callbacks
+ */
 export async function POST(request: NextRequest) {
-  // Generera ett unikt ID för denna request för spårbarhet i loggarna
-  const requestId = uuidv4().substring(0, 8);
-  
-  // Lägg till extra loggning i början av funktionen
-  logDebug(`[${requestId}] ===== SWISH CALLBACK RECEIVED =====`);
-  logDebug(`[${requestId}] Timestamp: ${new Date().toISOString()}`);
-  logDebug(`[${requestId}] URL: ${request.url}`);
-  
-  // Logga viktiga headers och information om requesten för felsökning
-  const sourceIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
-  const userAgent = request.headers.get('user-agent') || 'unknown';
-  
-  // Skapa en array av alla headers för loggning
-  const headers: Record<string, string> = {};
-  request.headers.forEach((value, key) => {
-    // Undvik att logga känsliga headers som Authorization eller Cookie
-    if (!['authorization', 'cookie'].includes(key.toLowerCase())) {
-      headers[key] = value;
-    }
-  });
-  
-  logDebug(`[${requestId}] Request source: IP=${sourceIp}, User-Agent=${userAgent}`);
-  logDebug(`[${requestId}] Request headers:`, headers);
-  
+  const requestId = uuidv4();
+  const startTime = Date.now();
+
   try {
-    // Konfigurera certifikat i produktionsmiljö
-    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_SWISH_TEST_MODE !== 'true') {
-      logDebug(`[${requestId}] Setting up Swish certificates from environment variables in callback endpoint`);
-      const certSetupResult = setupCertificate();
-      
-      if (!certSetupResult.success) {
-        logError(`[${requestId}] Failed to set up Swish certificates in callback endpoint:`, certSetupResult);
-      }
-    }
-    
-    // Försök att läsa body både som text och JSON för att fånga eventuella problem
-    let bodyText;
-    let body;
-    
-    try {
-      // Klona request för att kunna läsa body både som text och JSON
-    const requestClone = request.clone();
-      bodyText = await requestClone.text();
-      logDebug(`[${requestId}] Raw request body: ${bodyText}`);
-      
-      // Försök tolka JSON
-      body = await request.json();
-    } catch (parseError) {
-      logError(`[${requestId}] Failed to parse request body:`, parseError);
-      
-      // Försök med den klara texten om JSON-parsing misslyckades
-      try {
-        if (bodyText && bodyText.trim()) {
-          logDebug(`[${requestId}] Attempting to parse body as JSON despite initial parse error`);
-          body = JSON.parse(bodyText);
-          logDebug(`[${requestId}] Successfully parsed body as JSON on second attempt`);
-        }
-      } catch (secondParseError) {
-        logError(`[${requestId}] Also failed second JSON parse attempt:`, secondParseError);
-      }
-      
-      if (!body) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Invalid JSON body',
-          details: parseError instanceof Error ? parseError.message : 'Unknown error'
-        }, { status: 400 });
-      }
-    }
-    
-    // Redact sensitive data for logging
-    const logData = { ...body };
-    if (logData.payerAlias) {
-      logData.payerAlias = logData.payerAlias.substring(0, 4) + '****' + logData.payerAlias.slice(-2);
-    }
-    
-    // Log the callback data with sensitive information redacted
-    logDebug(`[${requestId}] Swish callback data:`, logData);
-
-    // Verify the callback signature if in production
-    const isTestMode = process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true';
-    if (!isTestMode) {
-      try {
-        const signature = request.headers.get('Swish-Signature');
-        
-        if (!signature) {
-          logError(`[${requestId}] Missing Swish-Signature header`);
-          // I produktion fortsätter vi ändå för att inte missa betalningar vid konfigurationsfel
-          logDebug(`[${requestId}] Continuing despite missing signature for robustness`);
-        } else {
-          logDebug(`[${requestId}] Verifying signature: ${signature.substring(0, 10)}...`);
-          
-          // Get the CA certificate
-          const caPath = process.env.SWISH_PROD_CA_PATH;
-          if (!caPath) {
-            logError(`[${requestId}] Missing Swish CA certificate configuration`);
-            // Fortsätt ändå, vi vill inte missa betalningar
-            logDebug(`[${requestId}] Continuing despite missing CA certificate for robustness`);
-          } else {
-            const caCert = fs.readFileSync(path.resolve(process.cwd(), caPath));
-            
-            // Convert the request body to a string for verification
-            const dataToVerify = bodyText || JSON.stringify(body);
-            
-            // Verify the signature
-            const verify = crypto.createVerify('SHA256');
-            verify.update(dataToVerify);
-            const isValid = verify.verify(caCert, signature, 'base64');
-            
-            if (!isValid) {
-              logError(`[${requestId}] Invalid signature`);
-              // I produktion fortsätter vi ändå för att inte missa betalningar vid konfigurationsfel
-              logDebug(`[${requestId}] Continuing despite invalid signature for robustness`);
-            } else {
-              logDebug(`[${requestId}] Signature verified successfully`);
-            }
-          }
-        }
-      } catch (error) {
-        logError(`[${requestId}] Error verifying signature:`, error);
-        // Continue processing even if signature verification fails in case the error is on our side
-        logDebug(`[${requestId}] Continuing despite signature verification error for robustness`);
-      }
-    }
-
-    // Extract the necessary information from the callback
-    const {
-      id,
-      payeePaymentReference,
-      paymentReference,
-      callbackUrl,
-      payerAlias,
-      payeeAlias,
-      amount,
-      currency,
-      message,
-      status,
-      dateCreated,
-      payment_date,
-      errorCode,
-      errorMessage
-    } = body;
-
-    // Validate that we have the required fields
-    if (!paymentReference && !payeePaymentReference) {
-      logError(`[${requestId}] Missing payment reference in callback`);
-      return NextResponse.json({ success: false, error: 'Missing payment reference' }, { status: 400 });
-    }
-
-    // Find the payment in our database using either the paymentReference or payeePaymentReference
-    const reference = paymentReference || payeePaymentReference;
-    logDebug(`[${requestId}] Looking up payment with reference: ${reference}`);
-
-    // Försök först med payeePaymentReference (vår interna referens)
-    let payment = null;
-    let fetchError = null;
-
-    // Logg alla parametrar för felsökning
-    logDebug(`[${requestId}] Payment lookup parameters:`, { 
-      payeePaymentReference, 
-      paymentReference,
-      reference 
+    // Log the incoming request
+    logInfo(`[${requestId}] Received Swish callback`, {
+      method: request.method,
+      url: request.url,
+      headers: Object.fromEntries(request.headers.entries())
     });
 
-    if (payeePaymentReference) {
-      logDebug(`[${requestId}] Trying to find payment with payeePaymentReference: ${payeePaymentReference}`);
-      const result = await supabase
-      .from('payments')
-      .select('*')
-        .eq('payment_reference', payeePaymentReference)
-        .maybeSingle();
-
-      fetchError = result.error;
-      payment = result.data;
-
-      logDebug(`[${requestId}] Result from first lookup:`, { 
-        found: !!payment, 
-        error: !!fetchError,
-        paymentId: payment?.id
-      });
+    // Verify content type
+    const contentType = request.headers.get('content-type');
+    if (!contentType?.includes('application/json')) {
+      throw new Error('Invalid content type. Expected application/json');
     }
 
-    // Om vi inte hittade något med payeePaymentReference, prova med paymentReference
-    if (!payment && !fetchError && paymentReference) {
-      logDebug(`[${requestId}] Trying to find payment with paymentReference: ${paymentReference}`);
-      const result = await supabase
-        .from('payments')
-        .select('*')
-        .eq('swish_payment_id', paymentReference)
-        .maybeSingle();
+    // Parse the request body
+    const callbackData = await request.json();
 
-      fetchError = result.error;
-      payment = result.data;
+    // Log the callback data (masking sensitive information)
+    logInfo(`[${requestId}] Callback data`, {
+      ...callbackData,
+      payerAlias: callbackData.payerAlias ? `${callbackData.payerAlias.substring(0, 4)}****${callbackData.payerAlias.slice(-2)}` : undefined
+    });
 
-      logDebug(`[${requestId}] Result from second lookup:`, { 
-        found: !!payment, 
-        error: !!fetchError,
-        paymentId: payment?.id 
-      });
-    }
+    // Get SwishService instance
+    const swishService = SwishService.getInstance();
 
-    // Om vi fortfarande inte hittat något, försök med en fuzzy-sökning (för säkerhets skull)
-    if (!payment && !fetchError) {
-      logDebug(`[${requestId}] Trying fuzzy lookup for reference: ${reference}`);
-      const result = await supabase
-        .from('payments')
-        .select('*')
-        .or(`payment_reference.ilike.%${reference}%,swish_payment_id.ilike.%${reference}%`)
-        .limit(1);
+    // Process the callback
+    await swishService.handleCallback(callbackData);
 
-      fetchError = result.error;
-      payment = result.data?.[0] || null;
+    // Log processing time
+    const processingTime = Date.now() - startTime;
+    logInfo(`[${requestId}] Callback processed successfully`, {
+      processingTime: `${processingTime}ms`
+    });
 
-      logDebug(`[${requestId}] Result from fuzzy lookup:`, { 
-        found: !!payment, 
-        error: !!fetchError,
-        paymentId: payment?.id
-      });
-    }
+    // Return success response
+    return NextResponse.json({ status: 'OK' }, { status: 200 });
 
-    if (fetchError || !payment) {
-      logError(`[${requestId}] Payment not found:`, { reference, error: fetchError });
-      return NextResponse.json({ success: false, error: 'Payment not found' }, { status: 404 });
-    }
-
-    logDebug(`[${requestId}] Found payment with ID: ${payment.id}, current status: ${payment.status}`);
-
-    // Update the payment status in our database
-    const { error: updateError } = await supabase
-      .from('payments')
-      .update({
-        status: getValidPaymentStatus(status),
-        swish_callback_url: callbackUrl,
-        swish_payment_id: paymentReference,
-        error_message: errorMessage,
-        updated_at: status === PAYMENT_STATUSES.PAID ? new Date().toISOString() : payment.updated_at,
-        // Spara callback-data för debugging
-        metadata: {
-          ...payment.metadata,
-          callback: {
-            data: logData,
-            timestamp: new Date().toISOString(),
-            payment_date: status === PAYMENT_STATUSES.PAID ? payment_date : null // Spara det faktiska Swish betalningsdatumet i metadata
-          }
-        }
-      })
-      .eq('id', payment.id)
-      .select()
-      .single();
-
-    if (updateError) {
-      logError(`[${requestId}] Error updating payment:`, updateError);
-      return NextResponse.json({ success: false, error: 'Error updating payment' }, { status: 500 });
-    }
-
-    logDebug(`[${requestId}] Payment status updated to: ${status}`);
-
-    // If the payment was successful and it's for a course, create a booking
-    if (status === PAYMENT_STATUSES.PAID) {
-      logDebug(`[${requestId}] Payment is PAID, processing related actions`);
-      
-      // Get the product type to determine what actions to take
-      const productType = payment.product_type;
-      const productId = payment.product_id;
-      const userInfo = payment.user_info;
-      
-      logDebug(`[${requestId}] Product type: ${productType}, Product ID: ${productId}`);
-      
-      if (productType === 'course' && productId && userInfo) {
-        try {
-          // Get payment reference from Swish callback
-          const payeePaymentReference = body.payeePaymentReference;
-          logDebug(`[${requestId}] Trying to find booking with reference: ${payeePaymentReference}`);
-
-          // Check if we already have a booking for this payment to avoid duplicates
-          const paymentSpecificBookingRef = `swish-${payment.id.substring(0, 8)}`;
-
-          const { data: existingBooking } = await supabase
-            .from('bookings')
-            .select('id, booking_reference')
-            .eq('booking_reference', paymentSpecificBookingRef)
-            .single();
-            
-          if (!existingBooking) {
-            logDebug(`[${requestId}] No existing booking found, creating new booking`);
-            
-            // Create a booking for this payment
-            const booking = await createBooking(payment.id, productId, userInfo, paymentSpecificBookingRef);
-            
-            logDebug(`[${requestId}] Booking created with reference: ${booking.booking_reference}`);
-            
-            // CRITICAL DB OPERATIONS COMPLETE
-            // Early response could be sent here in a different architectural approach
-            
-            // CONTINUE PROCESSING IN THE BACKGROUND
-            // Create a promised-based background process for email sending
-            logDebug(`[${requestId}] Setting up background process for email sending`);
-            
-            const runEmailBackgroundTask = async () => {
-              logDebug(`[${requestId}] Starting background email process`);
-              const backgroundStartTime = Date.now();
-              
-              // Create a keep-alive promise to delay function termination
-              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
-              const keepAlivePromise = new Promise(resolve => {
-                const timerId = setTimeout(() => {
-                  logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
-                  resolve(true);
-                }, 45000);
-                
-                // Ensure timer isn't lost to garbage collection
-                global.setTimeout = global.setTimeout || setTimeout;
-                if (!global.keepAliveTimers) {
-                  global.keepAliveTimers = [];
-                }
-                global.keepAliveTimers.push(timerId);
-              });
-              
-              try {
-                // Get course details for email
-                const { data: courseInstance, error: courseInstanceError } = await supabase
-                  .from('course_instances')
-                  .select('*')
-                  .eq('id', productId)
-                  .single();
-
-                if (courseInstanceError) {
-                  logError(`[${requestId}] Error fetching course instance:`, courseInstanceError);
-                  // Continue without course details
-                }
-
-                // Fetch template data if we have a template_id
-                let courseTemplate = null;
-                if (courseInstance?.template_id) {
-                  const { data: template, error: templateError } = await supabase
-                    .from('course_templates')
-                    .select('*')
-                    .eq('id', courseInstance.template_id)
-                    .single();
-
-                  if (templateError) {
-                    logError(`[${requestId}] Error fetching course template:`, templateError);
-                  } else {
-                    courseTemplate = template;
-                  }
-                }
-
-                // Combine instance and template data
-                const courseDetails = courseInstance ? {
-                  ...courseInstance,
-                  template: courseTemplate
-                } : null;
-
-                // We need to dynamically load the serverEmail module to avoid edge runtime errors
-                logDebug(`[${requestId}] Loading serverEmail module for email sending`);
-                const { sendServerBookingConfirmationEmail } = await import('@/utils/serverEmail');
-
-                // Process email in the background
-                let emailResult;
-                try {
-                  logDebug(`[${requestId}] Setting up email data for booking confirmation`);
-                  
-                  const courseData = courseDetails || {
-                    template: {
-                      title: 'Okänd kurs',
-                      description: '',
-                      price: 0
-                    },
-                    start_date: new Date().toISOString(),
-                    location: 'Studio Clay',
-                  };
-                  
-                  emailResult = await sendServerBookingConfirmationEmail({
-                    userInfo: {
-                      firstName: userInfo.firstName,
-                      lastName: userInfo.lastName,
-                      email: userInfo.email,
-                      phone: userInfo.phone,
-                      numberOfParticipants: userInfo.numberOfParticipants || "1",
-                      specialRequirements: userInfo.specialRequirements || ""
-                    },
-                    paymentDetails: {
-                      method: 'swish',
-                      status: 'PAID',
-                      paymentReference: reference
-                    },
-                    courseDetails: {
-                      id: productId,
-                      title: courseData.template?.title || courseData.title || 'Okänd kurs',
-                      description: courseData.template?.description || courseData.description || '',
-                      start_date: courseData.start_date,
-                      location: courseData.location,
-                      price: courseData.template?.price || courseData.price || 0
-                    },
-                    bookingReference: booking.booking_reference
-                  });
-                } catch (emailError) {
-                  logError(`[${requestId}] Error sending confirmation email:`, emailError);
-                  // Don't fail the overall process if email sending fails
-                }
-                
-                // Wait for the keep-alive promise to resolve before finishing
-                logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
-                await keepAlivePromise;
-                logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
-                
-                return { success: true };
-              } catch (backgroundError) {
-                logError(`[${requestId}] Error in background email processing:`, backgroundError);
-              }
-            };
-            
-            // Execute the background process with explicit promise handling
-            Promise.resolve().then(runEmailBackgroundTask).catch(err => {
-              logError(`[${requestId}] Critical error in background email processing:`, err);
-            });
-          } else {
-            logDebug(`[${requestId}] Booking already exists for this payment`, { 
-              booking_id: existingBooking.id, 
-              reference: existingBooking.booking_reference 
-            });
-          }
-        } catch (error) {
-          logError(`[${requestId}] Error in booking creation:`, error);
-          // Logg felet men returnera ändå 200 OK till Swish för att förhindra återförsök
-        }
-      }
-      // Handle gift cards
-      else if (productType === 'gift_card' && userInfo) {
-        try {
-          // Check if we already have a gift card for this payment
-          const { data: existingGiftCard } = await supabase
-            .from('gift_cards')
-            .select('id, code')
-            .eq('payment_reference', payment.id)
-            .single();
-            
-          if (!existingGiftCard) {
-            logDebug(`[${requestId}] No existing gift card found, creating new gift card`);
-            
-            // Create gift card
-            const itemDetails = payment.metadata?.item_details || {};
-            const giftCard = await createGiftCard(payment.id, payment.amount, userInfo, itemDetails);
-            
-            logDebug(`[${requestId}] Gift card created with code: ${giftCard.code}`);
-            
-            // CRITICAL DB OPERATIONS COMPLETE
-            // Now handle PDF generation and email sending in the background
-            
-            // Create a promised-based background process
-            logDebug(`[${requestId}] Setting up background process for gift card PDF and email`);
-            
-            const runGiftCardBackgroundTask = async () => {
-              logDebug(`[${requestId}] Starting background gift card process`);
-              const backgroundStartTime = Date.now();
-              
-              // Create a keep-alive promise to delay function termination
-              logDebug(`[${requestId}] KEEP-ALIVE: Creating keep-alive promise for 45 seconds`);
-              const keepAlivePromise = new Promise(resolve => {
-                const timerId = setTimeout(() => {
-                  logDebug(`[${requestId}] KEEP-ALIVE: Timer complete, resolving promise`);
-                  resolve(true);
-                }, 45000);
-                
-                // Ensure timer isn't lost to garbage collection
-                global.setTimeout = global.setTimeout || setTimeout;
-                if (!global.keepAliveTimers) {
-                  global.keepAliveTimers = [];
-                }
-                global.keepAliveTimers.push(timerId);
-              });
-              
-              try {
-                // Generate gift card PDF if digital
-                if (giftCard.type === 'digital' && giftCard.recipient_email) {
-                  try {
-                    logDebug(`[${requestId}] Generating gift card PDF`);
-                    
-                    const giftCardPdfData: GiftCardData = {
-                      code: giftCard.code,
-                      amount: giftCard.amount,
-                      recipientName: giftCard.recipientName || '',
-                      recipientEmail: giftCard.recipientEmail || '',
-                      senderName: giftCard.senderName || '',
-                      senderEmail: giftCard.senderEmail || '',
-                      message: giftCard.message || '',
-                      createdAt: new Date().toISOString(),
-                      expiresAt: giftCard.expiresAt
-                    };
-                    
-                    const pdfBuffer = await generateGiftCardPDF(giftCardPdfData);
-                    
-                    // Store PDF in Supabase storage
-                    const { data: storageData, error: storageError } = await supabase
-                .storage
-                      .from('giftcards')
-                      .upload(`gift-card-${giftCard.code}.pdf`, pdfBuffer, {
-                  contentType: 'application/pdf',
-                  upsert: true
-                });
-                
-                    if (storageError) {
-                      logError(`[${requestId}] Error storing gift card PDF:`, storageError);
-              } else {
-                      logDebug(`[${requestId}] Gift card PDF stored:`, storageData);
-                      
-                      // Try to send gift card email
-                      try {
-                        logDebug(`[${requestId}] Sending gift card email`);
-                        logDebug(`[${requestId}] DIAGNOSTIC: About to attempt email sending for gift card`);
-                        logDebug(`[${requestId}] DIAGNOSTIC: Email parameters:`, {
-                          senderEmail: giftCard.sender_email,
-                          recipientEmail: giftCard.recipient_email,
-                          giftCardCode: giftCard.code,
-                          giftCardAmount: giftCard.amount
-                        });
-                        
-                        const emailData = {
-                          giftCard: {
-                            code: giftCard.code,
-                            amount: giftCard.amount,
-                            recipient_name: giftCard.recipient_name,
-                            recipient_email: giftCard.recipient_email,
-                            message: giftCard.message,
-                            expires_at: giftCard.expires_at
-                          },
-                          senderInfo: {
-                            name: giftCard.senderName,
-                            email: giftCard.senderEmail,
-                            phone: giftCard.senderPhone
-                          }
-                        };
-                        
-                        const { sendServerGiftCardEmail } = await import('@/utils/serverEmail');
-                        
-                        // Convert Blob to Buffer for email attachment
-                        const buffer = Buffer.from(await pdfBuffer.arrayBuffer());
-                        
-                        // Send email using the gift card data from database
-                        const emailResult = await sendServerGiftCardEmail({
-                          giftCardData: {
-                            code: emailData.giftCard.code,
-                            amount: emailData.giftCard.amount,
-                            recipient_name: emailData.giftCard.recipient_name,
-                            recipient_email: emailData.giftCard.recipient_email,
-                            message: emailData.giftCard.message,
-                            expires_at: emailData.giftCard.expires_at
-                          },
-                          senderInfo: emailData.senderInfo,
-                          pdfBuffer: buffer
-                        });
-                        
-                        logDebug(`[${requestId}] Email sending result:`, emailResult);
-                        
-                        // Mark as emailed
-                        await supabase
-                  .from('gift_cards')
-                          .update({ is_emailed: true })
-                          .eq('id', giftCard.id);
-                      } catch (emailError) {
-                        logError(`[${requestId}] Error sending gift card email:`, emailError);
-                      }
-                    }
-                  } catch (pdfError) {
-                    logError(`[${requestId}] Error generating gift card PDF:`, pdfError);
-                  }
-                }
-                
-                logDebug(`[${requestId}] Background gift card process completed, time elapsed: ${Date.now() - backgroundStartTime}ms`);
-              } catch (backgroundError) {
-                logError(`[${requestId}] Error in gift card background processing:`, backgroundError);
-              }
-              
-              // Wait for the keep-alive promise to resolve before finishing
-              logDebug(`[${requestId}] KEEP-ALIVE: Waiting for keep-alive timer to finish...`);
-              await keepAlivePromise;
-              logDebug(`[${requestId}] KEEP-ALIVE: Keep-alive timer finished, ending background process`);
-            };
-            
-            // Execute the background process with explicit promise handling
-            Promise.resolve().then(runGiftCardBackgroundTask).catch(err => {
-              logError(`[${requestId}] Critical error in background gift card processing:`, err);
-            });
-          } else {
-            logDebug(`[${requestId}] Gift card already exists for this payment`, { 
-              gift_card_id: existingGiftCard.id, 
-              code: existingGiftCard.code 
-            });
-          }
-        } catch (error) {
-          logError(`[${requestId}] Error in gift card creation:`, error);
-          // Logg felet men returnera ändå 200 OK till Swish för att förhindra återförsök
-        }
-      }
-    }
-
-    return NextResponse.json({ success: true });
   } catch (error) {
+    // Log the error
     logError(`[${requestId}] Error processing Swish callback:`, error);
-    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
+
+    // Try to log the error to Supabase
+    try {
+      await supabase.from('error_logs').insert({
+        request_id: requestId,
+        error_type: 'swish_callback',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        error_stack: error instanceof Error ? error.stack : undefined,
+        request_data: await request.json().catch(() => null),
+        processing_time: Date.now() - startTime
+      });
+    } catch (loggingError) {
+      logError(`[${requestId}] Failed to log error to database:`, loggingError);
+    }
+
+    // Return error response
+    return NextResponse.json(
+      { 
+        status: 'ERROR',
+        message: 'Failed to process callback',
+        requestId
+      },
+      { status: 500 }
+    );
   }
 }

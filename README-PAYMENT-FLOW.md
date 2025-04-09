@@ -10,6 +10,13 @@ Systemet stödjer för närvarande två betalningsmetoder:
 - Swish - för direktbetalning via mobiltelefon
 - Faktura - för fakturering via e-post
 
+## VIKTIGT: API-vägar
+**OBS! KRITISKT:** API-vägarna för betalningssystemet måste användas exakt som angivna nedan. Ändringar i dessa vägar kommer orsaka fel i betalningsflödet:
+- Swish-betalningar: `/api/payments/swish/create`
+- Fakturabetalningar: `/api/payments/invoice/create`
+
+Dessa vägars struktur och namnkonventioner är specifikt utformade för att matcha backend-processerna. Ändra aldrig dessa vägar i frontend utan motsvarande ändringar i backend.
+
 ## Komponentstruktur
 ```
 /src/
@@ -156,11 +163,24 @@ Systemet stödjer för närvarande två betalningsmetoder:
    - Säkerställer att korrekt belopp används för presentkort
    - Skickar komplett data till API
 
-3. **API (/api/invoice/create)**
+3. **API (/api/payments/invoice/create)**
    - Tar emot betalningsdata
    - Baserat på product_type utför rätt flöde
    - Returnerar tidigt svar efter kritiska databassoperationer
    - Fortsätter bearbetning i bakgrunden
+
+### API-routing och vidarebefordring
+1. **Fakturabetalningar**
+   - Frontend anropar `/api/payments/invoice/create` (detta är en fast sökväg som inte får ändras)
+   - Routern i `/api/payments/invoice/create/route.ts` validerar data och vidarebefordrar till `/api/invoice/create`
+   - `/api/invoice/create/route.ts` hanterar databasoperationer, PDF-generering och e-postutskick
+   - Detta dubbla routing-lager möjliggör bakåtkompatibilitet med äldre kodbas
+
+2. **Swish-betalningar**
+   - Frontend anropar `/api/payments/swish/create` (detta är en fast sökväg som inte får ändras)
+   - Routern i `/api/payments/swish/create/route.ts` skapar betalningen i databasen och skickar till Swish API
+   - Callback från Swish tas emot på `/api/payments/swish/callback`
+   - Status kontrolleras via `/api/payments/status/[reference]`
 
 ### Backend till Frontend
 1. **Snabb respons**

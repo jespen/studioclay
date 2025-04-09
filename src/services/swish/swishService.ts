@@ -1,61 +1,63 @@
-import { SwishRequestData, SwishApiResponse, SwishValidationError, SwishApiError, SwishCertificateError, SwishError } from './types';
-import { SwishConfig, SWISH_ENDPOINTS } from './config';
+import { 
+  SwishError, 
+  SwishApiError, 
+  SwishValidationError,
+  SwishCertificateError,
+  CreateSwishPaymentDTO,
+  SwishCallbackData,
+  SwishTransaction,
+  CreateSwishPaymentSchema,
+  SwishCallbackSchema,
+  SwishStatus
+} from './types';
 import { formatSwishPhoneNumber } from '@/utils/swish/phoneNumberFormatter';
+import { logDebug, logError } from '@/lib/logging';
+import { createServerSupabaseClient } from '@/utils/supabase';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
+import { v4 as uuidv4 } from 'uuid';
 import fetch from 'node-fetch';
-import { logDebug, logError } from '@/lib/logging';
 
 /**
- * Service class for handling Swish payment operations.
- * Provides methods for creating payments and formatting phone numbers.
- * 
- * @example
- * ```typescript
- * const swishService = SwishService.getInstance();
- * const result = await swishService.createPayment(paymentData);
- * ```
+ * Core service for handling Swish payments
  */
 export class SwishService {
   private static instance: SwishService;
-  private readonly config: SwishConfig;
+  private readonly isTestMode: boolean;
+  private readonly baseUrl: string;
+  private readonly payeeAlias: string;
+  private readonly certPath: string;
+  private readonly keyPath: string;
+  private readonly caPath: string;
 
-  /**
-   * Private constructor to enforce singleton pattern.
-   * Initializes configuration and validates environment.
-   * 
-   * @throws {SwishCertificateError} If certificate files are missing
-   */
   private constructor() {
-    this.config = SwishConfig.getInstance();
+    this.isTestMode = process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true';
+    this.baseUrl = this.isTestMode
+      ? process.env.SWISH_TEST_API_URL || 'https://mss.cpc.getswish.net/swish-cpcapi/api/v1'
+      : process.env.SWISH_PROD_API_URL || 'https://cpc.getswish.net/swish-cpcapi/api/v1';
+    
+    this.payeeAlias = this.isTestMode
+      ? process.env.SWISH_TEST_PAYEE_ALIAS || '1231181189'
+      : process.env.SWISH_PROD_PAYEE_ALIAS || '1232296374';
+    
+    this.certPath = this.isTestMode
+      ? process.env.SWISH_TEST_CERT_PATH!
+      : process.env.SWISH_PROD_CERT_PATH!;
+    
+    this.keyPath = this.isTestMode
+      ? process.env.SWISH_TEST_KEY_PATH!
+      : process.env.SWISH_PROD_KEY_PATH!;
+    
+    this.caPath = this.isTestMode
+      ? process.env.SWISH_TEST_CA_PATH!
+      : process.env.SWISH_PROD_CA_PATH!;
+
     this.validateEnvironment();
   }
 
   /**
-   * Validates that all required certificate files exist.
-   * 
-   * @throws {SwishCertificateError} If any certificate file is missing
-   */
-  private validateEnvironment(): void {
-    const files = [
-      { path: this.config.certPath, name: 'certificate' },
-      { path: this.config.keyPath, name: 'private key' },
-      { path: this.config.caPath, name: 'CA certificate' }
-    ];
-
-    for (const { path: filePath, name } of files) {
-      if (!fs.existsSync(path.resolve(process.cwd(), filePath))) {
-        throw new SwishCertificateError(`Missing ${name} file at ${filePath}`);
-      }
-    }
-  }
-
-  /**
-   * Gets the singleton instance of SwishService.
-   * Creates a new instance if one doesn't exist.
-   * 
-   * @returns {SwishService} The singleton instance
+   * Get singleton instance
    */
   public static getInstance(): SwishService {
     if (!SwishService.instance) {
@@ -65,380 +67,318 @@ export class SwishService {
   }
 
   /**
-   * Gets the payee alias (Swish number).
-   * 
-   * @returns {string} The merchant's Swish number
+   * Get the configured Swish payee alias
    */
   public getPayeeAlias(): string {
-    return this.config.payeeAlias;
+    return this.payeeAlias;
   }
 
   /**
-   * Gets the path to the Swish certificate file.
-   * 
-   * @returns {string} Path to the certificate file
+   * Validate environment setup
    */
-  public getCertPath(): string {
-    return this.config.certPath;
+  private validateEnvironment(): void {
+    const files = [
+      { path: this.certPath, name: 'certificate' },
+      { path: this.keyPath, name: 'private key' },
+      { path: this.caPath, name: 'CA certificate' }
+    ];
+
+    for (const { path: filePath, name } of files) {
+      const resolvedPath = path.resolve(process.cwd(), filePath);
+      if (!fs.existsSync(resolvedPath)) {
+        throw new SwishCertificateError(`Missing ${name} file at ${resolvedPath}`);
+      }
+    }
   }
 
   /**
-   * Gets the path to the Swish private key file.
-   * 
-   * @returns {string} Path to the private key file
+   * Create a new Swish payment
    */
-  public getKeyPath(): string {
-    return this.config.keyPath;
+  public async createPayment(data: CreateSwishPaymentDTO): Promise<SwishTransaction> {
+    const requestId = uuidv4();
+    logDebug(`[${requestId}] Creating Swish payment`, {
+      ...data,
+      phoneNumber: `${data.phoneNumber.substring(0, 4)}****${data.phoneNumber.slice(-2)}`
+    });
+
+    try {
+      // Validate input data
+      const validatedData = CreateSwishPaymentSchema.parse(data);
+
+      // Format phone number for Swish
+      const formattedPhone = formatSwishPhoneNumber(validatedData.phoneNumber);
+
+      // Get Supabase client
+      const supabase = createServerSupabaseClient();
+
+      // Create payment record first
+      const { data: payment, error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          payment_reference: validatedData.paymentReference,
+          amount: validatedData.amount,
+          status: SwishStatus.CREATED,
+          payment_method: 'swish',
+          metadata: validatedData.metadata
+        })
+        .select()
+        .single();
+
+      if (paymentError) {
+        throw new SwishError('Failed to create payment record', 'DATABASE_ERROR', paymentError);
+      }
+
+      // Create Swish transaction record
+      const { data: transaction, error: transactionError } = await supabase
+        .from('swish_transactions')
+        .insert({
+          payment_id: payment.id,
+          amount: validatedData.amount,
+          phone_number: validatedData.phoneNumber,
+          swish_status: SwishStatus.CREATED
+        })
+        .select()
+        .single();
+
+      if (transactionError) {
+        throw new SwishError('Failed to create transaction record', 'DATABASE_ERROR', transactionError);
+      }
+
+      // Prepare Swish API request
+      const swishPaymentData = {
+        payeePaymentReference: validatedData.paymentReference,
+        callbackUrl: this.getCallbackUrl(),
+        payeeAlias: this.payeeAlias,
+        amount: validatedData.amount.toString(),
+        currency: "SEK",
+        message: validatedData.message || 'Payment to Studio Clay',
+        payerAlias: formattedPhone
+      };
+
+      // Make request to Swish API
+      const result = await this.makeSwishRequest(swishPaymentData);
+
+      if (!result.success) {
+        throw new SwishApiError(result.error || 'Unknown error from Swish API');
+      }
+
+      // Update transaction with Swish payment ID
+      const { error: updateError } = await supabase
+        .from('swish_transactions')
+        .update({
+          swish_payment_id: result.data.paymentId,
+          swish_callback_url: swishPaymentData.callbackUrl
+        })
+        .eq('id', transaction.id);
+
+      if (updateError) {
+        throw new SwishError('Failed to update transaction', 'DATABASE_ERROR', updateError);
+      }
+
+      return {
+        ...transaction,
+        swishPaymentId: result.data.paymentId,
+        callbackUrl: swishPaymentData.callbackUrl
+      };
+
+    } catch (error) {
+      logError(`[${requestId}] Error creating Swish payment:`, error);
+      
+      if (error instanceof SwishError) {
+        throw error;
+      }
+      
+      throw new SwishError(
+        'Failed to create Swish payment',
+        'UNKNOWN_ERROR',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
   }
 
   /**
-   * Gets the path to the Swish CA certificate file.
-   * 
-   * @returns {string} Path to the CA certificate file
+   * Handle Swish callback
    */
-  public getCaPath(): string {
-    return this.config.caPath;
+  public async handleCallback(callbackData: SwishCallbackData): Promise<void> {
+    const requestId = uuidv4();
+    logDebug(`[${requestId}] Processing Swish callback`, {
+      paymentReference: callbackData.payeePaymentReference,
+      status: callbackData.status
+    });
+
+    try {
+      // Validate callback data
+      const validatedData = SwishCallbackSchema.parse(callbackData);
+
+      // Get Supabase client
+      const supabase = createServerSupabaseClient();
+
+      // Process callback using database function
+      const { error } = await supabase.rpc('process_swish_callback', {
+        p_swish_payment_id: validatedData.paymentReference,
+        p_status: validatedData.status,
+        p_callback_data: validatedData
+      });
+
+      if (error) {
+        throw new SwishError('Failed to process callback', 'DATABASE_ERROR', error);
+      }
+
+    } catch (error) {
+      logError(`[${requestId}] Error processing Swish callback:`, error);
+      
+      if (error instanceof SwishError) {
+        throw error;
+      }
+      
+      throw new SwishError(
+        'Failed to process Swish callback',
+        'UNKNOWN_ERROR',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
   }
 
   /**
-   * Checks if the current environment is test mode.
-   * 
-   * @returns {boolean} True if in test mode, false otherwise
+   * Get payment status
    */
-  public isTestMode(): boolean {
-    return this.config.isTest;
+  public async getStatus(swishPaymentId: string): Promise<SwishTransaction> {
+    try {
+      // Get Supabase client
+      const supabase = createServerSupabaseClient();
+
+      const { data: transaction, error } = await supabase
+        .from('swish_transactions')
+        .select('*')
+        .eq('swish_payment_id', swishPaymentId)
+        .single();
+
+      if (error) {
+        throw new SwishError('Failed to get transaction status', 'DATABASE_ERROR', error);
+      }
+
+      if (!transaction) {
+        throw new SwishError('Transaction not found', 'NOT_FOUND');
+      }
+
+      return transaction;
+
+    } catch (error) {
+      if (error instanceof SwishError) {
+        throw error;
+      }
+      
+      throw new SwishError(
+        'Failed to get transaction status',
+        'UNKNOWN_ERROR',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
   }
 
   /**
-   * Formats a phone number for Swish API.
-   * Converts Swedish phone numbers to the format required by Swish.
-   * Example: "0739000001" -> "46739000001"
-   * 
-   * @param phone - The phone number to format
-   * @returns {string} The formatted phone number
-   * @throws {SwishValidationError} If the phone number is invalid
+   * Cancel payment
    */
-  public formatPhoneNumber(phone: string): string {
-    return formatSwishPhoneNumber(phone);
+  public async cancelPayment(swishPaymentId: string): Promise<void> {
+    const requestId = uuidv4();
+    logDebug(`[${requestId}] Cancelling Swish payment`, { swishPaymentId });
+
+    try {
+      // Get Supabase client
+      const supabase = createServerSupabaseClient();
+
+      // Get transaction first
+      const { data: transaction, error: fetchError } = await supabase
+        .from('swish_transactions')
+        .select('*')
+        .eq('swish_payment_id', swishPaymentId)
+        .single();
+
+      if (fetchError || !transaction) {
+        throw new SwishError('Transaction not found', 'NOT_FOUND');
+      }
+
+      // Make cancellation request to Swish API
+      const url = `${this.baseUrl}/paymentrequests/${swishPaymentId}/cancel`;
+      
+      const result = await this.makeSwishRequest({
+        method: 'PUT',
+        url,
+        isCancellation: true
+      });
+
+      if (!result.success) {
+        throw new SwishApiError(result.error || 'Failed to cancel payment');
+      }
+
+      // Update transaction status
+      const { error: updateError } = await supabase
+        .from('swish_transactions')
+        .update({
+          swish_status: SwishStatus.DECLINED,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', transaction.id);
+
+      if (updateError) {
+        throw new SwishError('Failed to update transaction status', 'DATABASE_ERROR', updateError);
+      }
+
+    } catch (error) {
+      logError(`[${requestId}] Error cancelling Swish payment:`, error);
+      
+      if (error instanceof SwishError) {
+        throw error;
+      }
+      
+      throw new SwishError(
+        'Failed to cancel payment',
+        'UNKNOWN_ERROR',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
   }
 
   /**
-   * Makes a request to the Swish API with proper certificates.
-   * Handles HTTPS communication and error responses.
-   * 
-   * @param options - The options for the API request (can be data object or request options)
-   * @returns {Promise<{success: boolean, data?: any, error?: string}>} The API response
-   * @throws {SwishApiError} If the API request fails
+   * Make request to Swish API
    */
   private async makeSwishRequest(options: any): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-      const isStatusRequest = options.isStatusCheck === true;
-      const isCancellation = options.isCancellation === true;
-      const requestMethod = options.method || 'POST';
-      
-      // Special logic for different request types
-      let url;
-      if (isStatusRequest) {
-        // For status requests, use the URL as provided
-        url = options.url;
-      } else if (isCancellation) {
-        // For cancellations, make sure URL format is correct
-        url = options.url;
-        logDebug('Preparing cancellation request', {
-          url,
-          method: requestMethod,
-          isCancellation
-        });
-      } else {
-        // For payment creation, use the createPayment endpoint
-        url = this.config.getEndpointUrl('createPayment');
-      }
-      
-      const isTestMode = this.config.isTest;
-      
-      logDebug('Swish API request:', {
-        url,
-        method: requestMethod,
-        isStatusRequest,
-        isCancellation,
-        headers: options.headers || {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
+      const agent = new https.Agent({
+        cert: fs.readFileSync(path.resolve(process.cwd(), this.certPath)),
+        key: fs.readFileSync(path.resolve(process.cwd(), this.keyPath)),
+        ca: fs.readFileSync(path.resolve(process.cwd(), this.caPath)),
+        rejectUnauthorized: !this.isTestMode
       });
 
-      logDebug('Swish config info:', {
-        isTestMode,
-        apiUrl: this.config.apiUrl,
-        payeeAlias: this.config.payeeAlias
-      });
+      const method = options.method || 'POST';
+      const url = options.url || `${this.baseUrl}/paymentrequests`;
 
-      // Resolve absolute paths for certificate files
-      const certPath = path.resolve(process.cwd(), this.config.certPath);
-      const keyPath = path.resolve(process.cwd(), this.config.keyPath);
-      const caPath = path.resolve(process.cwd(), this.config.caPath);
-      
-      logDebug('Certificate paths:', {
-        certPath,
-        keyPath,
-        caPath
-      });
-
-      // Verify that certificate files exist
-      const certExists = fs.existsSync(certPath);
-      const keyExists = fs.existsSync(keyPath);
-      const caExists = fs.existsSync(caPath);
-      
-      logDebug('Certificate files existence check:', {
-        certExists,
-        keyExists,
-        caExists
-      });
-
-      if (!certExists || !keyExists || !caExists) {
-        const missingFiles = [];
-        if (!certExists) missingFiles.push('certificate');
-        if (!keyExists) missingFiles.push('key');
-        if (!caExists) missingFiles.push('CA certificate');
-        
-        throw new SwishCertificateError(`Missing ${missingFiles.join(', ')} file(s)`);
-      }
-
-      try {
-        // Read certificate files to verify they're readable
-        const certContent = fs.readFileSync(certPath, 'utf8');
-        const keyContent = fs.readFileSync(keyPath, 'utf8');
-        const caContent = fs.readFileSync(caPath, 'utf8');
-        
-        logDebug('Certificate files read successfully', {
-          certLength: certContent.length,
-          keyLength: keyContent.length,
-          caLength: caContent.length,
-          certStartsWith: certContent.substring(0, 50),
-          keyStartsWith: keyContent.substring(0, 50),
-          caStartsWith: caContent.substring(0, 50)
-        });
-      } catch (readError: any) {
-        logError('Error reading certificate files', readError);
-        throw new SwishCertificateError(`Error reading certificate files: ${readError.message}`);
-      }
-
-      // Konfigurera HTTPS-agenten med certifikat
-      const agentOptions: https.AgentOptions = {
-        // Klientcertifikat för att identifiera oss mot Swish
-        cert: fs.readFileSync(certPath),
-        key: fs.readFileSync(keyPath),
-        
-        // För att verifiera Swish-serverns certifikat behöver vi CA-certifikat
-        // I test-miljö använder vi vårt egna CA-certifikat
-        // I produktionsmiljö inaktiverar vi validering eftersom Swish använder ett annat CA
-        rejectUnauthorized: isTestMode,
-        
-        // I test-miljö lägger vi till Swish CA till vår trust-store
-        ca: isTestMode ? fs.readFileSync(caPath) : undefined,
-        
-        // Eventuellt lösenord för certifikatet
-        passphrase: this.config.certPassword,
-        
-        // Tvinga TLS 1.2 eller högre
-        minVersion: 'TLSv1.2'
-      };
-
-      // Lägg till extradiagnostik för felsökning
-      logDebug('Creating HTTPS agent with options:', {
-        hasCert: !!agentOptions.cert,
-        hasKey: !!agentOptions.key,
-        hasCa: !!agentOptions.ca,
-        rejectUnauthorized: agentOptions.rejectUnauthorized,
-        hasPassphrase: !!agentOptions.passphrase
-      });
-      
-      const agent = new https.Agent(agentOptions);
-
-      // Prepare fetch options
-      const fetchOptions: any = {
-        method: requestMethod,
+      const response = await fetch(url, {
+        method,
         agent,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        }
-      };
-      
-      // Add body only for POST or PATCH requests
-      if ((requestMethod === 'POST' || requestMethod === 'PATCH') && !isStatusRequest) {
-        // For cancellations, ensure proper formatting of the body
-        if (isCancellation && requestMethod === 'PATCH') {
-          logDebug('Preparing cancellation request body:', options.body || JSON.stringify({ status: 'cancelled' }));
-        }
-        
-        // Redact sensitive information for logging
-        const logData = { ...options };
-        if (logData.payerAlias) {
-          logData.payerAlias = logData.payerAlias.substring(0, 4) + '****' + logData.payerAlias.slice(-2);
-        }
-        
-        logDebug('Sending request to Swish API with data:', { 
-          url, 
-          method: requestMethod, 
-          body: options.body || JSON.stringify(options),
-          ...logData 
-        });
-        
-        fetchOptions.body = options.body || JSON.stringify(options);
-      } else {
-        logDebug('Sending request to Swish API:', { url, method: requestMethod });
-      }
-
-      // Log complete URL and method for debugging
-      logDebug(`Complete Swish API request: ${requestMethod} ${url}`);
-      
-      // Perform the actual request
-      const response = await fetch(url, fetchOptions);
-
-      logDebug('Swish API response received:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers)
+        },
+        body: method !== 'GET' ? JSON.stringify(options) : undefined
       });
 
-      // Handle special case for cancellations
-      if (isCancellation) {
-        if (response.status >= 200 && response.status < 300) {
-          logDebug('Cancellation request successful');
-          return { success: true };
-        } else {
-          let errorData;
-          try {
-            const responseText = await response.text();
-            try {
-              errorData = JSON.parse(responseText);
-            } catch {
-              errorData = responseText;
-            }
-          } catch (textError) {
-            errorData = 'Could not read response text';
-          }
-          
-          logError('Cancellation request failed', {
-            status: response.status,
-            statusText: response.statusText,
-            error: errorData
-          });
-          
-          return {
-            success: false,
-            error: `Swish API error: ${response.status} ${response.statusText}`,
-            data: errorData
-          };
-        }
-      }
-
-      // Handle status check response
-      if (isStatusRequest) {
-        try {
-          const responseData = await response.json();
-          logDebug('Status check response:', responseData);
-          
-          if (response.ok) {
-            return { success: true, data: responseData };
-          } else {
-            return { 
-              success: false, 
-              error: `Swish API error: ${response.status} ${response.statusText}`,
-              data: responseData
-            };
-          }
-        } catch (parseError) {
-          logError('Error parsing status response:', parseError);
-          return { 
-            success: false, 
-            error: 'Failed to parse status response' 
-          };
-        }
-      }
-      
-      // Handle payment creation response
-      if (response.status === 201) {
+      if (response.status === 201 || response.status === 200) {
         const location = response.headers.get('location');
-        if (!location) {
-          throw new SwishApiError('No Location header in response');
-        }
-        const reference = location.split('/').pop();
-        logDebug('Successfully created payment request:', { reference, location });
-        return { success: true, data: { reference } };
+        const paymentId = location?.split('/').pop();
+        return { success: true, data: { paymentId } };
       }
 
-      const responseText = await response.text();
-      let errorData;
-      try {
-        errorData = JSON.parse(responseText);
-        logDebug('Parsed Swish error response:', errorData);
-      } catch {
-        errorData = responseText;
-        logDebug('Unparsed Swish error response:', responseText);
-      }
-
-      logError('Swish API error response:', {
-        status: response.status,
-        statusText: response.statusText,
+      const errorData = await response.json();
+      return {
+        success: false,
+        error: `Swish API error: ${response.status} ${response.statusText}`,
         data: errorData
-      });
+      };
 
-      throw new SwishApiError(`Swish API error: ${response.status} ${response.statusText}`, response.status);
     } catch (error) {
       logError('Error in makeSwishRequest:', error);
-      if (error instanceof SwishError) {
-        throw error;
-      }
-      throw new SwishApiError(error instanceof Error ? error.message : 'Unknown error');
-    }
-  }
-
-  /**
-   * Creates a Swish payment request.
-   * Formats the request data and sends it to the Swish API.
-   * 
-   * @param data - The payment request data
-   * @returns {Promise<SwishApiResponse>} The API response
-   */
-  public async createPayment(data: SwishRequestData): Promise<SwishApiResponse> {
-    try {
-      logDebug('Creating Swish payment with data:', {
-        ...data,
-        payerAlias: data.payerAlias ? `${data.payerAlias.substring(0, 4)}****${data.payerAlias.slice(-2)}` : undefined
-      });
-
-      // Verify the data format before sending
-      logDebug('Payment request validation check:', {
-        hasPayeePaymentReference: !!data.payeePaymentReference,
-        payeePaymentReferenceLength: data.payeePaymentReference?.length,
-        hasCallbackUrl: !!data.callbackUrl,
-        callbackUrl: data.callbackUrl,
-        hasPayeeAlias: !!data.payeeAlias,
-        payeeAlias: data.payeeAlias,
-        hasAmount: !!data.amount,
-        amount: data.amount,
-        hasCurrency: !!data.currency,
-        currency: data.currency,
-        hasMessage: !!data.message,
-        messageLength: data.message?.length,
-        hasPayerAlias: !!data.payerAlias,
-        payerAliasFormat: data.payerAlias?.startsWith('46')
-      });
-
-      const result = await this.makeSwishRequest(data);
-
-      logDebug('Swish payment result:', result);
-
-      return {
-        success: true,
-        data: {
-          reference: result.data?.reference
-        }
-      };
-    } catch (error) {
-      logError('Error in createPayment:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -447,239 +387,16 @@ export class SwishService {
   }
 
   /**
-   * Gets the status of a Swish payment.
-   * 
-   * @param paymentReference - The Swish payment reference (ID) to check
-   * @returns {Promise<SwishApiResponse>} The API response with payment status
+   * Get callback URL
    */
-  public async getPaymentStatus(paymentReference: string): Promise<SwishApiResponse> {
-    try {
-      logDebug(`Getting payment status for Swish reference: ${paymentReference}`);
-      
-      if (!paymentReference) {
-        throw new Error('Payment reference is required');
-      }
-
-      // Construct the URL for the payment status endpoint
-      const url = this.config.getEndpointUrl('paymentStatus').replace('{id}', paymentReference);
-      
-      logDebug('Fetching payment status from URL:', url);
-
-      // Make the request using the same mechanism as createPayment
-      const result = await this.makeSwishRequest({
-        method: 'GET',
-        url,
-        isStatusCheck: true
-      });
-
-      if (!result.success) {
-        return {
-          success: false,
-          error: result.error || 'Unknown error from Swish API',
-          data: result.data
-        };
-      }
-
-      // Extract status information
-      return {
-        success: true,
-        data: {
-          reference: paymentReference,
-          status: result.data?.status,
-          amount: result.data?.amount ? parseFloat(result.data.amount) : undefined
-        }
-      };
-    } catch (error) {
-      logError('Error in getPaymentStatus:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  }
-
-  /**
-   * Cancels a Swish payment request
-   * @param paymentIdOrReference The Swish payment ID or payment reference (e.g. SC-123456-789)
-   * @param options Additional options for cancellation
-   */
-  async cancelPayment(paymentIdOrReference: string, options: { timeout?: number, skipIdCheck?: boolean } = {}): Promise<void> {
-    if (!paymentIdOrReference) {
-      throw new Error('Payment ID or reference is required');
-    }
-
-    const timeout = options.timeout || 10000; // Default 10 second timeout
-    let swishPaymentId = paymentIdOrReference;
+  private getCallbackUrl(): string {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    let callbackUrl = baseUrl.replace('http://', 'https://');
     
-    // Utförlig loggning vid start
-    logDebug('cancelPayment called', {
-      paymentIdOrReference,
-      options,
-      certPath: this.config.certPath,
-      apiUrl: this.config.apiUrl,
-      isTestMode: this.config.isTest
-    });
-    
-    // If the input looks like a payment reference (e.g. SC-123456-789), try to get the Swish payment ID
-    if (paymentIdOrReference.includes('-') && !options.skipIdCheck) {
-      try {
-        logDebug('Input looks like a payment reference, fetching Swish payment ID', {
-          paymentReference: paymentIdOrReference
-        });
-        
-        // First, get the payment details from our database
-        const startTime = Date.now();
-        const response = await fetch(`/api/payments/status/${paymentIdOrReference}`);
-        
-        if (!response.ok) {
-          logError('Failed to get payment details', {
-            status: response.status,
-            statusText: response.statusText,
-            paymentReference: paymentIdOrReference,
-            duration: Date.now() - startTime
-          });
-          throw new Error(`Failed to get payment details: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        logDebug('Received payment details', {
-          success: data.success,
-          hasData: !!data.data,
-          hasPayment: !!data.data?.payment,
-          hasSwishId: !!data.data?.payment?.swish_payment_id,
-          duration: Date.now() - startTime,
-          paymentData: data.data?.payment ? {
-            id: data.data.payment.id,
-            status: data.data.payment.status,
-            swishId: data.data.payment.swish_payment_id
-          } : null
-        });
-        
-        if (!data.success || !data.data?.payment?.swish_payment_id) {
-          throw new Error('Could not find Swish payment ID');
-        }
-
-        swishPaymentId = data.data.payment.swish_payment_id;
-        logDebug('Successfully resolved Swish payment ID', {
-          paymentReference: paymentIdOrReference,
-          swishPaymentId
-        });
-      } catch (error) {
-        logError('Error resolving Swish payment ID from reference', {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          paymentReference: paymentIdOrReference
-        });
-        throw new Error(`Failed to resolve Swish payment ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
+    if (process.env.NODE_ENV === 'production' && callbackUrl.includes('www.studioclay.se')) {
+      callbackUrl = callbackUrl.replace('www.studioclay.se', 'studioclay.se');
     }
     
-    // Construct the URL correctly for Swish API
-    // According to Swish API, the URL should be /swish-cpcapi/api/v1/paymentrequests/{id}/cancel
-    // NOT /swish-cpcapi/api/v1/paymentrequests/{id} with PATCH method
-    const url = this.config.getEndpointUrl('cancelPayment').replace('{id}', swishPaymentId);
-
-    logDebug('Cancelling Swish payment using correct URL format', {
-      originalInput: paymentIdOrReference,
-      resolvedSwishId: swishPaymentId,
-      fullUrl: url,
-      timeout
-    });
-
-    try {
-      // Test connectivity to Swish API first to verify the HTTPS agent is correct
-      const testStart = Date.now();
-      try {
-        // Try a GET request to the API to verify connectivity
-        const testUrl = this.config.getEndpointUrl('paymentStatus').replace('{id}', swishPaymentId);
-        logDebug(`Testing connection to Swish API at ${testUrl}`);
-
-        // Use makeSwishRequest for the test
-        const testResult = await this.makeSwishRequest({
-          method: 'GET',
-          url: testUrl,
-          isStatusCheck: true
-        });
-        
-        logDebug('Swish API connectivity test result', {
-          success: testResult.success,
-          duration: Date.now() - testStart,
-          error: testResult.error,
-          data: testResult.data ? { summary: 'Data received' } : 'No data'
-        });
-      } catch (testError) {
-        logError('Error testing Swish API connectivity', {
-          error: testError instanceof Error ? testError.message : 'Unknown error',
-          duration: Date.now() - testStart
-        });
-      }
-
-      // Use makeSwishRequest to ensure proper certificate handling
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error(`Swish cancellation timed out after ${timeout/1000} seconds`)), timeout);
-      });
-      
-      logDebug('Starting cancellation request to Swish using PUT method with empty body');
-      
-      // According to Swish documentation, cancellation should be a PUT request with empty body
-      // to the /cancel endpoint, not a PATCH with a body
-      const result = await Promise.race([
-        this.makeSwishRequest({
-          method: 'PUT',  // Swish API uses PUT for cancellation
-          url: url,
-          isCancellation: true,  // Flag that this is a cancellation request
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: {}  // Empty body for cancellation
-        }),
-        timeoutPromise
-      ]) as { success: boolean; error?: string; data?: any };
-
-      logDebug('Cancellation request result', {
-        success: result.success,
-        error: result.error,
-        data: result.data
-      });
-
-      if (!result.success) {
-        throw new Error(`Failed to cancel payment: ${result.error}`);
-      }
-
-      logDebug('Successfully cancelled Swish payment', {
-        originalInput: paymentIdOrReference,
-        swishPaymentId
-      });
-    } catch (error) {
-      logError('Error cancelling Swish payment', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : 'No stack trace',
-        originalInput: paymentIdOrReference,
-        swishPaymentId,
-        url
-      });
-      throw error;
-    }
-  }
-
-  private getHttpsAgent(): https.Agent {
-    try {
-      const resolvedCertPath = path.resolve(process.cwd(), this.config.certPath);
-      const resolvedKeyPath = path.resolve(process.cwd(), this.config.keyPath);
-      const resolvedCaPath = path.resolve(process.cwd(), this.config.caPath);
-
-      if (!fs.existsSync(resolvedCertPath) || !fs.existsSync(resolvedKeyPath) || !fs.existsSync(resolvedCaPath)) {
-        throw new Error('Missing required certificate files');
-      }
-
-      return new https.Agent({
-        cert: fs.readFileSync(resolvedCertPath),
-        key: fs.readFileSync(resolvedKeyPath),
-        ca: fs.readFileSync(resolvedCaPath),
-        minVersion: 'TLSv1.2'
-      });
-    } catch (error) {
-      logError('Error creating HTTPS agent:', error);
-      throw error;
-    }
+    return `${callbackUrl}/api/payments/swish/callback`;
   }
 } 
