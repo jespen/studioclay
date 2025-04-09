@@ -24,6 +24,7 @@ import fetch from 'node-fetch';
  */
 export class SwishService {
   private static instance: SwishService;
+  private readonly isTestMode: boolean;
   private readonly baseUrl: string;
   private readonly payeeAlias: string;
   private readonly certPath: string;
@@ -31,11 +32,26 @@ export class SwishService {
   private readonly caPath: string;
 
   private constructor() {
-    this.baseUrl = process.env.SWISH_API_URL || 'https://cpc.getswish.net/swish-cpcapi/api/v1';
-    this.payeeAlias = process.env.SWISH_PAYEE_ALIAS || '1232296374';
-    this.certPath = process.env.SWISH_CERT_PATH!;
-    this.keyPath = process.env.SWISH_KEY_PATH!;
-    this.caPath = process.env.SWISH_CA_PATH!;
+    this.isTestMode = process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true';
+    this.baseUrl = this.isTestMode
+      ? process.env.SWISH_TEST_API_URL || 'https://mss.cpc.getswish.net/swish-cpcapi/api/v1'
+      : process.env.SWISH_PROD_API_URL || 'https://cpc.getswish.net/swish-cpcapi/api/v1';
+    
+    this.payeeAlias = this.isTestMode
+      ? process.env.SWISH_TEST_PAYEE_ALIAS || '1231181189'
+      : process.env.SWISH_PROD_PAYEE_ALIAS || '1232296374';
+    
+    this.certPath = this.isTestMode
+      ? process.env.SWISH_TEST_CERT_PATH!
+      : process.env.SWISH_PROD_CERT_PATH!;
+    
+    this.keyPath = this.isTestMode
+      ? process.env.SWISH_TEST_KEY_PATH!
+      : process.env.SWISH_PROD_KEY_PATH!;
+    
+    this.caPath = this.isTestMode
+      ? process.env.SWISH_TEST_CA_PATH!
+      : process.env.SWISH_PROD_CA_PATH!;
 
     this.validateEnvironment();
   }
@@ -61,20 +77,6 @@ export class SwishService {
    * Validate environment setup
    */
   private validateEnvironment(): void {
-    const requiredEnvVars = [
-      { key: 'SWISH_API_URL', value: this.baseUrl },
-      { key: 'SWISH_PAYEE_ALIAS', value: this.payeeAlias },
-      { key: 'SWISH_CERT_PATH', value: this.certPath },
-      { key: 'SWISH_KEY_PATH', value: this.keyPath },
-      { key: 'SWISH_CA_PATH', value: this.caPath }
-    ];
-
-    for (const { key, value } of requiredEnvVars) {
-      if (!value) {
-        throw new SwishError(`Missing required environment variable: ${key}`, 'CONFIG_ERROR');
-      }
-    }
-
     const files = [
       { path: this.certPath, name: 'certificate' },
       { path: this.keyPath, name: 'private key' },
@@ -85,12 +87,6 @@ export class SwishService {
       const resolvedPath = path.resolve(process.cwd(), filePath);
       if (!fs.existsSync(resolvedPath)) {
         throw new SwishCertificateError(`Missing ${name} file at ${resolvedPath}`);
-      }
-      
-      try {
-        fs.accessSync(resolvedPath, fs.constants.R_OK);
-      } catch (error) {
-        throw new SwishCertificateError(`Cannot read ${name} file at ${resolvedPath}`);
       }
     }
   }
@@ -352,7 +348,7 @@ export class SwishService {
         cert: fs.readFileSync(path.resolve(process.cwd(), this.certPath)),
         key: fs.readFileSync(path.resolve(process.cwd(), this.keyPath)),
         ca: fs.readFileSync(path.resolve(process.cwd(), this.caPath)),
-        rejectUnauthorized: true
+        rejectUnauthorized: !this.isTestMode
       });
 
       const method = options.method || 'POST';
@@ -394,7 +390,13 @@ export class SwishService {
    * Get callback URL
    */
   private getCallbackUrl(): string {
-    const baseUrl = process.env.BASE_URL || 'https://studioclay.se';
-    return `${baseUrl}/api/payments/swish/callback`;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    let callbackUrl = baseUrl.replace('http://', 'https://');
+    
+    if (process.env.NODE_ENV === 'production' && callbackUrl.includes('www.studioclay.se')) {
+      callbackUrl = callbackUrl.replace('www.studioclay.se', 'studioclay.se');
+    }
+    
+    return `${callbackUrl}/api/payments/swish/callback`;
   }
 } 

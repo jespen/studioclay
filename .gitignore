@@ -1,9 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-node_modules
-.pnp
-.pnp.js
+/node_modules
+/.pnp
+.pnp.*
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
@@ -11,15 +11,14 @@ node_modules
 !.yarn/versions
 
 # testing
-coverage
+/coverage
 
 # next.js
-.next/
-out/
+/.next/
+/out/
 
 # production
-build
-dist
+/build
 
 # misc
 .DS_Store
@@ -37,7 +36,7 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
-.env.production
+.env.production  # Excluded to prevent committing sensitive information
 
 # vercel
 .vercel
@@ -50,20 +49,18 @@ next-env.d.ts
 /backups/*.zip
 
 # Certificate files
-certs/swish/prod/*
-certs/swish/test/*
+/certs/*
+!certs/.gitkeep
 !certs/swish/prod/.gitkeep
-!certs/swish/test/.gitkeep
 
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=https://eguwlgpnmnrqpeemgwoy.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVndXdsZ3BubW5ycXBlZW1nd295Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE1MTI3MDAsImV4cCI6MjA1NzA4ODcwMH0.2brfHdD88F8v9ugQh_gCiAdvSnhdsAvCObtOsG9dz1c 
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVndXdsZ3BubW5ycXBlZW1nd295Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MTUxMjcwMCwiZXhwIjoyMDU3MDg4NzAwfQ.zypnulQIUHZ0hdKycfHGpgCAPLytTAcaqk-F2L4Mheg
 
+
 # Swish Configuration
+
 NEXT_PUBLIC_SWISH_TEST_MODE=true
 SWISH_TEST_API_URL=https://mss.cpc.getswish.net/swish-cpcapi/api/v2
 SWISH_TEST_PAYEE_ALIAS=1234679304
-
-# Local Netlify folder
-.netlify

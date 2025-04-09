@@ -17,22 +17,19 @@ export async function POST(request: Request) {
     const normalizedUserData = normalizeUserData(originalData.user || originalData.userInfo || {});
     
     // Determine product type and normalize data
-    let productType = originalData.product_type || getProductType(originalData);
-    console.log(`Using product type: ${productType} (from explicit field: ${!!originalData.product_type})`);
+    let productType = getProductType(originalData);
+    console.log(`Detected product type: ${productType}`);
     
     // Map product types to expected values for the legacy API
     let mappedProductType;
     switch (productType) {
       case ProductType.ART_PRODUCT:
-      case 'art_product':
         mappedProductType = 'art_product';
         break;
       case ProductType.COURSE:
-      case 'course':
         mappedProductType = 'course';
         break;
       case ProductType.GIFT_CARD:
-      case 'gift_card':
         mappedProductType = 'gift_card';
         break;
       default:
