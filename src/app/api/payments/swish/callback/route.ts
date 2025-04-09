@@ -10,7 +10,7 @@ import { generateGiftCardPDF, GiftCardData } from '@/utils/giftCardPDF';
 import { setupCertificate } from '../cert-helper';
 import { PAYMENT_STATUSES, getValidPaymentStatus } from '@/constants/statusCodes';
 import { sendServerBookingConfirmationEmail } from '@/utils/serverEmail';
-import { SwishService } from '@/services/swish/swishService';
+import { SwishService } from '@/services/swish/SwishService';
 import { SwishCallbackSchema } from '@/services/swish/types';
 
 // Initialize Supabase client

@@ -560,7 +560,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                   />      
                   {selectedPaymentMethod === 'swish' && userInfo && (
                     <SwishPaymentSection
-                      ref={swishPaymentRef}
                       amount={calculatePrice()}
                       productType={
                         flowType === FlowType.GIFT_CARD ? 'gift_card' : 

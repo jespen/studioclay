@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { logDebug, logError, logInfo } from "@/lib/logging";
-import { SwishService } from "@/services/swish/swishService";
+import { SwishService } from "@/services/swish/SwishService";
 import { getValidPaymentStatus, PAYMENT_STATUSES } from "@/constants/statusCodes";
 import { v4 as uuidv4 } from 'uuid';
 
