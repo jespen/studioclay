@@ -12,6 +12,7 @@ import { SwishService } from '@/services/swish/swishService';
 import { SwishPaymentData, SwishRequestSchema } from '@/services/swish/types';
 import { setupCertificate } from '../cert-helper';
 import { PAYMENT_STATUSES, getValidPaymentStatus } from '@/constants/statusCodes';
+import { generatePaymentReference, generateOrderReference } from '@/utils/referenceGenerators';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -313,15 +314,18 @@ export async function POST(request: NextRequest) {
       phoneNumber: requestData.phoneNumber ? `${requestData.phoneNumber.substring(0, 4)}****${requestData.phoneNumber.slice(-2)}` : undefined
     });
 
-    // Get SwishService instance
-    const swishService = SwishService.getInstance();
+    // Generate payment reference
+    const paymentReference = generatePaymentReference();
+    
+    // Create Swish payment
+    const swishService = new SwishService();
 
     // Create payment
     const transaction = await swishService.createPayment({
       amount: requestData.amount,
       phoneNumber: requestData.phoneNumber,
       message: requestData.message,
-      paymentReference: `SC-${uuidv4().substring(0, 8).toUpperCase()}`,
+      paymentReference: paymentReference,
       metadata: {
         productType: requestData.productType,
         productId: requestData.productId,
@@ -371,16 +375,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-/**
- * Generate a unique payment reference based on product type and ID
- */
-function generatePaymentReference(productType: string, productId: string): string {
-  const prefix = productType === 'course' ? 'SC' 
-               : productType === 'gift_card' ? 'GC'
-               : 'SP'; // Shop product
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 6);
-  return `${prefix}-${timestamp}-${random}`;
 } 

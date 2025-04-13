@@ -1,3 +1,16 @@
+/**
+ * DEPRECATED - DENNA FIL ANVÄNDS INTE LÄNGRE
+ * 
+ * API-rutten har ersatts av nyare implementationer i enlighet med 
+ * betalningsrefaktoriseringen.
+ * 
+ * Behåller tills vidare för referens, men kan tas bort.
+ * 
+ * Om du ser detta och applikationen fortfarande fungerar korrekt, 
+ * är det säkert att ta bort denna fil samt övriga filer under /api/invoice/.
+ */
+
+/*
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -114,7 +127,7 @@ export async function GET(
       invoiceNumber = booking.invoice_number;
     }
     
-    // If we couldn't find an invoice number, return an error
+    // Om vi inte kunde hitta ett fakturanummer, returnera ett fel
     if (!invoiceNumber) {
       return NextResponse.json(
         { success: false, error: 'Invoice number not found' },
@@ -122,10 +135,10 @@ export async function GET(
       );
     }
 
-    // Log the invoice number we're going to look for
+    // Logga fakturanumret vi kommer att söka efter
     console.log('Found invoice number:', invoiceNumber);
 
-    // Get the invoice PDF from storage
+    // Hämta PDF-fakturan från lagringen
     console.log('Fetching PDF from storage');
     const { data: pdfData, error: pdfError } = await supabase
       .storage
@@ -141,7 +154,7 @@ export async function GET(
       );
     }
 
-    // Convert the PDF data to base64
+    // Konvertera PDF-data till base64
     const base64Pdf = await pdfData.arrayBuffer();
     const base64String = Buffer.from(base64Pdf).toString('base64');
 
@@ -159,4 +172,5 @@ export async function GET(
       { status: 500 }
     );
   }
-} 
+}
+*/ 

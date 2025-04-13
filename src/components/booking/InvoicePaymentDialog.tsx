@@ -1,3 +1,17 @@
+/**
+ * DEPRECATED - DENNA FIL ANVÄNDS TROLIGEN INTE LÄNGRE
+ * 
+ * Denna komponent har ersatts av nyare implementationer i enlighet med 
+ * betalningsrefaktoriseringen.
+ * 
+ * Behåller tills vidare för referens, men kan tas bort om testerna visar att
+ * den inte längre används.
+ * 
+ * Om du ser detta och applikationen fortfarande fungerar korrekt, 
+ * är det säkert att ta bort denna fil.
+ */
+
+/*
 import React, { useEffect } from 'react';
 import {
   Dialog,
@@ -98,4 +112,5 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
   );
 };
 
-export default InvoicePaymentDialog; 
+export default InvoicePaymentDialog;
+*/ 

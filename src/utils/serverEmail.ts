@@ -6,6 +6,9 @@ import { readFile } from 'fs';
 import path from 'path';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import Mail from 'nodemailer/lib/mailer';
+import { createServerSupabaseClient } from '@/utils/supabase';
+import { logDebug, logError, logInfo } from '@/lib/logging';
+import { PRODUCT_TYPES, getValidProductType } from '@/constants/statusCodes';
 
 // Email configuration for server-side sending
 const emailConfig = {
@@ -20,7 +23,8 @@ const emailConfig = {
   // Studio Clay email address
   studioClayEmail: process.env.STUDIO_CLAY_EMAIL || 'eva@studioclay.se',
   // BCC email for keeping copies
-  bccEmail: process.env.BCC_EMAIL || ''
+  bccEmail: process.env.BCC_EMAIL || '',
+  from: process.env.EMAIL_FROM || 'info@studioclay.se'
 };
 
 // Longer keep-alive timer for email sending (30 seconds instead of 15)
@@ -916,6 +920,273 @@ export async function sendServerProductOrderConfirmationEmail(params: {
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Unknown error sending product order confirmation email'
+    };
+  }
+}
+
+/**
+ * Server Email Module
+ * 
+ * Hanterar e-postmeddelanden som skickas från servern. Detta inkluderar:
+ * - Bekräftelse av bokningar
+ * - Fakturor
+ * - Presentkort
+ */
+
+// Standardsvar från e-postfunktioner
+interface EmailResult {
+  success: boolean;
+  message: string;
+  messageId?: string;
+}
+
+/**
+ * Skickar e-post med faktura till kunden
+ */
+export async function sendEmailWithInvoice(data: {
+  userInfo: any;
+  invoiceNumber: string;
+  paymentReference: string;
+  productType: string;
+  pdfBlob?: Blob;
+  giftCardPdfUrl?: string;
+  courseDetails?: any;
+  artProduct?: any;
+  giftCardDetails?: any;
+}): Promise<EmailResult> {
+  const requestId = data.paymentReference;
+  
+  try {
+    logInfo(`Preparing to send invoice email`, { requestId });
+    
+    // Validera e-postmottagare
+    const recipientEmail = data.userInfo.email;
+    if (!recipientEmail || !recipientEmail.includes('@')) {
+      throw new Error(`Invalid recipient email: ${recipientEmail}`);
+    }
+    
+    // Skapa e-posttransport
+    const transporter = nodemailer.createTransport({
+      host: emailConfig.host,
+      port: emailConfig.port,
+      secure: emailConfig.secure,
+      auth: emailConfig.auth
+    });
+    
+    // Förbered bifogad faktura-PDF om den finns
+    const attachments = [];
+    
+    if (data.pdfBlob) {
+      logDebug(`Adding invoice PDF attachment`, { requestId });
+      
+      // Konvertera PDF-blob till buffer
+      const arrayBuffer = await data.pdfBlob.arrayBuffer();
+      const pdfBuffer = Buffer.from(arrayBuffer);
+      
+      attachments.push({
+        filename: `faktura-${data.invoiceNumber}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf'
+      });
+    }
+    
+    // Generera ämnesrad och innehåll baserat på produkttyp
+    const validProductType = getValidProductType(data.productType);
+    let subject = '';
+    let htmlContent = '';
+    
+    if (validProductType === PRODUCT_TYPES.COURSE) {
+      // Kursbokningar
+      const courseTitle = data.courseDetails?.title || 'din kurs';
+      subject = `Din faktura för bokning av ${courseTitle}`;
+      
+      // Formatera kursdatum om det finns
+      let formattedDate = '';
+      if (data.courseDetails?.start_date) {
+        const courseDate = new Date(data.courseDetails.start_date);
+        formattedDate = courseDate.toLocaleDateString('sv-SE', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+      
+      // HTML-innehåll för kursbokningar
+      htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #42857a;">Tack för din bokning!</h1>
+          <p>Hej ${data.userInfo.firstName},</p>
+          <p>Tack för din bokning av kursen "${courseTitle}"${formattedDate ? ` den ${formattedDate}` : ''}.</p>
+          <p>Din faktura är bifogad i detta e-postmeddelande. Betalningsvillkor är 14 dagar.</p>
+          <p><strong>Fakturanummer:</strong> ${data.invoiceNumber}</p>
+          <p><strong>Betalningsreferens:</strong> ${data.paymentReference}</p>
+          <p>Vi ser fram emot att träffa dig på kursen!</p>
+          <p>Vänliga hälsningar,<br>Studio Clay</p>
+        </div>
+      `;
+    } else if (validProductType === PRODUCT_TYPES.GIFT_CARD) {
+      // Presentkort
+      subject = 'Ditt presentkort från Studio Clay';
+      
+      // HTML-innehåll för presentkort
+      htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #42857a;">Tack för ditt köp av presentkort!</h1>
+          <p>Hej ${data.userInfo.firstName},</p>
+          <p>Tack för ditt köp av presentkort till Studio Clay på ${data.giftCardDetails?.amount || ''} kr.</p>
+          <p>Din faktura är bifogad i detta e-postmeddelande. Betalningsvillkor är 14 dagar.</p>
+          <p><strong>Fakturanummer:</strong> ${data.invoiceNumber}</p>
+          <p><strong>Betalningsreferens:</strong> ${data.paymentReference}</p>
+          ${data.giftCardDetails?.code ? `<p><strong>Presentkortskod:</strong> ${data.giftCardDetails.code}</p>` : ''}
+          <p>Efter betalning kan presentkortet användas för att boka kurser eller köpa produkter på vår hemsida.</p>
+          <p>Vänliga hälsningar,<br>Studio Clay</p>
+        </div>
+      `;
+      
+      // Lägg till länk till presentkorts-PDF om det finns
+      if (data.giftCardPdfUrl) {
+        htmlContent += `
+          <div style="margin-top: 20px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;">
+            <p>Du kan ladda ner ditt presentkort som PDF genom att <a href="${data.giftCardPdfUrl}" target="_blank">klicka här</a>.</p>
+          </div>
+        `;
+      }
+    } else if (validProductType === PRODUCT_TYPES.ART_PRODUCT) {
+      // Konstprodukt
+      const productName = data.artProduct?.name || 'din produkt';
+      subject = `Din faktura för köp av ${productName}`;
+      
+      // HTML-innehåll för konstprodukter
+      htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #42857a;">Tack för ditt köp!</h1>
+          <p>Hej ${data.userInfo.firstName},</p>
+          <p>Tack för ditt köp av "${productName}".</p>
+          <p>Din faktura är bifogad i detta e-postmeddelande. Betalningsvillkor är 14 dagar.</p>
+          <p><strong>Fakturanummer:</strong> ${data.invoiceNumber}</p>
+          <p><strong>Betalningsreferens:</strong> ${data.paymentReference}</p>
+          <p>Vi kommer att kontakta dig angående leverans efter att betalningen har mottagits.</p>
+          <p>Vänliga hälsningar,<br>Studio Clay</p>
+        </div>
+      `;
+    } else {
+      // Generisk
+      subject = 'Din faktura från Studio Clay';
+      
+      // Generiskt HTML-innehåll
+      htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #42857a;">Tack för ditt köp!</h1>
+          <p>Hej ${data.userInfo.firstName},</p>
+          <p>Tack för ditt köp från Studio Clay.</p>
+          <p>Din faktura är bifogad i detta e-postmeddelande. Betalningsvillkor är 14 dagar.</p>
+          <p><strong>Fakturanummer:</strong> ${data.invoiceNumber}</p>
+          <p><strong>Betalningsreferens:</strong> ${data.paymentReference}</p>
+          <p>Vänliga hälsningar,<br>Studio Clay</p>
+        </div>
+      `;
+    }
+    
+    // Skicka e-postmeddelande
+    const mailOptions = {
+      from: `"Studio Clay" <${emailConfig.from}>`,
+      to: recipientEmail,
+      subject: subject,
+      html: htmlContent,
+      attachments: attachments
+    };
+    
+    logDebug(`Sending email to ${recipientEmail}`, { 
+      requestId,
+      subject,
+      hasAttachments: attachments.length > 0 
+    });
+    
+    // Faktiskt skicka e-post
+    const info = await transporter.sendMail(mailOptions);
+    
+    logInfo(`Successfully sent email`, {
+      requestId,
+      messageId: info.messageId,
+      recipient: recipientEmail
+    });
+    
+    return {
+      success: true,
+      message: 'Email sent successfully',
+      messageId: info.messageId
+    };
+    
+  } catch (error) {
+    logError(`Failed to send invoice email`, {
+      requestId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error sending email'
+    };
+  }
+}
+
+/**
+ * Skickar en bekräftelse på bokning via e-post
+ */
+export async function sendBookingConfirmation(data: {
+  email: string;
+  name: string;
+  bookingReference: string;
+  courseTitle: string;
+  courseDate: string;
+  participants: number;
+}): Promise<EmailResult> {
+  try {
+    // Skapa e-posttransport
+    const transporter = nodemailer.createTransport({
+      host: emailConfig.host,
+      port: emailConfig.port,
+      secure: emailConfig.secure,
+      auth: emailConfig.auth
+    });
+    
+    // HTML-innehåll för bokningsbekräftelse
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #42857a;">Bokningsbekräftelse</h1>
+        <p>Hej ${data.name},</p>
+        <p>Vi bekräftar härmed din bokning av kursen "${data.courseTitle}" den ${data.courseDate}.</p>
+        <p><strong>Antal deltagare:</strong> ${data.participants}</p>
+        <p><strong>Bokningsreferens:</strong> ${data.bookingReference}</p>
+        <p>Vi ser fram emot att träffa dig på kursen!</p>
+        <p>Vänliga hälsningar,<br>Studio Clay</p>
+      </div>
+    `;
+    
+    // Skicka e-postmeddelande
+    const mailOptions = {
+      from: `"Studio Clay" <${emailConfig.from}>`,
+      to: data.email,
+      subject: `Bokningsbekräftelse - ${data.courseTitle}`,
+      html: htmlContent
+    };
+    
+    const info = await transporter.sendMail(mailOptions);
+    
+    return {
+      success: true,
+      message: 'Booking confirmation email sent successfully',
+      messageId: info.messageId
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error sending booking confirmation'
     };
   }
 } 

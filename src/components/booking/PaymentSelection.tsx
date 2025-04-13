@@ -17,7 +17,7 @@
  *       └── InvoicePaymentDialog.tsx  # Payment status
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { 
@@ -52,13 +52,13 @@ import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import InventoryIcon from '@mui/icons-material/Inventory';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import { GenericStep, FlowType } from '../common/BookingStepper';
 import GenericFlowContainer from '../common/GenericFlowContainer';
 import StyledButton from '../common/StyledButton';
 import { v4 as uuidv4 } from 'uuid';
 import SwishPaymentSection, { SwishPaymentSectionRef } from './SwishPaymentSection';
-import InvoicePaymentSection, { InvoicePaymentSectionRef } from './InvoicePaymentSection';
 import { PaymentMethod, PaymentDetails, BaseFormErrors, InvoiceDetails } from '@/types/payment';
 import { setPaymentInfo } from '@/utils/flowStorage';
 import { FlowStateData } from '../common/FlowStepWrapper';
@@ -74,8 +74,12 @@ import {
   getGiftCardDetails 
 } from '@/utils/flowStorage';
 import { getPreviousStepUrl, getNextStepUrl } from '@/utils/flowNavigation';
-import { PAYMENT_STATUSES } from '@/constants/statusCodes';
+import { PAYMENT_STATUSES, PAYMENT_METHODS, PRODUCT_TYPES } from '@/constants/statusCodes';
 import { PaymentService } from '@/services/payment/paymentService';
+import { validatePaymentRequest } from '@/lib/validation/paymentSchemas';
+import { type ProductType } from '@/constants/statusCodes';
+import InvoicePaymentSection, { InvoicePaymentSectionRef } from '../payment/InvoicePaymentSection';
+import { StandardPaymentResponse, PaymentReferenceData } from '@/types/paymentTypes';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -118,6 +122,14 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const [invoicePostalCode, setInvoicePostalCode] = useState<string>('');
   const [invoiceCity, setInvoiceCity] = useState<string>('');
   const [invoiceReference, setInvoiceReference] = useState<string>('');
+
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentProcessStarted, setPaymentProcessStarted] = useState(false);
+  const [processingSteps, setProcessingSteps] = useState([
+    { id: 'payment', label: 'Skapar betalning...', completed: false },
+    { id: 'processing', label: 'Bearbetar betalningen...', completed: false },
+    { id: 'redirect', label: 'Förbereder bekräftelse...', completed: false }
+  ]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -165,15 +177,19 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   };
 
   const validateForm = (): boolean => {
-    const newErrors: BaseFormErrors = {};
+    setFormErrors(prev => ({ ...prev, paymentMethod: undefined }));
     
-    if (!selectedPaymentMethod) {
-      newErrors.paymentMethod = 'Välj betalningsmetod';
+    if (selectedPaymentMethod === 'invoice') {
+      // Validera fakturaformuläret via ref
+      if (invoicePaymentRef.current) {
+        return invoicePaymentRef.current.validateForm();
+      }
+    } else if (selectedPaymentMethod === 'swish') {
+      // Validering av swish sker i SwishPaymentSection
+      return true;
     }
-
-    // Each payment section handles its own validation
-    setFormErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    
+    return false;
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -211,7 +227,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       } else if (selectedPaymentMethod === 'invoice') {
         console.log('[PaymentSelection] Processing Invoice payment');
         if (invoicePaymentRef.current) {
-          const isValid = invoicePaymentRef.current.validateForm();
+          const isValid = validateForm();
           console.log('[PaymentSelection] Invoice form validation result:', isValid);
           
           if (isValid) {
@@ -242,154 +258,138 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   };
 
   const handleInvoicePayment = async (): Promise<boolean> => {
-    try {
-      setIsSubmitting(true);
-      setSubmitError(null);
-
-      // Validate form
-      if (!invoicePaymentRef.current) {
-        throw new Error('Invoice payment form reference is undefined');
-      }
-
-      const isInvoiceFormValid = invoicePaymentRef.current.validateForm();
-      if (!isInvoiceFormValid) {
-        setSubmitError('Vänligen fyll i alla obligatoriska fält för fakturering.');
-        return false;
-      }
-
-      // Determine product type and get details
-      let amount = 0;
-      let productId = '';
-      let productType = '';
-
-      if (flowType === FlowType.GIFT_CARD) {
-        // For gift card flow
-        if (!flowData?.itemDetails) {
-          throw new Error('Gift card details are missing');
-        }
-        amount = flowData.itemDetails.amount;
-        productId = flowData.itemDetails.id;
-        productType = 'gift_card';
-      } else if (flowType === FlowType.ART_PURCHASE) {
-        // For art purchase flow
-        if (!flowData?.itemDetails) {
-          throw new Error('Art product details are missing');
-        }
-        amount = flowData.itemDetails.price;
-        productId = flowData.itemDetails.id;
-        productType = 'art_product';
-      } else {
-        // For course booking flow
-        if (!courseId) {
-          throw new Error('Course ID is missing');
-        }
-        amount = calculatePrice();
-        productId = courseId;
-        productType = 'course';
-      }
-
-      if (!userInfo) {
-        throw new Error('User information is missing');
-      }
-
-      // Get invoice details from the ref
-      const invoiceDetails = invoicePaymentRef.current.getInvoiceDetails();
-      
-      // Generate a unique payment reference and idempotency key
-      const paymentRef = `${productType.substring(0, 1)}-inv-${Date.now()}`;
-      const idempotencyKey = uuidv4();
-      
-      // Construct the request body
-      const requestBody = {
-        payment_method: "invoice",
-        amount,
-        product_id: productId,
-        product_type: productType,
-        payment_reference: paymentRef,
-        idempotency_key: idempotencyKey,
-        userInfo: {
-          firstName: userInfo.firstName,
-          lastName: userInfo.lastName,
-          email: userInfo.email,
-          phone: userInfo.phone,
-          numberOfParticipants: userInfo.numberOfParticipants
-        },
-        invoiceDetails: invoiceDetails
-      };
-
-      console.log('Creating invoice payment with: ', requestBody);
-      console.log('Invoice request stringified:', JSON.stringify(requestBody));
-
-      // Make API call to create invoice payment. This endpoint should never ever be changed. this is very important. dont change it!!!
-      const response = await fetch('/api/payments/invoice/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      console.log('Invoice API response status:', response.status);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Invoice API error details:', errorData);
-        throw new Error(errorData.message || errorData.error || 'Failed to process invoice payment');
-      }
-
-      const data = await response.json();
-      console.log('Invoice payment created:', data);
-
-      // Handle success
-      if (onNext) {
-        onNext({
-          paymentStatus: 'PAID',
-          paymentMethod: selectedPaymentMethod,
-          paymentReference: data.paymentId
-        });
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Invoice payment error:', error);
-      setSubmitError(error instanceof Error ? error.message : 'Ett fel uppstod vid behandling av fakturan.');
+    console.log('[PaymentSelection] Starting invoice payment flow');
+    
+    if (!invoicePaymentRef.current || !userInfo) {
+      console.error('[PaymentSelection] Invoice form reference is not available or userInfo is missing');
       return false;
-    } finally {
+    }
+    
+    // Validera formuläret med den befintliga valideringsfunktionen
+    if (!invoicePaymentRef.current.validateForm()) {
+      console.log('[PaymentSelection] Form validation failed');
+      return false;
+    }
+    
+    // Visa processindikatorn
+    preparePaymentProcessSteps();
+    setIsSubmitting(true);
+    setSubmitError(null);
+    
+    try {
+      // Använd den befintliga metoden för att skicka fakturabetalningen
+      const success = await invoicePaymentRef.current.submitInvoicePayment();
+      console.log('[PaymentSelection] Invoice payment result:', success);
+      
+      if (!success) {
+        // Återställ processtegen vid fel
+        setPaymentProcessStarted(false);
+      }
+      
       setIsSubmitting(false);
+      return success;
+    } catch (error) {
+      console.error('[PaymentSelection] Error in handleInvoicePayment:', error);
+      setSubmitError(error instanceof Error ? error.message : 'Ett fel uppstod');
+      setIsSubmitting(false);
+      
+      // Återställ processtegen vid fel
+      setPaymentProcessStarted(false);
+      
+      return false;
+    }
+  };
+
+  const handleSwishPayment = async (): Promise<boolean> => {
+    console.log('[PaymentSelection] Starting Swish payment flow');
+    
+    if (!swishPaymentRef.current) {
+      console.error('[PaymentSelection] No Swish payment ref available');
+      return false;
+    }
+    
+    // Visa processindikatorn för Swish
+    preparePaymentProcessSteps();
+    
+    try {
+      const success = await swishPaymentRef.current.submitSwishPayment();
+      
+      if (!success) {
+        // Återställ processtegen vid fel
+        setPaymentProcessStarted(false);
+      }
+      
+      return success;
+    } catch (error) {
+      console.error('[PaymentSelection] Error in Swish payment:', error);
+      
+      // Återställ processtegen vid fel
+      setPaymentProcessStarted(false);
+      
+      return false;
     }
   };
 
   const handlePaymentComplete = (paymentData: any) => {
-    console.log('[PaymentSelection] Payment complete with data:', paymentData);
+    console.log('[PaymentSelection] Payment completed:', paymentData);
     
-    // Store the payment reference if available
-    if (paymentData && paymentData.payment_reference) {
-      console.log('[PaymentSelection] Storing payment reference:', paymentData.payment_reference);
-      setPaymentReference(paymentData.payment_reference);
-    }
+    // Sätt success-state
+    setPaymentSuccess(true);
     
-    // Determine where to redirect based on the flow type
-    let redirectPath = '';
+    // Visa feedback till användaren innan redirect
+    setProcessingSteps(current => 
+      current.map(step => 
+        step.id === 'payment' ? { ...step, completed: true } : step
+      )
+    );
     
-    if (flowType === FlowType.COURSE_BOOKING) {
-      redirectPath = '/booking/confirmation';
-      console.log('[PaymentSelection] Redirecting to course confirmation page');
-    } else if (flowType === FlowType.GIFT_CARD) {
-      redirectPath = '/gift-card/confirmation';
-      console.log('[PaymentSelection] Redirecting to gift card confirmation page');
-    } else if (flowType === FlowType.ART_PURCHASE) {
-      redirectPath = '/art/confirmation';
-      console.log('[PaymentSelection] Redirecting to art product confirmation page');
-    } else {
-      console.error('[PaymentSelection] Unknown flow type for redirect:', flowType);
-      redirectPath = '/';
-    }
-    
-    // Give a small delay before redirecting to let things settle
+    // Kort fördröjning för att användaren ska hinna se att betalningen lyckades
     setTimeout(() => {
-      console.log('[PaymentSelection] Executing redirect to:', redirectPath);
-      router.push(redirectPath);
-    }, 500);
+      setProcessingSteps(current => 
+        current.map(step => 
+          step.id === 'processing' ? { ...step, completed: true } : step
+        )
+      );
+      
+      // Ytterligare fördröjning innan redirect
+      setTimeout(() => {
+        setProcessingSteps(current => 
+          current.map(step => 
+            step.id === 'redirect' ? { ...step, completed: true, label: 'Omdirigerar till bekräftelsesidan...' } : step
+          )
+        );
+        
+        // Prioritera redirect-URL från API-svar om den finns
+        if (paymentData?.redirectUrl) {
+          console.log('[PaymentSelection] Redirecting to URL from API:', paymentData.redirectUrl);
+          router.push(paymentData.redirectUrl);
+          return;
+        }
+        
+        // Fallback till standardrutter baserat på flowType
+        let redirectPath = '/payment/confirmation';
+        
+        if (paymentData?.paymentReference) {
+          redirectPath = `/payment/confirmation/${paymentData.paymentReference}`;
+        }
+        
+        if (flowType === FlowType.COURSE_BOOKING) {
+          redirectPath = `/booking/confirmation?reference=${paymentData?.paymentReference || ''}`;
+        } else if (flowType === FlowType.GIFT_CARD) {
+          redirectPath = `/gift-card/confirmation?reference=${paymentData?.paymentReference || ''}`;
+        } else if (flowType === FlowType.ART_PURCHASE) {
+          redirectPath = `/art/confirmation?reference=${paymentData?.paymentReference || ''}`;
+        }
+        
+        console.log('[PaymentSelection] Redirecting to:', redirectPath);
+        router.push(redirectPath);
+      }, 500);
+    }, 1000);
+    
+    // Anropa även onNext om det finns en sådan callback
+    if (onNext) {
+      onNext(paymentData);
+    }
   };
 
   const handleBack = () => {
@@ -431,22 +431,28 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   }, []);
 
   const handlePaymentSuccess = (paymentData: any) => {
+    // Determine actual payment status from paymentData
+    const paymentStatus = paymentData.status || PAYMENT_STATUSES.CREATED;
+    
+    console.log(`Payment success handler with status: ${paymentStatus}`, paymentData);
+    
     // Store payment info using PaymentService instead of direct call
     PaymentService.completePayment({
       paymentMethod: selectedPaymentMethod,
       productData: flowData?.itemDetails || courseDetail,
       userData: userInfo,
-      paymentReference: paymentData.paymentId,
+      paymentReference: paymentData.paymentId || paymentData.paymentReference,
       amount: calculatePrice(),
+      status: paymentStatus,
       additionalData: paymentData
     });
 
     // Proceed to next step
     if (onNext) {
       onNext({
-        paymentStatus: 'PAID',
+        paymentStatus: paymentStatus,
         paymentMethod: selectedPaymentMethod,
-        paymentReference: paymentData.paymentId
+        paymentReference: paymentData.paymentId || paymentData.paymentReference
       });
     }
   };
@@ -480,6 +486,42 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       console.error('Error getting gift card amount:', e);
       return courseDetail?.price || 0;
     }
+  };
+
+  // Vid start av betalningsprocessen: förbered status-stegen
+  const preparePaymentProcessSteps = () => {
+    setPaymentProcessStarted(true);
+    setProcessingSteps([
+      { id: 'payment', label: 'Skapar betalning...', completed: false },
+      { id: 'processing', label: 'Bearbetar betalningen...', completed: false },
+      { id: 'redirect', label: 'Förbereder bekräftelse...', completed: false }
+    ]);
+  };
+
+  // För att visa processindikatorn
+  const renderProcessingStatus = () => {
+    if (!paymentProcessStarted) return null;
+    
+    return (
+      <Box sx={{ mt: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 2 }}>
+        <Typography variant="subtitle1" gutterBottom fontWeight="medium" color="primary">
+          Betalningsprocessen pågår
+        </Typography>
+        
+        {processingSteps.map((step) => (
+          <Box key={step.id} sx={{ display: 'flex', alignItems: 'center', my: 1 }}>
+            {step.completed ? (
+              <CheckCircleIcon color="success" sx={{ mr: 1 }} />
+            ) : (
+              <CircularProgress size={20} thickness={4} sx={{ mr: 1 }} />
+            )}
+            <Typography variant="body2">
+              {step.label}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    );
   };
 
   // If data is loading, show loading state
@@ -619,11 +661,19 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
                     <InvoicePaymentSection
                       ref={invoicePaymentRef}
                       userInfo={userInfo}
-                      courseId={courseId}
+                      productId={courseId}
                       amount={calculatePrice()}
-                      product_type={flowType === FlowType.GIFT_CARD ? 'gift_card' : 'course'}
+                      productType={
+                        flowType === FlowType.GIFT_CARD ? 'gift_card' : 
+                        flowType === FlowType.ART_PURCHASE ? 'art_product' : 
+                        'course'
+                      }
                       onPaymentComplete={handlePaymentSuccess}
-                      onValidationError={(error) => setFormErrors(prev => ({ ...prev, invoice: error }))}
+                      onValidationError={(error: string) => setFormErrors(prev => ({ ...prev, invoice: error }))}
+                      onPaymentError={(error: Error) => {
+                        console.error('Invoice payment error:', error);
+                        setSubmitError('Ett fel uppstod vid fakturabetalningen. Försök igen eller kontakta support.');
+                      }}
                     />
                   )}
                 </CardContent>
@@ -944,6 +994,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             }}
           >
             {renderPaymentContent()}
+            {renderProcessingStatus()}
             {renderButtons()}
           </Paper>
         </GenericFlowContainer>
@@ -962,6 +1013,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             }}
           >
             {renderPaymentContent()}
+            {renderProcessingStatus()}
             {renderButtons()}
           </Paper>
         </>

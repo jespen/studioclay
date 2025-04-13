@@ -1,3 +1,16 @@
+/**
+ * DEPRECATED - DENNA FIL ANVÄNDS INTE LÄNGRE
+ * 
+ * API-rutten har ersatts av /api/payments/invoice/create/route.ts i enlighet med 
+ * betalningsrefaktoriseringen.
+ * 
+ * Behåller tills vidare för referens, men kan tas bort.
+ * 
+ * Om du ser detta och applikationen fortfarande fungerar korrekt, 
+ * är det säkert att ta bort denna fil samt övriga filer under /api/invoice/.
+ */
+
+/*
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendServerInvoiceEmail } from '@/utils/serverEmail';
@@ -948,4 +961,5 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-} 
+}
+*/ 

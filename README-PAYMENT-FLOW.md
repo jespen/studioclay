@@ -14,68 +14,427 @@ Systemet stödjer för närvarande två betalningsmetoder:
 **OBS! KRITISKT:** API-vägarna för betalningssystemet måste användas exakt som angivna nedan. Ändringar i dessa vägar kommer orsaka fel i betalningsflödet:
 - Swish-betalningar: `/api/payments/swish/create`
 - Fakturabetalningar: `/api/payments/invoice/create`
+- Statusförfrågningar: `/api/payments/status/[reference]`
 
 Dessa vägars struktur och namnkonventioner är specifikt utformade för att matcha backend-processerna. Ändra aldrig dessa vägar i frontend utan motsvarande ändringar i backend.
 
-## Komponentstruktur
+## Komponentarkitektur och ansvarsområden
+
+### Huvudkomponenter och deras roller
+
+#### 1. PaymentSelection.tsx
+**Huvudrollen:** Central koordinator för hela betalningsflödet.
+**Ansvar:**
+- Renderar betalningsmetodval (Swish/Faktura)
+- Samlar användardata och produktinformation
+- Koordinerar flödet mellan olika betalningskomponenter
+- Hanterar callbacks och navigering efter betalning
+- Validerar de övergripande formulärinmatningarna
+
+**Interaktioner:**
+- Renderar antingen `SwishPaymentSection` eller `InvoicePaymentSection` baserat på användarval
+- Anropar refs (t.ex. `invoicePaymentRef.current.submitInvoicePayment()`) för att starta betalning
+- Hanterar callbacks från betalningskomponenterna via `handlePaymentComplete`
+
+#### 2. Invoice-flödeskomponenter
+
+##### InvoicePaymentSection.tsx
+**Huvudrollen:** Ansvarig för fakturainmatning och API-anrop för fakturering.
+**Ansvar:**
+- Samlar in faktureringsadress och referens
+- Validerar faktureringsformulär
+- Hanterar API-anropet till `/api/payments/invoice/create`
+- Felhantering och statusuppdateringar
+
+**Exponerade metoder via ref:**
+- `validateForm()` - Kontrollerar att alla obligatoriska fält är ifyllda
+- `getInvoiceDetails()` - Returnerar faktureringsuppgifter
+- `submitInvoicePayment()` - Gör API-anropet och returnerar status
+
+**Dataström:**
+1. Tar emot användardata från PaymentSelection
+2. Samlar formulärdata för fakturering
+3. Skapar API-anrop med komplett betalningsdata
+4. Anropar `onPaymentComplete` callback med svarsdata
+
+#### 3. Swish-flödeskomponenter
+
+##### SwishPaymentSection.tsx
+**Huvudrollen:** Koordinator för Swish-betalningsflödet.
+**Ansvar:**
+- Hanterar telefoninmatning via `SwishPaymentForm`
+- Validerar telefonnummer för Swish
+- Skapar API-anrop till Swish-betalning
+- Visar dialog för betalningsstatus och QR-kod
+- Hanterar polling av betalningsstatus
+
+**Exponerade metoder via ref:**
+- `submitSwishPayment()` - Validerar och startar Swish-betalningsflödet
+
+**Dataström:**
+1. Tar emot användardata och betalningsbelopp från PaymentSelection
+2. Samlar telefonnummer från användaren
+3. Gör API-anropet till `/api/payments/swish/create`
+4. Startar polling för betalningsstatus
+5. Anropar callbacks baserat på betalningsresultat
+
+##### SwishPaymentForm.tsx
+**Ansvar:**
+- Renderar inmatningsfält för telefonnummer
+- Validerar telefonnummerformat
+- Ger visuell feedback om valideringsfel
+
+##### SwishPaymentDialog.tsx
+**Ansvar:**
+- Visar betalningsstatus (väntar, betald, nekad, fel)
+- Visar QR-kod för betalning när tillämpligt
+- Ger användaren möjlighet att avbryta betalning
+
+### Backend-komponenter och tjänster
+
+#### 1. Tjänster (services)
+
+##### invoiceService.ts
+**Huvudrollen:** Sköter kommunikationen med backend för fakturor.
+**Ansvar:**
+- Skapar API-anrop till `/api/payments/invoice/create`
+- Strukturerar faktureringsdata
+- Felhantering och återförsök
+
+##### paymentService.ts
+**Huvudrollen:** Centraliserad tjänst för betalningsrelaterade funktioner.
+**Ansvar:**
+- Validerar betalningsdata
+- Hanterar idempotensnycklar
+- Kan anropa både Swish och Faktura-tjänster
+
+#### 2. API-routes
+
+##### /api/payments/invoice/create/route.ts
+**Huvudrollen:** Skapar faktura och hanterar orderdata.
+**Ansvar:**
+- Validerar inkommande data
+- Skapar order i rätt tabell baserat på produkttyp
+- Skapar fakturareferens och fakturanummer
+- Initierar bakgrundsprocess för PDF-generering och e-post
+- Returnerar bekräftelse till frontend
+
+**Processflöde:**
+1. Validerar inkommande data
+2. Skapar payment record i databasen
+3. Sparar orderdata (beroende på produkttyp)
+4. Startar asynkron process för PDF-generering och e-post
+5. Returnerar snabbt svar till frontenden med betalningsreferens
+
+##### /api/payments/swish/create/route.ts
+**Huvudrollen:** Initierar Swish-betalning och hanterar databasen.
+**Ansvar:**
+- Validerar inkommande data
+- Skapar payment record
+- Anropar Swish API
+- Returnerar betalningslänk och referens
+
+##### /api/payments/status/[reference]/route.ts
+**Huvudrollen:** Returnerar aktuell betalningsstatus.
+**Ansvar:**
+- Hämtar betalningsstatus från databasen
+- Returnerar status och relevant information
+- Används för polling från frontend
+
+### Hjälputiliteter
+
+#### flowStorage.ts
+**Huvudrollen:** Hanterar persisterande lagring av betalnings- och flödesdata.
+**Ansvar:**
+- Sparar och hämtar betalningsreferenser
+- Hanterar användardata över flödet
+- Lagrar tillfälliga betalningsuppgifter
+
+#### invoicePDF.ts
+**Huvudrollen:** Genererar faktura-PDF.
+**Ansvar:**
+- Skapar PDF baserat på order- och kunddata
+- Formaterar fakturainformation
+- Lägger till betalningsinformation
+
+#### giftCardPDF.ts
+**Huvudrollen:** Genererar presentkorts-PDF.
+**Ansvar:**
+- Skapar presentkort med unik kod
+- Formaterar mottagarinformation
+
+#### serverEmail.ts
+**Huvudrollen:** Hanterar e-postutskick från servern.
+**Ansvar:**
+- Skapar e-postmeddelanden
+- Bifogar genererade PDF-filer
+- Hanterar olika e-postmallar för olika produkttyper
+
+## Dataflöden i detalj
+
+### 1. Faktureringsflödet
+
+#### Frontend-flöde för fakturering:
+1. **Användarval:**
+   - Användaren väljer "Faktura" i PaymentSelection
+   - InvoicePaymentSection visas med formulär
+
+2. **Datainsamling:**
+   - Användaren fyller i faktureringsadress och referens
+   - PaymentSelection samlar userData, courseData och vald betalningsmetod
+
+3. **Validering och inskickning:**
+   - Vid submit anropas `invoicePaymentRef.current.submitInvoicePayment()`
+   - InvoicePaymentSection validerar, konstruerar betalningsdata och anropar invoice API
+
+4. **Callback-hantering:**
+   - När API svarar, anropar InvoicePaymentSection `onPaymentComplete` med svarsdata
+   - PaymentSelection.handlePaymentComplete lagrar data och navigerar till nästa steg
+
+#### Backend-flöde för fakturering:
+1. **API-anrop tas emot:**
+   - `/api/payments/invoice/create` tar emot data
+   - Validerar inkommande data och behörigheter
+
+2. **Databasoperationer:**
+   - Skapar post i payments-tabellen
+   - Skapar orderpost i relevant tabell (bookings/art_orders/gift_cards)
+   - Genererar fakturanummer och betalningsreferens
+
+3. **Returnerar tidigt svar:**
+   - Skickar success=true och ID/referens till frontend
+   - Användaren kan fortsätta utan att vänta
+
+4. **Bakgrundsbearbetning:**
+   - PDF-generering startas
+   - PDF sparas i rätt lagringsplats
+   - E-post skickas med PDF-bilaga
+   - Loggar hela processen
+
+### 2. Swish-flödet
+
+#### Frontend-flöde för Swish:
+1. **Användarval:**
+   - Användaren väljer "Swish" i PaymentSelection
+   - SwishPaymentSection visas med telefonnummerinmatning
+
+2. **Initiering av betalning:**
+   - Vid submit anropas `swishPaymentRef.current.submitSwishPayment()`
+   - SwishPaymentSection validerar, konstruerar data och anropar Swish API
+   - SwishPaymentDialog visas för att visa status och QR-kod
+
+3. **Polling av status:**
+   - Frontend pollar `/api/payments/status/[reference]` var tredje sekund
+   - Uppdaterar UI baserat på statusändringar
+
+4. **Slutföring:**
+   - När status blir PAID, anropar SwishPaymentSection `onPaymentComplete`
+   - PaymentSelection.handlePaymentComplete lagrar data och navigerar till nästa steg
+
+#### Backend-flöde för Swish:
+1. **API-anrop tas emot:**
+   - `/api/payments/swish/create` tar emot data
+   - Validerar inkommande data och behörigheter
+
+2. **Swish API-anrop:**
+   - Skapar payment record i databasen
+   - Anropar externa Swish API:et
+   - Returnerar paymentID och status till frontend
+
+3. **Callback-hantering:**
+   - Swish skickar callback till `/api/payments/swish/callback`
+   - Systemet uppdaterar betalningsstatus i databasen
+   - Backend initierar samma orderprocesser som för faktura efter betald status
+
+4. **Statusförfrågningar:**
+   - `/api/payments/status/[reference]` svarar på poll-anrop
+   - Returnerar aktuell status från databasen
+
+## Produktspecifika flöden
+
+### Kursbokning (course_booking)
+1. **Databasen:**
+   - Skapar post i bookings-tabellen
+   - Uppdaterar current_participants i course_instances
+   - Skapar poster i booking_participants för gruppaddeltagare
+
+2. **PDF och e-post:**
+   - Genererar faktura-PDF med kursuppgifter
+   - Skickar bekräftelse-e-post med faktura bifogad
+
+### Konstprodukt (art_product)
+1. **Databasen:**
+   - Skapar post i art_orders-tabellen
+   - Uppdaterar stock_quantity i products-tabellen
+
+2. **PDF och e-post:**
+   - Genererar faktura-PDF
+   - Skickar e-post med orderbekräftelse och faktura
+
+### Presentkort (gift_card)
+1. **Databasen:**
+   - Skapar post i gift_cards-tabellen
+   - Genererar unik presentkortskod
+
+2. **PDF och e-post:**
+   - Genererar presentkorts-PDF med kod och mottagarinformation
+   - Genererar faktura-PDF för köpet
+   - Skickar e-post med båda PDF-filer bifogade
+   - Vid digitalt presentkort skickas separat e-post till mottagaren
+
+## Felhantering och edge-cases
+
+### Viktiga felhanteringsprinciper
+1. **Strukturerad loggning:**
+   - Alla kritiska operationer loggas med unika request IDs
+   - Felloggar innehåller tillräckligt med kontext för felsökning
+
+2. **Granulär felhantering:**
+   - Varje steg i processen har sin egen try-catch
+   - Fel i specifika steg förhindrar inte fortsatt process
+
+3. **Frontend-feedback:**
+   - Användare får tydliga felmeddelanden
+   - UI uppdateras korrekt vid serverfel
+
+### Viktiga edge-cases
+1. **Timeout-hantering:**
+   - Asynkron bearbetning för krävande operationer
+   - "Fire and forget"-mönster för PDF-generering
+   - Databaslagring sker alltid först för att säkerställa datakonsistens
+
+2. **Dubbla betalningar:**
+   - Idempotensnycklar används för alla betalningar
+   - Lokalt lagras betalningsreferenser för att förhindra dubbletter
+
+3. **Avbrutna betalningar:**
+   - Status-polling detekterar avbrutna betalningar
+   - Callback-hantering för Swish hanterar avbrutna flöden
+
+4. **Serverkrascher:**
+   - Kritisk data sparas tidigt i processen
+   - Betalningsstatus kan återhämtas även om frontend-sessionen avbryts
+
+## Implementationsdetaljer
+
+### PaymentSelection.tsx
+```typescript
+// PaymentSelection koordinerar mellan betalningsmetoder
+const handleInvoicePayment = async (): Promise<boolean> => {
+  console.log('[PaymentSelection] Handle invoice payment called');
+  setIsSubmitting(true);
+  
+  try {
+    if (!invoicePaymentRef.current || !userInfo) {
+      throw new Error('Invoice form reference is not available');
+    }
+    
+    // Låt InvoicePaymentSection hantera API-anropet
+    const success = await invoicePaymentRef.current.submitInvoicePayment();
+    
+    setIsSubmitting(false);
+    return success;
+  } catch (error) {
+    console.error('[PaymentSelection] Invoice payment error:', error);
+    setSubmitError(error instanceof Error ? error.message : 'Ett fel uppstod');
+    setIsSubmitting(false);
+    return false;
+  }
+};
 ```
-/src/
-├── components/
-│   └── booking/
-│       ├── PaymentSelection.tsx        # Huvudkoordinator för betalningsval
-│       │
-│       ├── Swish Flow/
-│       │   ├── SwishPaymentSection.tsx # Swish-koordinator (telefoninmatning + betalning)
-│       │   ├── SwishPaymentForm.tsx    # Telefoninmatning
-│       │   └── SwishPaymentDialog.tsx  # Dialog för betalningsstatus
-│       │
-│       └── Invoice Flow/
-│           ├── InvoicePaymentSection.tsx # Faktura-koordinator
-│           ├── InvoicePaymentForm.tsx    # Adressinmatning
-│           └── InvoicePaymentDialog.tsx  # Dialog för fakturastatus
-│
-├── services/
-│   └── swish/
-│       ├── swishService.ts             # Huvudsaklig Swish-tjänst som hanterar API-anrop
-│       ├── config.ts                   # Konfiguration för Swish API
-│       └── types.ts                    # Typdefinitioner för Swish
-│
-├── hooks/
-│   └── useSwishPaymentStatus.ts        # Custom hook för statushantering
-│
-├── app/
-│   └── api/
-│       ├── payments/
-│       │   ├── status/
-│       │   │   └── [reference]/
-│       │   │       └── route.ts        # Hämtar betalningsstatus
-│       │   │
-│       │   └── swish/
-│       │       ├── create/
-│       │       │   └── route.ts        # Skapar Swish-betalning
-│       │       ├── cancel/
-│       │       │   └── route.ts        # Avbryter Swish-betalning och uppdaterar databas
-│       │       ├── simple-cancel/
-│       │       │   └── route.ts        # Förenklad avbrytningsprocess (fallback)
-│       │       ├── callback/
-│       │       │   └── route.ts        # Hanterar callbacks från Swish
-│       │       └── debug/
-│       │           └── cancel-test/
-│       │               └── route.ts    # Testendpoint för avbrytningar
-│       │
-│       └── invoice/
-│           └── create/
-│               └── route.ts            # Skapar faktura och PDF
-│
-├── utils/
-│   ├── flowStorage.ts                  # Hantering av betalnings- och flödesdata i localStorage
-│   ├── invoicePDF.ts                   # Genererar faktura-PDF
-│   ├── giftCardPDF.ts                  # Genererar presentkorts-PDF
-│   ├── serverEmail.ts                  # Hanterar e-postutskick från servern
-│   └── flowNavigation.ts               # Navigation mellan steg i bokningsflödet
-│
-└── types/
-    └── payment.ts                      # Delade betalningstyper
+
+### InvoicePaymentSection.tsx
+```typescript
+// InvoicePaymentSection hanterar fakturainmatning och API-anrop
+const handleSubmit = async (): Promise<boolean> => {
+  console.log('[InvoicePaymentSection] Submitting invoice payment');
+  
+  if (!validateForm()) {
+    return false;
+  }
+
+  setIsSubmitting(true);
+
+  try {
+    // Konstruera requestdata för service-anrop
+    const requestData: InvoicePaymentRequest = {
+      payment_method: PAYMENT_METHODS.INVOICE,
+      amount: amount,
+      product_id: courseId,
+      product_type: validProductType,
+      userInfo: userInfo,
+      invoiceDetails: {
+        address: address.trim(),
+        postalCode: postalCode.trim(),
+        city: city.trim(),
+        reference: reference || ''
+      }
+    };
+    
+    // Anropa invoice service
+    const responseData = await createInvoicePayment(requestData);
+    
+    // Anropa callback med svarsdata
+    if (onPaymentComplete) {
+      onPaymentComplete(responseData);
+    }
+    
+    setIsSubmitting(false);
+    return true;
+  } catch (error) {
+    console.error('[InvoicePaymentSection] Error:', error);
+    setInvoiceFormError(error instanceof Error ? error.message : 'Ett fel uppstod');
+    setIsSubmitting(false);
+    return false;
+  }
+};
+```
+
+### SwishPaymentSection.tsx
+```typescript
+// SwishPaymentSection hanterar telefonnummerinmatning och Swish-betalning
+const handleSubmit = async () => {
+  console.log('[SwishPaymentSection] Submit button clicked');
+  if (!validateForm()) {
+    return;
+  }
+
+  setIsSubmitting(true);
+  setError(null);
+  
+  try {
+    // Generera unik referens
+    const paymentRef = `${productType.substring(0, 1)}-${Date.now()}`;
+    setPaymentReference(paymentRef);
+    
+    // Konstruera requestbody
+    const requestBody = {
+      phone_number: phoneNumber,
+      payment_method: "swish",
+      product_type: productType,
+      product_id: productId,
+      amount: amount,
+      user_info: userInfo
+    };
+    
+    // Gör API-anrop
+    const response = await fetch('/api/payments/swish/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+    
+    // Öppna betalningsdialog
+    setPaymentDialogOpen(true);
+    
+  } catch (error) {
+    console.error('[SwishPaymentSection] Payment creation error:', error);
+    setError(error instanceof Error ? error.message : 'Ett fel uppstod vid betalningen');
+    setIsSubmitting(false);
+  }
+};
 ```
 
 ## Nyligen implementerade förbättringar
@@ -104,108 +463,7 @@ Dessa vägars struktur och namnkonventioner är specifikt utformade för att mat
 - **Bakgrundsprocesser** - PDF-generering, lagring och e-postutskick sker i bakgrunden utan att blockera huvudtråden.
 - **Förbättrad upplevelse med längre processer** - Låter användaren fortsätta till bekräftelsesidan medan tyngre uppgifter slutförs.
 
-## Faktureringsflöde i detalj (uppdaterat)
-
-### För konstprodukter (art_product):
-
-1. **Kritiska databassoperationer först**
-   - Skapa order-record i art_orders-tabellen
-   - Uppdatera stock_quantity i products-tabellen
-   - Returnera snabbt svar till klienten
-
-2. **Bakgrundsprocesser**
-   - Generera faktura-PDF baserat på produktdata och kundinformation
-   - Spara PDF i 'invoices'-bucket med invoiceNumber som filnamn
-   - Skicka e-post med bifogad faktura-PDF och orderbekräftelse
-
-### För presentkort (gift_card):
-
-1. **Kritiska databassoperationer först**
-   - Skapa post i gift_cards-tabellen med all relevant information
-   - Generera unik presentkortskod (GC-XXXXXXXX)
-   - Returnera svar till klienten med giftCardId och giftCardCode
-
-2. **Bakgrundsprocesser**
-   - Generera presentkorts-PDF med mottagarinfo, belopp och personligt meddelande
-   - Spara presentkorts-PDF i 'giftcards'-bucket med filnamnet `gift-card-KODEN.pdf`
-   - Generera faktura-PDF för presentkortsköpet
-   - Spara faktura-PDF i 'invoices'-bucket med invoiceNumber som filnamn
-   - Skicka e-post med båda PDF-dokumenten bifogade
-
-### För kursbokningar (course):
-
-1. **Kritiska databassoperationer först**
-   - Skapa bokningspost i bookings-tabellen med alla nödvändiga kundinformationer
-   - Uppdatera current_participants i course_instances-tabellen
-   - Om det finns flera deltagare, skapa poster i booking_participants-tabellen
-   - Returnera snabbt svar till klienten
-
-2. **Bakgrundsprocesser**
-   - Generera faktura-PDF baserat på kursdata och kundinformation
-   - Spara PDF i 'invoices'-bucket med invoiceNumber som filnamn
-   - Skicka e-post med bifogad faktura-PDF och bokningsbekräftelse
-
-## E-postbilagor
-- **Art Products**: Faktura-PDF
-- **Gift Cards**: Både presentkorts-PDF och faktura-PDF i samma e-post
-- **Course Bookings**: Faktura-PDF
-
-## Dataflöden (uppdaterade)
-
-### Frontend till Backend
-1. **PaymentSelection.tsx**
-   - Koordinerar valet av betalningsmetod
-   - Anropar rätt betalningssektion (Swish/Invoice)
-
-2. **InvoicePaymentSection.tsx**
-   - Validerar faktureringsinformation
-   - För presentkort: Hämtar presentkortsinformation från flowStorage
-   - Säkerställer att korrekt belopp används för presentkort
-   - Skickar komplett data till API
-
-3. **API (/api/payments/invoice/create)**
-   - Tar emot betalningsdata
-   - Baserat på product_type utför rätt flöde
-   - Returnerar tidigt svar efter kritiska databassoperationer
-   - Fortsätter bearbetning i bakgrunden
-
-### API-routing och vidarebefordring
-1. **Fakturabetalningar**
-   - Frontend anropar `/api/payments/invoice/create` (detta är en fast sökväg som inte får ändras)
-   - Routern i `/api/payments/invoice/create/route.ts` validerar data och vidarebefordrar till `/api/invoice/create`
-   - `/api/invoice/create/route.ts` hanterar databasoperationer, PDF-generering och e-postutskick
-   - Detta dubbla routing-lager möjliggör bakåtkompatibilitet med äldre kodbas
-
-2. **Swish-betalningar**
-   - Frontend anropar `/api/payments/swish/create` (detta är en fast sökväg som inte får ändras)
-   - Routern i `/api/payments/swish/create/route.ts` skapar betalningen i databasen och skickar till Swish API
-   - Callback från Swish tas emot på `/api/payments/swish/callback`
-   - Status kontrolleras via `/api/payments/status/[reference]`
-
-### Backend till Frontend
-1. **Snabb respons**
-   - Returnerar success: true
-   - Inkluderar relevant ID, referens och presentkortskod (om tillämpligt)
-
-2. **Bekräftelsesidan**
-   - Hämtar all sparad data från localStorage via flowStorage
-   - Visar bekräftelse till användaren baserat på produkt och betalningsstatus
-
-## Viktiga Edge Cases och hantering
-
-### Presentkortsbelopp
-- **Problem**: Presentkortsbeloppet överfördes inte korrekt från frontend till backend
-- **Lösning**: Explicit extrahering av belopp från itemDetails i InvoicePaymentSection och konsekvent användning av detta belopp i backend
-
-### Timeout-hantering
-- **Problem**: Serverless-funktioner har tidsbegränsning (vanligtvis 10-30 sekunder)
-- **Lösning**: Asynkron bearbetning och "fire and forget"-mönster för tyngre operationer
-
-### PDF-generering
-- **Problem**: PDF-generering kan misslyckas av olika anledningar
-- **Lösning**: Robust felhantering med fortsatt process även om ett steg misslyckas
-
-## TO DO: Framtida förbättringar för faktureringsflödet
+## TO DO: Framtida förbättringar för betalningsflödet
 
 ### 1. Införa köhantering för bakgrundsuppgifter
 - **Beskrivning**: Implementera en dedikerad kömekanism (t.ex. med AWS SQS, RabbitMQ eller liknande) för bakgrundsuppgifter istället för "fire and forget"-metoden.
@@ -248,9 +506,9 @@ Dessa vägars struktur och namnkonventioner är specifikt utformade för att mat
 ### 6. Dynamisk fakturautformning baserad på kundtyp
 - **Beskrivning**: Utöka fakturasystemet för att hantera både privatpersoner och företag med specifika fakturakrav.
 - **Fördelar**:
-  - Stöd för företagskunder med organisationsnummer och momsregler
-  - Anpassade betalningsvillkor för olika kundtyper
-  - Förbättrad professionalitet mot företagssegmentet
+  - Korrekt momshantering för olika kundtyper
+  - Stöd för företagsspecifik information (organisationsnummer, etc.)
+  - Förbättrad efterlevnad av bokföringsregler
 
 ### 7. E-postkvalitetsövervakning och analys
 - **Beskrivning**: Implementera spårning av e-postleverans, öppningsgrad och klickfrekvens.
@@ -273,67 +531,106 @@ Betalningssystemet använder följande databastabeller med tillhörande struktur
 
 #### 1. `payments` - Huvudtabell för betalningar
 
-```sql
-CREATE TABLE "public"."payments" (
-  "id" UUID PRIMARY KEY,
-  "amount" DECIMAL NOT NULL,
-  "payment_reference" TEXT NOT NULL, -- Vår interna referens (SC-XXXXXX-XXX)
-  "swish_payment_id" TEXT, -- ID från Swish (endast för Swish-betalningar)
-  "swish_callback_url" TEXT,
-  "phone_number" TEXT,
-  "status" TEXT NOT NULL, -- 'CREATED', 'PAID', 'DECLINED', 'ERROR'
-  "error_message" TEXT, -- Felmeddelande om betalningen misslyckades
-  "created_at" TIMESTAMPTZ DEFAULT NOW(), -- Skapandetidpunkt
-  "updated_at" TIMESTAMPTZ DEFAULT NOW(), -- Tidpunkt för senaste uppdatering (används som betalningsdatum för PAID-status)
-  "payment_method" TEXT NOT NULL, -- 'swish', 'invoice'
-  "booking_id" UUID, -- FK till bookings.id
-  "course_id" UUID, -- FK till course_instances.id
-  "user_info" JSONB, -- Lagrar användarinfo som JSON
-  "product_type" TEXT NOT NULL, -- 'course', 'gift_card', 'art_product'
-  "product_id" UUID NOT NULL, -- ID för produkten (course_instance, gift_card eller product)
-  "currency" TEXT DEFAULT 'SEK',
-  "metadata" JSONB -- Ytterligare data, callbacks, betalningsdatum från Swish, etc.
-);
-```
+Tabellen `payments` lagrar alla betalningsförsök för olika produkttyper och betalningsmetoder:
 
-**OBS:** Betalningsdatum ('payment_date') från Swish sparas inte som en separat kolumn utan i `metadata`-fältet, medan `updated_at` uppdateras till aktuell tidpunkt när en betalning bekräftas som betald (PAID).
+| Kolumnnamn            | Datatyp   | Beskrivning                                      | Rekommendation                                    |
+|-----------------------|-----------|--------------------------------------------------|---------------------------------------------------|
+| id                    | UUID      | Primärnyckel                                     | Genereras automatiskt                             |
+| status                | TEXT      | Betalningsstatus                                 | Använd `PAYMENT_STATUSES.CREATED/PAID`            |
+| amount                | DECIMAL   | Betalningsbelopp                                 | I SEK, med två decimaler                          |
+| currency              | TEXT      | Valutakod                                        | Normalt "SEK"                                     |
+| payment_method        | TEXT      | Betalningsmetod                                  | Använd `PAYMENT_METHODS.INVOICE/SWISH`            |
+| payment_reference     | TEXT      | Unikt betalningsreferensnummer                   | Format: "SC-ÅÅÅÅMMDD-XXXXXX"                      |
+| product_type          | TEXT      | Typ av produkt                                   | 'course', 'art_product', 'gift_card'              |
+| product_id            | UUID      | ID för den produkt som betalades                 | Främmande nyckel till respektive produkttabell    |
+| created_at            | TIMESTAMP | Tidsstämpel för betalningsförsöket               | Genereras automatiskt                             |
+| updated_at            | TIMESTAMP | Tidsstämpel för betalningsstatusen               | Uppdateras automatiskt                            |
+| swish_payment_id      | TEXT      | Swish-specifikt betalnings-ID                    | För Swish-betalningar                             |
+| swish_callback_url    | TEXT      | URL för Swish-callback                           | För Swish-betalningar                             |
+| swish_reference       | TEXT      | Swish referenskod                                | För Swish-betalningar                             |
+| user_info             | JSONB     | Kundinformation i JSON-format                    | Standardiserad struktur                           |
+| metadata              | JSONB     | Ytterligare information i JSON-format            | Varierar beroende på produkttyp                   |
 
-**API-användning**:
-- `/api/payments/swish/create`: Skapar en ny betalning och skickar betalningsförfrågan till Swish
-- `/api/payments/swish/callback`: Tar emot och behandlar callbacks från Swish
-- `/api/payments/status/[reference]`: Hämtar betalningsstatus baserat på referens
-- `/api/payments/swish/cancel`: Avbryter en pågående betalning
+**Viktigt för payments-tabellen:**
+- Använd ALLTID konstanter från `statusCodes.ts` för statusvärden
+- Korrekt hantering av `product_type` är kritisk för att relatera betalningar till rätt produkttabell
+- Alla belopp ska anges i öre för att undvika avrundningsproblem med decimaler
 
 #### 2. `bookings` - Kursbokningar
 
-```sql
-CREATE TABLE "public"."bookings" (
-  "id" UUID PRIMARY KEY,
-  "course_id" UUID NOT NULL, -- FK till course_instances.id
-  "customer_name" TEXT NOT NULL,
-  "customer_email" TEXT NOT NULL,
-  "customer_phone" TEXT,
-  "number_of_participants" INTEGER DEFAULT 1,
-  "booking_date" TIMESTAMPTZ DEFAULT NOW(),
-  "status" TEXT NOT NULL, -- 'confirmed', 'cancelled', 'pending'
-  "payment_status" TEXT NOT NULL, -- 'paid', 'unpaid', 'refunded'
-  "message" TEXT,
-  "created_at" TIMESTAMPTZ DEFAULT NOW(),
-  "updated_at" TIMESTAMPTZ DEFAULT NOW(),
-  "invoice_number" TEXT,
-  "invoice_address" TEXT,
-  "invoice_postal_code" TEXT,
-  "invoice_city" TEXT,
-  "invoice_reference" TEXT,
-  "payment_method" TEXT, -- 'swish', 'invoice'
-  "booking_reference" TEXT NOT NULL -- Unik bokningsreferens (SC-XXX-XXXXXX)
-);
-```
+Tabellen `bookings` lagrar alla kursbokningar, inklusive de som skapats genom fakturabetalningar:
 
-**API-användning**:
-- `/api/payments/swish/callback`: Skapar bokning när betalningen är genomförd
-- `/api/bookings/create`: Direkt skapande av bokningar
-- `/api/bookings/[id]`: Hantering av enskilda bokningar
+| Kolumnnamn            | Datatyp   | Beskrivning                                      | Rekommendation                                    |
+|-----------------------|-----------|--------------------------------------------------|---------------------------------------------------|
+| id                    | UUID      | Primärnyckel                                     | Genereras automatiskt                             |
+| course_id             | UUID      | Främmande nyckel till course_instances           | Måste vara ett giltigt course_id                  |
+| customer_name         | TEXT      | Kundens fullständiga namn                        | Formatera som "Förnamn Efternamn"                 |
+| customer_email        | TEXT      | Kundens e-postadress                             | Använd lowercase för konsistens                   |
+| customer_phone        | TEXT      | Kundens telefonnummer                            | Formatera som "07XXXXXXXX" utan mellanslag        |
+| number_of_participants| INTEGER   | Antal deltagare i bokningen                      | Minimum 1                                         |
+| booking_date          | TIMESTAMP | Datum när bokningen gjordes                      | Använd UTC-tid                                    |
+| status                | TEXT      | Bokningsstatus                                   | Använd `BOOKING_STATUSES.CONFIRMED`               |
+| payment_status        | TEXT      | Betalningsstatus                                 | Använd `PAYMENT_STATUSES.CREATED` vid skapande   |
+| message               | TEXT      | Valfritt meddelande från kunden                  | Kan vara null                                     |
+| created_at            | TIMESTAMP | Tidsstämpel för postens skapande                 | Genereras automatiskt                             |
+| updated_at            | TIMESTAMP | Tidsstämpel för postens uppdatering              | Uppdateras automatiskt                            |
+| invoice_number        | TEXT      | Fakturanummer för fakturabetalningar             | Format: "SC-ÅÅÅÅMMDD-XXXX"                        |
+| invoice_address       | TEXT      | Faktureringsadress                               | Obligatoriskt för fakturabetalningar              |
+| invoice_postal_code   | TEXT      | Postnummer för faktura                           | Obligatoriskt för fakturabetalningar              |
+| invoice_city          | TEXT      | Ort för faktura                                  | Obligatoriskt för fakturabetalningar              |
+| invoice_reference     | TEXT      | Kundens referens för fakturan                    | Valfritt fält                                     |
+| payment_method        | TEXT      | Betalningsmetod                                  | Använd `PAYMENT_METHODS.INVOICE` för fakturor     |
+| booking_reference     | TEXT      | Unikt referensnummer för bokningen               | Format: "SC-XXX-XXXXXX"                           |
+| unit_price            | DECIMAL   | Pris per deltagare                               | I SEK, med två decimaler                          |
+| total_price           | DECIMAL   | Totalpris för bokningen                          | unit_price * number_of_participants               |
+| currency              | TEXT      | Valutakod                                        | Normalt "SEK"                                     |
+
+**VIKTIGT:** 
+- För bokning via faktura, använd ALLTID `booking_reference` som fältnamn för bokningens referensnummer, inte `order_reference`.
+- För betalningar använd ALLTID status-värden från konstanterna i `statusCodes.ts`:
+  - `PAYMENT_STATUSES.CREATED` - när fakturan skapas
+  - `PAYMENT_STATUSES.PAID` - när betalningen är bekräftad 
+  - `BOOKING_STATUSES.CONFIRMED` - för bekräftade bokningar
+- För fakturabetalningar måste fälten `invoice_address`, `invoice_postal_code` och `invoice_city` vara ifyllda.
+
+### Kodexempel: Skapa en bokning via faktura
+
+```typescript
+// Importera nödvändiga konstanter
+import { BOOKING_STATUSES, PAYMENT_STATUSES, PAYMENT_METHODS } from '@/constants/statusCodes';
+
+// Exempel på bookingData för infogning i databasen
+const bookingData = {
+  course_id: courseId, // UUID från course_instances
+  customer_name: `${userInfo.firstName} ${userInfo.lastName}`,
+  customer_email: userInfo.email,
+  customer_phone: userInfo.phoneNumber || '',
+  number_of_participants: parseInt(userInfo.numberOfParticipants) || 1,
+  booking_date: new Date().toISOString(),
+  status: BOOKING_STATUSES.CONFIRMED,
+  payment_status: PAYMENT_STATUSES.CREATED, // Ändra till PAID när betalning bekräftas
+  message: message || null,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  invoice_number: invoiceNumber, // Format: SC-ÅÅÅÅMMDD-XXXX
+  invoice_address: invoiceDetails.address,
+  invoice_postal_code: invoiceDetails.postalCode,
+  invoice_city: invoiceDetails.city,
+  invoice_reference: invoiceDetails.reference || '',
+  payment_method: PAYMENT_METHODS.INVOICE,
+  booking_reference: bookingReference, // Format: SC-XXX-XXXXXX
+  unit_price: coursePrice,
+  total_price: coursePrice * (parseInt(userInfo.numberOfParticipants) || 1),
+  currency: 'SEK'
+};
+
+// Infoga bokningen i databasen
+const { data: bookingResult, error: bookingError } = await supabase
+  .from('bookings')
+  .insert(bookingData)
+  .select('id, booking_reference')
+  .single();
+```
 
 #### 3. `gift_cards` - Presentkort
 
@@ -375,33 +672,37 @@ CREATE TABLE "public"."gift_cards" (
 
 #### 4. `art_orders` - Beställningar av konstprodukter
 
-```sql
-CREATE TABLE "public"."art_orders" (
-  "id" UUID PRIMARY KEY,
-  "created_at" TIMESTAMPTZ DEFAULT NOW(),
-  "updated_at" TIMESTAMPTZ DEFAULT NOW(),
-  "product_id" UUID NOT NULL, -- FK till products.id
-  "customer_name" TEXT NOT NULL,
-  "customer_email" TEXT NOT NULL,
-  "customer_phone" TEXT,
-  "shipping_address" TEXT,
-  "shipping_postal_code" TEXT,
-  "shipping_city" TEXT,
-  "status" TEXT NOT NULL, -- 'confirmed', 'shipped', 'delivered', 'cancelled'
-  "payment_status" TEXT NOT NULL, -- 'PAID', 'UNPAID', 'REFUNDED'
-  "payment_method" TEXT NOT NULL, -- 'swish', 'invoice'
-  "order_reference" TEXT NOT NULL, -- Unik orderreferens
-  "invoice_number" TEXT,
-  "unit_price" DECIMAL NOT NULL,
-  "total_price" DECIMAL NOT NULL,
-  "currency" TEXT DEFAULT 'SEK',
-  "metadata" JSONB -- Ytterligare data, användarinfo, etc
-);
-```
+Tabellen `art_orders` lagrar information om beställningar av konstverk:
 
-**API-användning**:
-- `/api/payments/swish/callback`: Skapar eller uppdaterar en konstproduktbeställning
-- `/api/art-orders/create`: Direkt skapande av konstproduktbeställningar
+| Kolumnnamn            | Datatyp   | Beskrivning                                      | Rekommendation                                    |
+|-----------------------|-----------|--------------------------------------------------|---------------------------------------------------|
+| id                    | UUID      | Primärnyckel                                     | Genereras automatiskt                             |
+| product_id            | UUID      | Främmande nyckel till art_products               | Måste vara ett giltigt product_id                 |
+| customer_name         | TEXT      | Kundens fullständiga namn                        | Formatera som "Förnamn Efternamn"                 |
+| customer_email        | TEXT      | Kundens e-postadress                             | Använd lowercase för konsistens                   |
+| customer_phone        | TEXT      | Kundens telefonnummer                            | Formatera som "07XXXXXXXX" utan mellanslag        |
+| shipping_address      | TEXT      | Leveransadress för konstverk                     | Fullständig adress                                |
+| shipping_postal_code  | TEXT      | Postnummer för leverans                          | Format "XXX XX"                                   |
+| shipping_city         | TEXT      | Leveransort                                      | Stadsnamn                                         |
+| status                | TEXT      | Orderstatus                                      | Använd konstanter för statusvärden                 |
+| payment_status        | TEXT      | Betalningsstatus                                 | Använd `PAYMENT_STATUSES.CREATED/PAID`            |
+| payment_method        | TEXT      | Betalningsmetod                                  | Använd `PAYMENT_METHODS.INVOICE/SWISH`            |
+| order_reference       | TEXT      | Unikt referensnummer för beställningen           | Format: "ART-ÅÅMMDD-XXXX"                         |
+| price                 | DECIMAL   | Pris för konstverket                             | I SEK, med två decimaler                          |
+| currency              | TEXT      | Valutakod                                        | Normalt "SEK"                                     |
+| invoice_number        | TEXT      | Fakturanummer (för fakturabetalningar)           | Format: "INV-ÅÅMM-XXXX"                           |
+| invoice_address       | TEXT      | Faktureringsadress                               | Obligatoriskt för fakturabetalningar              |
+| invoice_postal_code   | TEXT      | Postnummer för faktura                           | Obligatoriskt för fakturabetalningar              |
+| invoice_city          | TEXT      | Ort för faktura                                  | Obligatoriskt för fakturabetalningar              |
+| invoice_reference     | TEXT      | Kundens referens för fakturan                    | Valfritt fält                                     |
+| message               | TEXT      | Meddelande från kunden                           | Valfritt fält                                     |
+| created_at            | TIMESTAMP | Tidsstämpel för postens skapande                 | Genereras automatiskt                             |
+| updated_at            | TIMESTAMP | Tidsstämpel för postens uppdatering              | Uppdateras automatiskt                            |
+
+**Viktigt för art_orders-tabellen:**
+- För konstbeställningar, använd `order_reference` (inte `booking_reference`) för det unika referensnumret
+- Alla konstbeställningar kräver fullständig leveransinformation
+- Vid fakturabetalning krävs fakturainformation även om den är identisk med leveransinformationen
 
 #### 5. `products` - Konstprodukter
 

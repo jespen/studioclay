@@ -381,3 +381,57 @@ Rich Text Editorn accepterar följande props:
 - `style`: (object, optional) Ytterligare CSS-stilar att tillämpa
 
 Rich Text Editorn används främst i kursredigeringsgränssnittet för att skapa rika kursbeskrivningar som visas på webbplatsen.
+
+## Database Structure
+
+### Bookings Table
+
+The `bookings` table stores all course bookings, including those created through invoice payments:
+
+| Column Name           | Data Type   | Description                                       |
+|-----------------------|-------------|---------------------------------------------------|
+| id                    | UUID        | Primary key                                       |
+| course_id             | UUID        | Foreign key to course_instances                   |
+| customer_name         | TEXT        | Full name of customer                            |
+| customer_email        | TEXT        | Email address of customer                        |
+| customer_phone        | TEXT        | Phone number of customer                         |
+| number_of_participants| INTEGER     | Number of participants in the booking            |
+| booking_date          | TIMESTAMP   | Date when booking was made                       |
+| status                | TEXT        | Status of booking (confirmed, cancelled)         |
+| payment_status        | TEXT        | Status of payment (CREATED, PAID, ERROR)         |
+| message               | TEXT        | Optional message from customer                   |
+| created_at            | TIMESTAMP   | Record creation timestamp                        |
+| updated_at            | TIMESTAMP   | Record update timestamp                          |
+| invoice_number        | TEXT        | Invoice number for invoice payments              |
+| invoice_address       | TEXT        | Billing address for invoice                      |
+| invoice_postal_code   | TEXT        | Postal code for invoice                          |
+| invoice_city          | TEXT        | City for invoice                                 |
+| invoice_reference     | TEXT        | Customer reference for invoice                   |
+| payment_method        | TEXT        | Payment method (swish, invoice)                  |
+| booking_reference     | TEXT        | Unique reference code for booking                |
+| unit_price            | DECIMAL     | Price per participant                            |
+| total_price           | DECIMAL     | Total price for booking                          |
+| currency              | TEXT        | Currency code (default: SEK)                     |
+
+Example row:
+```sql
+INSERT INTO "public"."bookings" (
+  "id", "course_id", "customer_name", "customer_email", "customer_phone", 
+  "number_of_participants", "booking_date", "status", "payment_status", 
+  "message", "created_at", "updated_at", "invoice_number", "invoice_address", 
+  "invoice_postal_code", "invoice_city", "invoice_reference", "payment_method", 
+  "booking_reference", "unit_price", "total_price", "currency"
+) VALUES (
+  'e992ae1a-1c97-4210-b818-0c6924961e8b', 'c51791b1-dc50-4027-8c9b-b839d4665acd', 
+  'Charlotta + dotter', 'charlotta-eriksson@outlook.com', '', '2', 
+  '2025-03-30 23:12:09.258+00', 'confirmed', 'CREATED', null, 
+  '2025-03-30 23:12:09.329301+00', '2025-03-30 23:12:09.329301+00', 
+  'SC-20250330-4050', '', '', '', null, 'invoice', 'SC-G47-328930', 
+  '800.00', '1600.00', 'SEK'
+);
+```
+
+**Important Notes:**
+- The `booking_reference` field is the correct field name for storing booking references.
+- Status values should use constants from `BOOKING_STATUSES` and `PAYMENT_STATUSES`.
+- For invoice payments, all invoice_* fields should be populated.

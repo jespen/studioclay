@@ -1,3 +1,14 @@
+/**
+ * DEPRECATED - DENNA FIL ANVÄNDS INTE LÄNGRE
+ * 
+ * Funktionaliteten har flyttats till src/utils/serverEmail.ts
+ * Behåller tills vidare för referens, men kan tas bort.
+ * 
+ * Om du ser detta och applikationen fortfarande fungerar korrekt, 
+ * är det säkert att ta bort denna fil.
+ */
+
+/*
 import emailjs from '@emailjs/browser';
 import { emailConfig } from '@/config/email';
 import { UserInfo, PaymentDetails } from '@/types/booking';
