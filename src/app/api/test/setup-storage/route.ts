@@ -61,19 +61,28 @@ export async function GET() {
             logInfo(`Successfully created bucket ${bucketName}`, { requestId });
             results[bucketName].created = true;
             
-            // Set bucket public
-            const { error: policyError } = await supabase.storage.from(bucketName).createSignedUrl(
-              'dummy.txt', 
-              60, 
-              {
-                download: true
+            // Make bucket publicly accessible
+            logInfo(`Setting bucket ${bucketName} to public access`, { requestId });
+            try {
+              const { error: updateError } = await supabase
+                .storage
+                .updateBucket(bucketName, { 
+                  public: true,
+                  allowedMimeTypes: ['application/pdf']
+                });
+              
+              if (updateError) {
+                logWarning(`Error making bucket ${bucketName} public`, {
+                  requestId, 
+                  error: updateError.message
+                });
+              } else {
+                logInfo(`Successfully set bucket ${bucketName} to public access`, { requestId });
               }
-            );
-            
-            if (policyError && !policyError.message.includes('not found')) {
-              logWarning(`Error setting public policy on bucket ${bucketName}`, {
-                requestId, 
-                error: policyError.message
+            } catch (policyError) {
+              logWarning(`Exception updating bucket ${bucketName}`, {
+                requestId,
+                error: policyError instanceof Error ? policyError.message : 'Unknown policy error'
               });
             }
           }

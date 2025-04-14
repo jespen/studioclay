@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-import { processJobs } from '@/lib/jobQueue';
-import { logError, logInfo, logDebug } from '@/lib/logging';
+import { logError, logInfo, logDebug, logWarning } from '@/lib/logging';
 import { v4 as uuidv4 } from 'uuid';
 import { createServerSupabaseClient } from '@/utils/supabase';
+import { processNextJob } from '@/app/api/jobs/process/utils';
+import { NextRequest } from 'next/server';
 
 /**
- * Test endpoint to manually trigger job processing
- * Only available in development mode for testing and debugging
+ * Test endpoint för att manuellt trigga jobbprocessning
+ * Används i utvecklingsmiljö för att testa och debugga jobbflöden
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   // Only allow in development mode
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json(
@@ -20,48 +21,74 @@ export async function GET() {
   const requestId = uuidv4();
   
   try {
-    logInfo('Manual test of job processing triggered', { requestId });
+    logInfo('Manual job processing triggered via test endpoint', { requestId });
     
-    // Get count of pending jobs
+    // Process the next job using the centralized job processor
+    const result = await processNextJob(requestId);
+    
+    // Kontrollera jobblistan oavsett för att ge information
     const supabase = createServerSupabaseClient();
-    const { count, error: countError } = await supabase
+    const { data: pendingJobs, error: jobsError } = await supabase
       .from('background_jobs')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending');
+      .select('id, job_type, status, created_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(5);
       
-    if (countError) {
-      logError('Error getting job count', { requestId, error: countError.message });
+    const pendingJobCount = pendingJobs?.length || 0;
+    
+    if (jobsError) {
+      logWarning('Error checking pending job list', { 
+        requestId, 
+        error: jobsError.message,
+        processingResult: result 
+      });
+    } else {
+      logInfo(`Found ${pendingJobCount} additional pending jobs`, { requestId });
+    }
+    
+    if (result.success) {
+      if (result.jobId) {
+        logInfo(`Successfully processed job ${result.jobId}`, { 
+          requestId, 
+          jobId: result.jobId,
+          jobType: result.jobType 
+        });
+        
+        return NextResponse.json({
+          success: true,
+          message: `Job ${result.jobId} processed successfully`,
+          jobId: result.jobId,
+          jobType: result.jobType,
+          pendingJobs: pendingJobCount > 0 ? pendingJobs : []
+        });
+      } else {
+        return NextResponse.json({
+          success: true,
+          message: result.message || 'No pending jobs to process',
+          pendingJobs: pendingJobCount > 0 ? pendingJobs : []
+        });
+      }
+    } else {
+      logError(`Failed to process job`, { 
+        requestId, 
+        jobId: result.jobId, 
+        error: result.error || 'Unknown error' 
+      });
+      
       return NextResponse.json(
-        { error: `Failed to get job count: ${countError.message}` },
+        { 
+          success: false, 
+          jobId: result.jobId,
+          error: result.error || 'Unknown error processing job',
+          pendingJobs: pendingJobCount > 0 ? pendingJobs : []
+        },
         { status: 500 }
       );
     }
     
-    logDebug(`Found ${count || 0} pending jobs`, { requestId });
-    
-    // Process jobs
-    const result = await processJobs(requestId);
-    
-    if (result) {
-      logInfo('Successfully processed jobs from manual test', { requestId });
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Jobs processed successfully',
-        pendingJobsCount: count || 0
-      });
-    } else {
-      logInfo('No jobs processed or processing failed', { requestId });
-      
-      // If no jobs were processed, provide a way to create a test job
-      return NextResponse.json({ 
-        success: false, 
-        message: 'No jobs processed or processing failed',
-        pendingJobsCount: count || 0,
-        hint: 'You can use POST to this endpoint to create a test job' 
-      });
-    }
   } catch (error) {
-    logError('Error in manual job processing test', { 
+    logError('Error in test job processing endpoint', { 
       requestId, 
       error: error instanceof Error ? error.message : 'Unknown error' 
     });
@@ -73,7 +100,10 @@ export async function GET() {
   }
 }
 
-// Create a test job
+/**
+ * Test endpoint för att skapa ett testjobb
+ * Används i utvecklingsmiljö för att skapa och testa olika jobbtyper
+ */
 export async function POST() {
   // Only allow in development mode
   if (process.env.NODE_ENV === 'production') {
@@ -86,20 +116,36 @@ export async function POST() {
   const requestId = uuidv4();
   
   try {
-    logInfo('Creating test job', { requestId });
+    logInfo('Creating sample invoice email job', { requestId });
     
     const supabase = createServerSupabaseClient();
     
-    // Create a test job
+    // Create a sample invoice_email job for testing
+    const invoiceNumber = `INV-TEST-${Math.floor(Math.random() * 10000)}`;
+    const paymentReference = `REF-TEST-${Math.floor(Math.random() * 10000)}`;
+    
     const { data, error } = await supabase
       .from('background_jobs')
       .insert({
         id: uuidv4(),
-        job_type: 'test_job',
+        job_type: 'invoice_email',
         job_data: {
-          test: true,
-          created_at: new Date().toISOString(),
-          message: 'This is a test job created from the manual test endpoint'
+          paymentReference: paymentReference,
+          invoiceNumber: invoiceNumber,
+          productType: 'course',
+          productId: '00000000-0000-0000-0000-000000000000', // Dummy ID
+          userInfo: {
+            firstName: 'Test',
+            lastName: 'User',
+            email: 'dev-test@studioclay.se',
+            phone: '0701234567'
+          },
+          invoiceDetails: {
+            address: 'Testgatan 1',
+            postalCode: '12345',
+            city: 'Stockholm'
+          },
+          amount: 1000
         },
         status: 'pending',
         created_at: new Date().toISOString()
@@ -108,29 +154,37 @@ export async function POST() {
       .single();
       
     if (error) {
-      logError('Error creating test job', { requestId, error: error.message });
+      logError('Error creating sample job', { requestId, error: error.message });
       return NextResponse.json(
-        { error: `Failed to create test job: ${error.message}` },
+        { error: `Failed to create sample job: ${error.message}` },
         { status: 500 }
       );
     }
     
-    logInfo('Successfully created test job', { requestId, jobId: data.id });
+    logInfo('Successfully created sample invoice job', { 
+      requestId, 
+      jobId: data.id,
+      invoiceNumber,
+      paymentReference 
+    });
     
     return NextResponse.json({ 
       success: true, 
-      message: 'Test job created successfully',
+      message: 'Sample invoice job created successfully',
       jobId: data.id,
-      hint: 'You can now use GET on this endpoint to process the test job'
+      invoiceNumber: invoiceNumber,
+      paymentReference: paymentReference,
+      hint: 'You can now use GET on this endpoint to process the sample job',
+      testUrl: '/api/test/process-jobs'
     });
   } catch (error) {
-    logError('Error creating test job', { 
+    logError('Error creating sample job', { 
       requestId, 
       error: error instanceof Error ? error.message : 'Unknown error' 
     });
     
     return NextResponse.json(
-      { error: 'Internal server error creating test job' },
+      { error: 'Internal server error creating sample job' },
       { status: 500 }
     );
   }

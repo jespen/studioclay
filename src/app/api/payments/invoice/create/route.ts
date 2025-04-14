@@ -34,6 +34,7 @@ import {
 import { generateAndStoreInvoicePdf, generateAndStoreGiftCardPdf } from '@/utils/pdfGenerator';
 import type { GiftCardData as GiftCardPdfData } from '@/utils/giftCardPDF';
 import { convertObjectToSnakeCase } from '@/utils/caseConverter';
+import { createBackgroundJob, JobType } from '@/lib/jobQueue';
 
 // Utöka UserInfo interface för att inkludera presentkortsfält
 interface ExtendedUserInfo {
@@ -494,30 +495,6 @@ async function generateInvoiceAndSendEmail(
   }
 }
 
-/**
- * Create a job in the background_jobs table
- */
-async function createBackgroundJob(jobType: string, jobData: any): Promise<string> {
-  const supabase = createServerSupabaseClient();
-  const jobId = uuidv4();
-  
-  const { error } = await supabase
-    .from('background_jobs')
-    .insert({
-      id: jobId,
-      job_type: jobType,
-      job_data: jobData,
-      status: 'pending',
-      created_at: new Date().toISOString()
-    });
-    
-  if (error) {
-    throw new Error(`Failed to create background job: ${error.message}`);
-  }
-  
-  return jobId;
-}
-
 // Typer för produkt-specifika data
 interface ArtOrderData {
   id: string;
@@ -919,21 +896,33 @@ export const POST = async (req: Request) => {
             productType
           });
           
-          const jobId = await createBackgroundJob('invoice_email', {
-            paymentReference,
-            invoiceNumber,
-            productType,
-            productId,
-            userInfo: userInfoObj,
-            invoiceDetails,
-            amount: requestData.amount
-          });
+          const jobId = await createBackgroundJob(
+            'invoice_email' as JobType,
+            {
+              paymentReference,
+              invoiceNumber,
+              productType,
+              productId,
+              userInfo: userInfoObj,
+              invoiceDetails,
+              amount: requestData.amount
+            },
+            { 
+              requestId,
+              maxRetries: 3,  // Tillåt upp till 3 försök för viktiga fakturajobb
+              delay: 100      // Liten fördröjning för att säkerställa att databasoperationer har slutförts
+            }
+          );
           
-          logInfo(`Created background job for invoice email`, {
-            requestId,
-            jobId,
-            invoiceNumber
-          });
+          if (jobId) {
+            logInfo(`Created background job for invoice email`, {
+              requestId,
+              jobId,
+              invoiceNumber
+            });
+          } else {
+            throw new Error('Failed to create background job');
+          }
         } catch (jobError) {
           logError(`Failed to create background job for invoice email`, {
             requestId,

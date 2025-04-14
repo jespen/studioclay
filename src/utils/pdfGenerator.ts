@@ -52,12 +52,19 @@ interface PdfGenerationResult {
 export async function generateAndStoreInvoicePdf(options: InvoicePdfOptions): Promise<PdfGenerationResult> {
   const { requestId, userInfo, invoiceDetails, invoiceNumber, productType, productId, amount, productDetails } = options;
   
-  logInfo(`Starting invoice PDF generation`, { requestId, invoiceNumber });
+  logInfo(`Starting invoice PDF generation`, { requestId, invoiceNumber, productType });
   
   try {
     // 1. Förbered data för PDF-generering
     const dueDate = options.dueDate || 
       new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toLocaleDateString('sv-SE');
+    
+    logDebug(`Preparing PDF data with parameters`, {
+      requestId,
+      invoiceNumber,
+      userEmail: userInfo?.email,
+      hasProductDetails: !!productDetails
+    });
     
     let pdfData: any = {
       customerInfo: userInfo,
@@ -101,19 +108,73 @@ export async function generateAndStoreInvoicePdf(options: InvoicePdfOptions): Pr
     
     // 2. Generera PDF
     logDebug(`Calling PDF generation function`, { requestId });
-    const pdfBlob = await generateInvoicePDF(pdfData);
-    
-    if (!pdfBlob) {
-      throw new Error('PDF generation failed with null result');
+    try {
+      // Direkt anrop till generateInvoicePDF för att undvika potentiella problem med dynamisk import
+      const { generateInvoicePDF } = await import('@/utils/invoicePDF');
+      
+      if (!generateInvoicePDF) {
+        logError(`Failed to import generateInvoicePDF function`, { requestId });
+        throw new Error('PDF generation module import failed - function not found');
+      }
+      
+      logDebug(`Starting direct PDF generation with prepared data`, { 
+        requestId,
+        dataReady: !!pdfData,
+        customer: userInfo ? `${userInfo.firstName} ${userInfo.lastName}` : 'unknown'
+      });
+      
+      const pdfBlob = await generateInvoicePDF(pdfData);
+      
+      if (!pdfBlob) {
+        logError(`PDF generation failed - returned null or undefined`, { requestId });
+        throw new Error('PDF generation failed - null result returned');
+      }
+      
+      logInfo(`Successfully generated invoice PDF`, {
+        requestId,
+        pdfSizeBytes: pdfBlob.size
+      });
+      
+      // 3. Lagra PDF i Supabase-bucket
+      logDebug(`Now storing PDF in bucket 'invoices'`, { 
+        requestId, 
+        invoiceNumber,
+        blobSize: pdfBlob.size 
+      });
+      
+      // Spara PDF i bucket
+      const storageResult = await storePdfToBucket(pdfBlob, 'invoices', invoiceNumber, requestId);
+      
+      if (!storageResult.success) {
+        return storageResult;
+      }
+      
+      // Returnera ett resultat som inkluderar både lagringsresultat och PDF blob
+      return {
+        success: true,
+        pdfBlob, // Inkludera PDF blob för att kunna bifogas i e-post
+        storagePath: storageResult.storagePath,
+        publicUrl: storageResult.publicUrl
+      };
+    } catch (pdfGenError) {
+      // Detaljerad loggning av fel vid PDF-generering
+      const errorIsError = pdfGenError instanceof Error;
+      logError(`Error in PDF generation step`, {
+        requestId,
+        error: errorIsError ? pdfGenError.message : 'Unknown PDF generation error',
+        stack: errorIsError ? pdfGenError.stack : undefined,
+        details: errorIsError ? undefined : JSON.stringify(pdfGenError)
+      });
+      
+      if (errorIsError && pdfGenError.message.includes('jsPDF')) {
+        logError(`jsPDF error detected. This could be due to SSR issues`, { 
+          requestId,
+          suggestion: 'Make sure jsPDF is properly imported for server environment'
+        });
+      }
+      
+      throw pdfGenError;
     }
-    
-    logInfo(`Successfully generated invoice PDF`, {
-      requestId,
-      pdfSizeBytes: pdfBlob.size
-    });
-    
-    // 3. Lagra PDF i Supabase-bucket
-    return await storePdfToBucket(pdfBlob, 'invoices', invoiceNumber, requestId);
     
   } catch (error) {
     logError(`Error in invoice PDF generation process`, {
@@ -210,10 +271,12 @@ async function storePdfToBucket(
     logDebug(`Preparing to store PDF in bucket`, { 
       requestId,
       bucketName,
-      fileName 
+      fileName,
+      blobSize: pdfBlob.size 
     });
     
     // Kontrollera om bucket finns
+    logDebug(`Checking if bucket '${bucketName}' exists`, { requestId });
     const { data: buckets, error: bucketError } = await supabase
       .storage
       .listBuckets();
@@ -221,7 +284,8 @@ async function storePdfToBucket(
     if (bucketError) {
       logError(`Failed to list buckets`, {
         requestId,
-        error: bucketError
+        error: bucketError.message,
+        details: bucketError
       });
       throw new Error(`Error listing buckets: ${bucketError.message}`);
     }
@@ -230,10 +294,17 @@ async function storePdfToBucket(
     const bucketExists = buckets.some(b => b.name === bucketName);
     
     if (!bucketExists) {
-      logWarning(`Bucket '${bucketName}' doesn't exist, may need to create it`, { requestId });
+      logError(`Bucket '${bucketName}' doesn't exist, needs to be created first`, { 
+        requestId,
+        availableBuckets: buckets.map(b => b.name) 
+      });
+      throw new Error(`Storage bucket '${bucketName}' doesn't exist`);
+    } else {
+      logDebug(`Confirmed bucket '${bucketName}' exists`, { requestId });
     }
     
     // Konvertera PDF blob till ArrayBuffer för uppladdning
+    logDebug(`Converting PDF blob to Uint8Array for upload`, { requestId });
     const arrayBuffer = await pdfBlob.arrayBuffer();
     const pdfUint8Array = new Uint8Array(arrayBuffer);
     
@@ -259,7 +330,8 @@ async function storePdfToBucket(
     if (uploadError) {
       logError(`Failed to upload PDF to storage`, {
         requestId,
-        error: uploadError,
+        error: uploadError.message,
+        details: uploadError,
         bucketName,
         fileName: safeFileName
       });
@@ -268,10 +340,17 @@ async function storePdfToBucket(
     
     logInfo(`Successfully uploaded PDF to storage`, {
       requestId,
-      path: uploadData.path
+      path: uploadData.path,
+      bucketName
     });
     
     // Hämta publik URL
+    logDebug(`Getting public URL for uploaded PDF`, {
+      requestId,
+      bucketName,
+      path: uploadData.path
+    });
+    
     const { data: urlData } = await supabase
       .storage
       .from(bucketName)
@@ -280,20 +359,30 @@ async function storePdfToBucket(
     if (!urlData || !urlData.publicUrl) {
       logWarning(`Could not get public URL for uploaded PDF`, {
         requestId,
-        path: uploadData.path
+        path: uploadData.path,
+        bucketName
+      });
+    } else {
+      logDebug(`Generated public URL for PDF`, {
+        requestId,
+        hasUrl: !!urlData.publicUrl
       });
     }
     
     return {
       success: true,
       storagePath: uploadData.path,
-      publicUrl: urlData?.publicUrl
+      publicUrl: urlData?.publicUrl,
+      pdfBlob: pdfBlob
     };
     
   } catch (error) {
     logError(`Exception during PDF storage`, {
       requestId,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      bucketName,
+      fileName
     });
     
     return {
