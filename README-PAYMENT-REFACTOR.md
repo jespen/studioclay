@@ -689,3 +689,206 @@ För att säkerställa ett robust flöde hanterar systemet flera edge-cases:
    - Manuell omgenerering och omsändning via admin-panelen
 
 Denna förbättrade presentkortshantering garanterar ett sömlöst flöde från köp till användning, oavsett betalningsmetod, med noggrann hantering av alla steg i processen. 
+
+## Uppdaterade Presentkortsprocessen och Betalningsflödet
+
+Efter omfattande felsökning och förbättringar har vi implementerat flera viktiga ändringar i presentkortsprocessen och betalningsflödet. Dessa förändringar förbättrar robustheten, spårbarheten och användarupplevelsen för hela systemet.
+
+### Nyckelförbättringar
+
+1. **Enhetlig Identifieringsmetod**
+   - Systemet stöder nu både presentkortskod (`code`) och betalningsreferens (`payment_reference`) som identifierare
+   - PDF-generering kan använda båda typerna av identifierare, med `payment_reference` prioriterad
+   - Bekräftelsesidan kan hämta presentkortsinformation med båda typerna av identifierare
+
+2. **Robustare Databasinteraktioner**
+   - Förbättrade frågor som undviker konflikter med flera poster med samma referens
+   - Användning av `maybeSingle()` istället för `single()` för att hantera frånvarande data
+   - Räkning och validering av poster innan hämtning för att förhindra databasfel
+
+3. **Förbättrad Bakgrundsjobbshantering**
+   - Omskriven `processInvoiceEmailJob`-funktion som genererar presentkorts-PDF vid fakturering
+   - Stegvis uppdatering av presentkortsrekord med PDF-URL
+   - Automatisk återhämtning från fel i bakgrundsprocessen
+
+4. **PDF-generering och E-post**
+   - Förbättrad presentkorts-PDF med professionell layout
+   - Stöd för både kod och betalningsreferens i PDF-generering
+   - Inkludering av båda PDF-filerna (faktura och presentkort) i e-postutskick
+
+5. **Omfattande Loggning**
+   - Detaljerad loggningsinformation om alla steg i processen
+   - Tydliga felmeddelanden och statusuppdateringar
+   - Call stack-information för enklare felsökning
+
+### Detaljerad Komponentöversikt och Dataflöde
+
+#### 1. Frontend till Backend-interaktion
+```
+Frontend (React/MUI) → API Gateway → Databashantering + Bakgrundsjobb
+```
+
+- **Frontend-komponenter**:
+  - `GiftCardFlow`: Hanterar hela presentkortsköpflödet
+  - `PaymentSelection`: Presenterar betalningsalternativ (Swish eller faktura)
+  - `InvoicePaymentSection`: Hanterar fakturaspecifika data
+  - `GiftCardConfirmationDetails`: Visar bekräftelse efter köp
+
+- **Lokalt Lagringssystem**:
+  ```typescript
+  // I flowStorage.ts
+  // Sparar presentkortsdetaljer temporärt under köpprocessen
+  export function setGiftCardDetails(details) { ... }
+  export function getGiftCardDetails() { ... }
+  
+  // Sparar betalningsinformation
+  export function setPaymentInfo(info) { ... }
+  export function getPaymentInfo() { ... }
+  
+  // I PaymentService.ts
+  // Slutför betalning och uppdaterar lokalt status
+  export function completePayment(paymentInfo) { ... }
+  ```
+
+#### 2. Identifierare i Systemet
+
+Systemet använder två typer av identifierare för att spåra presentkort:
+
+1. **Presentkortskod (`code`)**:
+   - Format: `GC-YYYYMMDD-XXX` (t.ex. "GC-250419-553")
+   - Används traditionellt för att identifiera presentkort
+   - Genereras i `src/app/api/payments/invoice/create/route.ts`
+
+2. **Betalningsreferens (`payment_reference`)**:
+   - Format: `SC-YYYYMMDD-XXXXX` (t.ex. "SC-20250414-11192B")
+   - Används för att länka presentkort till betalningar
+   - Genereras i `generatePaymentReferences()`-funktionen
+
+Båda identifierarna lagras i `gift_cards`-tabellen, och systemet kan nu använda vilken som helst för sökning/hämtning:
+
+```typescript
+// I gift_cards-tabellen
+{
+  id: 'uuid', // Databasens primärnyckel
+  code: 'GC-250419-553', // Presentkortskod
+  payment_reference: 'SC-20250414-11192B', // Betalningsreferens
+  amount: 500,
+  // övriga fält...
+}
+```
+
+#### 3. Bakgrundsjobb för Presentkortshantering
+
+Bakgrundsjobb skapas efter fakturabetalningar och hanteras av följande komponenter:
+
+1. **Skapande av jobb**:
+   ```typescript
+   // I src/app/api/payments/invoice/create/route.ts
+   const jobId = await createBackgroundJob(
+     'invoice_email', 
+     {
+       paymentReference,
+       invoiceNumber,
+       productType,
+       // övriga data...
+     }
+   );
+   ```
+
+2. **Jobbets exekvering**:
+   ```typescript
+   // I src/app/api/jobs/process/utils.ts
+   async function processInvoiceEmailJob(jobData) {
+     // 1. Hämta presentkortsdata baserat på payment_reference
+     // 2. Generera presentkorts-PDF
+     // 3. Uppdatera gift_cards med PDF-URL
+     // 4. Skapa och skicka e-post med båda PDF:er
+   }
+   ```
+
+3. **Aktivering av jobb**:
+   - Via API-endpoint: `POST /api/jobs/process`
+   - Automatiskt i utvecklingsmiljö genom direkt anrop
+
+#### 4. PDF-generering för Presentkort
+
+PDF-generering har förbättrats för att hantera båda typerna av identifierare:
+
+```typescript
+// I src/utils/giftCardPDF.ts
+export async function generateGiftCardPDF(giftCardData: GiftCardData): Promise<Blob | null> {
+  try {
+    // Bestäm vilken referens som ska användas
+    const referenceToUse = giftCardData.payment_reference || giftCardData.code;
+    if (!referenceToUse) {
+      logError(`No reference found for PDF`);
+      return null;
+    }
+
+    // Skapa och formatera PDF med professionell layout
+    // ...
+
+    return pdfBlob;
+  } catch (error) {
+    logError(`Error generating PDF`, error);
+    return null;
+  }
+}
+```
+
+#### 5. Bekräftelsesidans Dataflöde
+
+Bekräftelsesidan hämtar data via två huvudvägar:
+
+1. **Från lokalt lagring**:
+   - Vid direkt redirect efter köp
+   - Innehåller basdata som belopp, mottagare, etc.
+
+2. **Från API genom `payment_reference`**:
+   ```typescript
+   // I GiftCardConfirmationDetails.tsx
+   const fetchGiftCardByReference = async () => {
+     if (!giftCardDetails?.code && giftCardDetails?.payment_reference) {
+       const response = await fetch(`/api/gift-cards/by-reference?reference=${giftCardDetails.payment_reference}`);
+       // Hantera svaret och uppdatera UI
+     }
+   };
+   ```
+
+### Integrering med Swish-Betalning (Planerad)
+
+Baserat på de förbättringar som gjorts i fakturaflödet, kommer Swish-integrationen att följa liknande mönster:
+
+1. **Frontend-hantering**:
+   - Lik `InvoicePaymentSection` men med Swish-specifik UI
+   - Hantering av telefonnummer och redirect till Swish-app
+
+2. **Backend-hantering**:
+   - Endpoint för att skapa Swish-betalning
+   - Callback-endpoint för att hantera betalningssvar från Swish
+   - Bakgrundsjobb för PDF-generering och e-postutskick
+
+3. **Gemensam infrastruktur**:
+   - Återanvändning av presentkortsgenerering
+   - Samma PDF-genererings- och lagringsmekanismer
+   - Liknande bekräftelseprocess och e-postutskick
+
+### Rekommendationer för Framtida Förbättringar
+
+1. **Databasstruktur**:
+   - Överväg en relation mellan `payments` och `gift_cards` via främmande nycklar
+   - Implementera databaskonstrainter för att säkerställa unika betalningsreferenser
+
+2. **Jobbhantering**:
+   - Implementera en planerad återförsökslogik för misslyckade jobb
+   - Skapa en admin-panel för att granska och omköra misslyckade jobb
+
+3. **UI-förbättringar**:
+   - Visa tydligare laddningsindikatorer under PDF-generering
+   - Implementera automatisk uppdatering av bekräftelsesidan när PDF:er blir tillgängliga
+
+4. **Loggning och Övervakning**:
+   - Centralisera loggningen för bättre spårbarhet
+   - Implementera alarmering för kritiska fel i betalningsprocessen
+
+Denna uppdaterade dokumentation reflekterar de senaste ändringarna i systemet och ger en solid grund för fortsatt utveckling av betalningsfunktionerna, särskilt för den kommande Swish-integrationen. 
