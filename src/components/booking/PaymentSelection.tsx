@@ -404,15 +404,23 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     }
   };
 
-  // Calculate price based on number of participants
+  // Calculate price based on number of participants or gift card amount
   const calculatePrice = () => {
+    // För presentkort, använd belopp från GiftCard-detaljer
+    if (flowType === FlowType.GIFT_CARD) {
+      return getGiftCardAmount();
+    }
+    
+    // För konstprodukter, använd produktpris direkt
+    if (flowType === FlowType.ART_PURCHASE && flowData?.itemDetails?.price) {
+      return flowData.itemDetails.price;
+    }
+    
+    // För kurser, beräkna baserat på antal deltagare
     if (!userInfo || !courseDetail || !courseDetail.price) {
-      // For shop items, use the product price directly from flowData
-      if (flowType === FlowType.ART_PURCHASE && flowData?.itemDetails?.price) {
-        return flowData.itemDetails.price;
-      }
       return 0;
     }
+    
     const numParticipants = parseInt(userInfo.numberOfParticipants) || 1;
     return courseDetail.price * numParticipants;
   };

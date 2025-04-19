@@ -63,6 +63,11 @@ interface InvoiceProcessingArgs {
   amount: number;
   paymentReference: string;
   invoiceNumber: string;
+  giftCardDetails?: {
+    recipientName?: string;
+    recipientEmail?: string;
+    message?: string;
+  };
 }
 
 // Interface for invoice details structure
@@ -242,6 +247,7 @@ async function generateInvoiceAndSendEmail(
           // Uppdatera giftCardDetails med presentkortsdata för PDF
           giftCardDetails = {
             code: giftCard.code,
+            payment_reference: paymentReference,
             amount: giftCard.amount,
             recipientName: giftCard.recipient_name,
             recipientEmail: giftCard.recipient_email,
@@ -259,6 +265,12 @@ async function generateInvoiceAndSendEmail(
             paymentReference
           });
           
+          // Hämta gift card details från argumenten
+          logInfo(`Gift card details from args`, {
+            requestId,
+            hasGiftCardDetails: !!giftCardDetails
+          });
+          
           // Generera en unik presentkortskod
           const giftCardCode = `GC-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
           
@@ -266,7 +278,7 @@ async function generateInvoiceAndSendEmail(
           const expiryDate = new Date();
           expiryDate.setFullYear(expiryDate.getFullYear() + 1);
           
-          // Skapa presentkort i databasen
+          // Skapa presentkort i databasen, använd gift card details om tillgängligt
           const { data: newGiftCard, error: createError } = await supabase
             .from('gift_cards')
             .insert({
@@ -278,12 +290,14 @@ async function generateInvoiceAndSendEmail(
               sender_name: `${userInfo.firstName} ${userInfo.lastName}`,
               sender_email: userInfo.email,
               sender_phone: userInfo.phoneNumber || '',
-              recipient_name: userInfo.recipientName || `${userInfo.firstName} ${userInfo.lastName}`,
-              recipient_email: userInfo.recipientEmail || userInfo.email,
-              message: userInfo.message || null,
-              is_paid: true,
+              recipient_name: giftCardDetails?.recipientName || userInfo.recipientName || `${userInfo.firstName} ${userInfo.lastName}`,
+              recipient_email: giftCardDetails?.recipientEmail || userInfo.recipientEmail || userInfo.email,
+              message: giftCardDetails?.message || userInfo.message || null,
+              is_paid: false, // Fakturor börjar som obetalda
               payment_reference: paymentReference,
               invoice_number: invoiceNumber,
+              payment_method: 'invoice',
+              payment_status: 'CREATED',
               created_at: new Date().toISOString(),
               expires_at: expiryDate.toISOString()
             })
@@ -299,7 +313,7 @@ async function generateInvoiceAndSendEmail(
             logInfo(`Successfully created gift card`, {
               requestId,
               giftCardId: newGiftCard.id,
-              giftCardCode: newGiftCard.code
+              paymentReference: paymentReference
             });
             
             // Spara databasID separat
@@ -308,6 +322,7 @@ async function generateInvoiceAndSendEmail(
             // Uppdatera giftCardDetails med det nyligen skapade presentkortet
             giftCardDetails = {
               code: newGiftCard.code,
+              payment_reference: paymentReference,
               amount: newGiftCard.amount,
               recipientName: newGiftCard.recipient_name,
               recipientEmail: newGiftCard.recipient_email,
@@ -359,12 +374,13 @@ async function generateInvoiceAndSendEmail(
       if (productType === 'gift_card' && giftCardDetails && giftCardDetails.code) {
         logInfo(`Generating gift card PDF for invoice payment`, {
           requestId,
-          giftCardCode: giftCardDetails.code
+          paymentReference: paymentReference
         });
         
         // Make sure the completeGiftCardData is converted to snake_case for database storage
         const completeGiftCardData: GiftCardPdfData = {
-          code: giftCardDetails.code || `GC-${Date.now()}`,
+          code: giftCardDetails.code || `GC-${Date.now()}`, // Behåll för bakåtkompatibilitet
+          payment_reference: paymentReference, // Använd payment_reference som huvudidentifierare
           amount: giftCardDetails.amount || amount,
           recipientName: giftCardDetails.recipientName || 'Presentkortsmottagare',
           senderName: giftCardDetails.senderName || `${userInfo.firstName} ${userInfo.lastName}`,
@@ -441,7 +457,49 @@ async function generateInvoiceAndSendEmail(
       
       // Anropa e-posttjänsten
       logDebug(`Calling email service`, { requestId });
-      const emailResult = await serverEmailModule.sendEmailWithInvoice(emailData);
+      
+      // Prepare the email data in the format expected by sendServerInvoiceEmail
+      const emailParams = {
+        userInfo: {
+          firstName: userInfo.firstName,
+          lastName: userInfo.lastName,
+          email: userInfo.email,
+          phone: userInfo.phoneNumber || '',  // Ensure phone is a string, not undefined
+          numberOfParticipants: String(userInfo.numberOfParticipants || 1)  // Convert to string
+        },
+        paymentDetails: {
+          method: 'invoice',
+          status: 'pending',
+          invoiceNumber,
+          amount
+        },
+        courseDetails: productType === 'course' && courseDetails
+          ? {
+              id: courseDetails.id,
+              title: courseDetails.title,
+              description: courseDetails.description || '',
+              start_date: courseDetails.start_date,
+              location: courseDetails.location || '',
+              price: courseDetails.price
+            }
+          : {
+              id: productId,
+              title: productType === 'gift_card' 
+                ? 'Presentkort' 
+                : (artOrderDetails?.name || 'Produkt'),
+              description: artOrderDetails?.description || '',
+              start_date: new Date().toISOString(),
+              location: 'Studio Clay, Stockholm',
+              price: amount
+            },
+        invoiceNumber,
+        pdfBuffer: invoicePdfResult.pdfBlob ? Buffer.from(await invoicePdfResult.pdfBlob.arrayBuffer()) : undefined,
+        isGiftCard: productType === 'gift_card',
+        giftCardCode: giftCardDetails?.code || giftCardDetails?.payment_reference,
+        giftCardPdfBuffer: undefined  // We don't have the buffer here
+      };
+      
+      const emailResult = await serverEmailModule.sendServerInvoiceEmail(emailParams);
       
       if (!emailResult.success) {
         logError(`Failed to send invoice email`, {
@@ -454,24 +512,35 @@ async function generateInvoiceAndSendEmail(
       logInfo(`Successfully sent invoice email`, {
         requestId,
         recipient: userInfo.email,
-        messageId: emailResult.messageId || 'unknown',
+        messageId: emailResult.message || 'unknown',
         includesGiftCard: productType === 'gift_card' && !!giftCardPdfUrl
       });
       
       // 5. Uppdatera payment-tabellen för att markera email som skickat
-      const { error: updateEmailError } = await supabase
-        .from('payments')
-        .update({
-          email_sent: true,
-          email_sent_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('payment_reference', paymentReference);
-        
-      if (updateEmailError) {
-        logWarning(`Failed to update payment with email status`, {
+      try {
+        const { error: updateEmailError } = await supabase
+          .from('payments')
+          .update({
+            email_sent_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('payment_reference', paymentReference);
+          
+        if (updateEmailError) {
+          logWarning(`Failed to update payment with email status`, {
+            requestId,
+            error: updateEmailError
+          });
+        } else {
+          logInfo(`Updated payment record with email status`, {
+            requestId,
+            paymentReference
+          });
+        }
+      } catch (updateError) {
+        logWarning(`Exception when updating payment email status`, {
           requestId,
-          error: updateEmailError
+          error: updateError instanceof Error ? updateError.message : 'Unknown error'
         });
       }
       
@@ -658,6 +727,11 @@ export const POST = async (req: Request) => {
       // Använd vår tillfälliga interface istället för InvoicePaymentRequest
       const invoicePaymentData = validatedData as unknown as NormalizedInvoicePaymentData;
       
+      // För presentkort, hämta ut presentkortsdetaljer
+      const giftCardDetails = validatedData.productType === PRODUCT_TYPES.GIFT_CARD ? 
+        (validatedData as any).giftCardDetails : 
+        null;
+      
       // Kontrollera och validera produkttyp
       const productType = mapProductType(invoicePaymentData.productType);
       const productId = invoicePaymentData.productId;
@@ -665,7 +739,8 @@ export const POST = async (req: Request) => {
       logInfo(`[STEG 1.3] Validated payment request`, { 
         requestId, 
         productType,
-        productId
+        productId,
+        hasGiftCardDetails: !!giftCardDetails
       });
       
       // Om vi kommer hit har vi validerat datan, nu kan vi processa betalningen
@@ -733,6 +808,17 @@ export const POST = async (req: Request) => {
           hasCamelCase: !!requestData.productType
         });
         
+        // För presentkort behöver vi ett UUID för product_id fältet i payments-tabellen
+        if (productType === PRODUCT_TYPES.GIFT_CARD) {
+          // Generera ett UUID för att representera denna presentkortsbeställning
+          requestData.product_id = uuidv4();
+          
+          logDebug(`Generated UUID for gift card product_id`, {
+            requestId,
+            generatedUUID: requestData.product_id
+          });
+        }
+        
         // Skapa payment-record
         const { data: payment, error: paymentError } = await supabase
           .from('payments')
@@ -772,6 +858,73 @@ export const POST = async (req: Request) => {
           invoice_number: invoiceNumber,
           product_type: getValidProductType(requestData.product_type)
         });
+        
+        // Om detta är ett presentkort, skapa en post i gift_cards-tabellen
+        if (productType === PRODUCT_TYPES.GIFT_CARD) {
+          try {
+            // Skapa en unik presentkortskod
+            const giftCardCode = `GC-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+            
+            logInfo(`Creating gift card record for invoice payment`, {
+              requestId,
+              paymentReference,
+              invoiceNumber,
+              giftCardCode
+            });
+            
+            // Hämta gift card details från validerade data
+            const giftCardDetailsData = giftCardDetails || {};
+            
+            // Skapa utgångsdatum (1 år)
+            const expiryDate = new Date();
+            expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+            
+            // Skapa gift_card-record
+            const { data: giftCard, error: giftCardError } = await supabase
+              .from('gift_cards')
+              .insert({
+                code: giftCardCode,
+                amount: requestData.amount,
+                remaining_balance: requestData.amount,
+                status: 'active',
+                type: 'digital',
+                sender_name: `${userInfoObj.firstName} ${userInfoObj.lastName}`,
+                sender_email: userInfoObj.email,
+                sender_phone: userInfoObj.phoneNumber || '',
+                recipient_name: giftCardDetailsData.recipientName || `${userInfoObj.firstName} ${userInfoObj.lastName}`,
+                recipient_email: giftCardDetailsData.recipientEmail || userInfoObj.email,
+                message: giftCardDetailsData.message || null,
+                is_paid: false, // Fakturor börjar som obetalda
+                payment_reference: paymentReference,
+                invoice_number: invoiceNumber,
+                payment_method: 'invoice',
+                payment_status: 'CREATED',
+                created_at: new Date().toISOString(),
+                expires_at: expiryDate.toISOString()
+              })
+              .select()
+              .single();
+              
+            if (giftCardError) {
+              logWarning(`Failed to create gift card record, continuing`, {
+                requestId,
+                error: giftCardError
+              });
+            } else {
+              logInfo(`Gift card created successfully`, {
+                requestId,
+                giftCardId: giftCard.id,
+                paymentReference: paymentReference
+              });
+            }
+          } catch (giftCardError) {
+            logError(`Error creating gift card record`, {
+              requestId,
+              error: giftCardError instanceof Error ? giftCardError.message : 'Unknown error'
+            });
+            // Fortsätt trots fel med gift card - vi har fortfarande payment record
+          }
+        }
         
         // Om detta är en konstprodukt (art_product), skapa en post i art_orders
         if (productType === PRODUCT_TYPES.ART_PRODUCT) {
@@ -905,11 +1058,11 @@ export const POST = async (req: Request) => {
               productId,
               userInfo: userInfoObj,
               invoiceDetails,
-              amount: requestData.amount
+              amount: requestData.amount,
+              giftCardDetails
             },
             { 
               requestId,
-              maxRetries: 3,  // Tillåt upp till 3 försök för viktiga fakturajobb
               delay: 100      // Liten fördröjning för att säkerställa att databasoperationer har slutförts
             }
           );

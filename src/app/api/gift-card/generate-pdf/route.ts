@@ -54,8 +54,8 @@ export async function POST(request: NextRequest) {
     // Set up bucket name
     const bucketName = 'giftcards';
     
-    // Generate a constant filename based on the gift card code (without timestamp)
-    const fileName = `gift-card-${giftCard.code}.pdf`;
+    // Generate a constant filename based on the payment reference (without timestamp)
+    const fileName = `gift-card-${giftCard.payment_reference}.pdf`;
     const filePath = fileName;
     console.log('API-PDF-11: File path for expected PDF:', filePath);
 

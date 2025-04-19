@@ -16,7 +16,7 @@ import { generateGiftCardPDF, GiftCardData } from '@/utils/giftCardPDF';
 // Interface för gemensamma data för alla PDF-genereringar
 interface BasePdfGenerationOptions {
   requestId: string;
-  paymentReference: string;
+  paymentReference?: string;
 }
 
 // Specifik data för faktura-PDF
@@ -32,9 +32,10 @@ interface InvoicePdfOptions extends BasePdfGenerationOptions {
 }
 
 // Specifik data för presentkorts-PDF
-interface GiftCardPdfOptions extends BasePdfGenerationOptions {
+export interface GiftCardPdfOptions extends BasePdfGenerationOptions {
   giftCardData: GiftCardData;
   storeToBucket?: boolean;
+  paymentReference?: string;
 }
 
 // Resultat av PDF-generering
@@ -191,62 +192,125 @@ export async function generateAndStoreInvoicePdf(options: InvoicePdfOptions): Pr
 }
 
 /**
- * Genererar PDF för presentkort och lagrar den 
+ * Genererar en PDF för ett presentkort och lagrar det i en bucket (om storeToBucket=true)
  */
 export async function generateAndStoreGiftCardPdf(options: GiftCardPdfOptions): Promise<PdfGenerationResult> {
-  const { requestId, giftCardData, storeToBucket = true } = options;
-  
-  logInfo(`Starting gift card PDF generation`, { 
-    requestId, 
-    giftCardCode: giftCardData.code 
-  });
+  const { requestId, giftCardData, storeToBucket = true, paymentReference } = options;
   
   try {
-    // 1. Generera PDF
-    const pdfBlob = await generateGiftCardPDF(giftCardData);
-    
-    if (!pdfBlob) {
-      throw new Error('Gift card PDF generation failed with null result');
-    }
-    
-    logInfo(`Successfully generated gift card PDF`, {
+    // Debug input data before processing
+    logInfo(`🔍 GIFT CARD PDF GENERATOR - INPUT DATA:`, {
       requestId,
-      pdfSizeBytes: pdfBlob.size,
-      giftCardCode: giftCardData.code
+      giftCardData: {
+        code: giftCardData.code || '[MISSING]',
+        payment_reference: giftCardData.payment_reference || '[MISSING]',
+        amount: giftCardData.amount,
+        recipientName: giftCardData.recipientName || '[MISSING]',
+        recipientEmail: giftCardData.recipientEmail || '[MISSING]',
+        senderName: giftCardData.senderName || '[MISSING]',
+      },
+      optionsPaymentReference: paymentReference || '[MISSING]',
+      storeToBucket
     });
     
-    // 2. Lagra PDF om det begärs
-    if (storeToBucket) {
-      const storageResult = await storePdfToBucket(
-        pdfBlob, 
-        'giftcards', 
-        giftCardData.code.replace(/[^a-zA-Z0-9-]/g, '_'), 
-        requestId
-      );
-      
-      if (!storageResult.success) {
-        return storageResult;
-      }
-      
+    // Ensure the gift card has a code or payment reference
+    if (!giftCardData.code && !giftCardData.payment_reference && !paymentReference) {
+      logError(`❌ Cannot generate gift card PDF: Missing both code and payment reference`, { 
+        requestId,
+        giftCardData,
+        optionsPaymentReference: paymentReference
+      });
       return {
-        success: true,
-        pdfBlob,
-        storagePath: storageResult.storagePath,
-        publicUrl: storageResult.publicUrl
+        success: false,
+        error: 'Gift card is missing both code and payment reference'
       };
     }
     
-    // Om vi inte behöver lagra, returnera bara PDF-blob
-    return {
-      success: true,
-      pdfBlob
-    };
+    // Pass the payment reference to the gift card data if provided
+    if (paymentReference && !giftCardData.payment_reference) {
+      logInfo(`📝 Setting payment_reference from paymentReference parameter`, {
+        requestId,
+        paymentReference,
+        hadCode: !!giftCardData.code
+      });
+      giftCardData.payment_reference = paymentReference;
+    }
     
+    // Debug data before passing to PDF generator
+    logInfo(`🧩 GIFT CARD PDF GENERATION - ABOUT TO CALL GENERATOR`, { 
+      requestId, 
+      hasCode: !!giftCardData.code,
+      hasPaymentReference: !!giftCardData.payment_reference,
+      amount: giftCardData.amount,
+      payment_reference: giftCardData.payment_reference || paymentReference || '[NONE]',
+      code: giftCardData.code || '[NONE]',
+      finalReferenceToBeUsed: giftCardData.payment_reference || paymentReference || giftCardData.code || '[NONE]'
+    });
+    
+    // Generate the PDF
+    const pdfBlob = await generateGiftCardPDF(giftCardData);
+    
+    if (!pdfBlob) {
+      logError(`❌ Failed to generate gift card PDF, empty blob returned`, { 
+        requestId,
+        giftCardDataSent: {
+          code: giftCardData.code || '[MISSING]',
+          payment_reference: giftCardData.payment_reference || '[MISSING]',
+          amount: giftCardData.amount
+        }
+      });
+      return {
+        success: false,
+        error: 'Empty blob returned from PDF generation'
+      };
+    }
+    
+    logInfo(`✅ PDF generated successfully`, { 
+      requestId, 
+      blobSize: pdfBlob.size,
+      blobType: pdfBlob.type
+    });
+    
+    // If we don't want to store the PDF, just return it
+    if (!storeToBucket) {
+      logInfo(`🔄 Skipping storage, returning PDF blob directly`, { requestId });
+      return {
+        success: true,
+        pdfBlob
+      };
+    }
+    
+    // Use payment_reference or code as the filename
+    const fileName = giftCardData.payment_reference || paymentReference || giftCardData.code;
+    
+    logInfo(`💾 Storing PDF with filename based on payment reference or code`, {
+      requestId,
+      fileName,
+      usedPaymentReference: !!giftCardData.payment_reference || !!paymentReference,
+      usedCode: !giftCardData.payment_reference && !paymentReference && !!giftCardData.code,
+      referenceSource: giftCardData.payment_reference 
+        ? 'gift_card_data.payment_reference' 
+        : (paymentReference ? 'options.paymentReference' : 'gift_card_data.code')
+    });
+    
+    // Store the PDF in the bucket
+    return await storePdfToBucket(
+      pdfBlob, 
+      'giftcards', 
+      fileName,
+      requestId
+    );
   } catch (error) {
-    logError(`Error in gift card PDF generation process`, {
+    logError(`❌ Exception generating gift card PDF`, {
       requestId,
       error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
+      stack: error instanceof Error ? error.stack : undefined,
+      giftCardData: {
+        hasCode: !!giftCardData.code,
+        hasPaymentReference: !!giftCardData.payment_reference,
+        amount: giftCardData.amount,
+        recipientName: !!giftCardData.recipientName
+      }
     });
     
     return {

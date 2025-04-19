@@ -176,15 +176,31 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
           quantity
         };
 
+        // För presentkort måste vi inkludera presentkortsdetaljer
+        if (validProductType === PRODUCT_TYPES.GIFT_CARD) {
+          try {
+            // Hämta presentkortsdetaljer från localStorage
+            const giftCardDetailsStr = localStorage.getItem('giftCardDetails');
+            if (giftCardDetailsStr) {
+              const giftCardDetails = JSON.parse(giftCardDetailsStr);
+              console.log('[InvoicePaymentSection] Found gift card details:', giftCardDetails);
+              
+              // Lägg till presentkortsdetaljer i förfrågan
+              (requestData as any).giftCardDetails = {
+                recipientName: giftCardDetails.recipientName,
+                recipientEmail: giftCardDetails.recipientEmail || '',
+                message: giftCardDetails.message || ''
+              };
+            } else {
+              console.error('[InvoicePaymentSection] Gift card details not found in localStorage');
+            }
+          } catch (error) {
+            console.error('[InvoicePaymentSection] Error getting gift card details:', error);
+          }
+        }
+
         // Loggning för felsökning
-        console.log('[InvoicePaymentSection] Request data:', {
-          productId,
-          productType: validProductType,
-          amount,
-          invoiceAddress: address.trim(),
-          invoicePostalCode: postalCode.trim(),
-          invoiceCity: city.trim(),
-        });
+        console.log('[InvoicePaymentSection] Request data:', requestData);
         
         // Använd vår nya standardiserade API-tjänst
         const response: StandardPaymentResponse = await createStandardizedInvoicePayment(requestData);

@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
         throw new Error(`Failed to get count for ${status} jobs: ${error.message}`);
       }
       
-      statusCounts[status] = count || 0;
+      statusCounts[status as JobStatus] = count || 0;
     }
     
     // Hämta senaste jobb

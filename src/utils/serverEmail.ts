@@ -194,7 +194,7 @@ export async function sendServerInvoiceEmail(params: {
   console.log(`📧 Recipient: ${params.userInfo.email}`);
   console.log(`📧 Has PDF: ${params.pdfBuffer ? 'Yes' : 'No'}`);
   if (params.isGiftCard) {
-    console.log(`📧 Gift Card Code: ${params.giftCardCode}`);
+    console.log(`📧 Payment Reference: ${params.invoiceNumber}`);
     console.log(`📧 Has Gift Card PDF: ${params.giftCardPdfBuffer ? 'Yes' : 'No'}`);
   }
   
@@ -271,7 +271,7 @@ export async function sendServerInvoiceEmail(params: {
     if (params.isGiftCard && params.giftCardPdfBuffer && params.giftCardCode) {
       console.log(`📧 Adding gift card PDF attachment (${params.giftCardPdfBuffer.length} bytes)`);
       attachments.push({
-        filename: `Presentkort-${params.giftCardCode}.pdf`,
+        filename: `Presentkort-${params.invoiceNumber}.pdf`,
         content: params.giftCardPdfBuffer,
         contentType: 'application/pdf'
       });
@@ -517,6 +517,7 @@ export async function sendServerGiftCardEmail(params: {
   console.log('📧 =========== GIFT CARD EMAIL SENDING ATTEMPT ===========');
   console.log(`📧 Time: ${new Date().toISOString()}`);
   console.log(`📧 Gift Card Code: ${params.giftCardData.code}`);
+  console.log(`📧 Payment Reference: ${params.giftCardData.code}`);
   console.log(`📧 Amount: ${params.giftCardData.amount}`);
   console.log(`📧 Sender: ${params.senderInfo.email}`);
   console.log(`📧 Recipient Name: ${params.giftCardData.recipient_name}`);
@@ -554,7 +555,7 @@ export async function sendServerGiftCardEmail(params: {
     
     // Create reusable transporter
     console.log(`📧 Creating email transporter...`);
-    const transporter = await createTransporter();
+    const transporter = createTransporter();
     
     if (!transporter) {
       console.log('📧 No transporter available, simulating email send');
@@ -580,7 +581,7 @@ export async function sendServerGiftCardEmail(params: {
     }
     
     // For Office 365, use a simplified from address that exactly matches the authenticated user
-    const authenticatedEmail = process.env.EMAIL_USER || 'eva@studioclay.se';
+    const authenticatedEmail = emailSettings.from;
     console.log(`📧 Using authenticated email as sender: ${authenticatedEmail}`);
     
     // Create email options - now sending to the purchaser/sender
@@ -662,62 +663,47 @@ export async function sendServerGiftCardEmail(params: {
  * Send a product order confirmation email from the server
  */
 export async function sendServerProductOrderConfirmationEmail(params: {
-  userInfo: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone?: string;
-    address?: string;
-    postalCode?: string;
-    city?: string;
-  };
-  paymentDetails: {
-    method: string;
-    status: string;
-    reference?: string;
-    invoiceNumber?: string;
-    amount: number;
-  };
-  productDetails: {
+  userInfo: UserInfo;
+  paymentDetails: PaymentDetails;
+  courseDetails: {
     id: string;
     title: string;
     description?: string;
+    start_date: string;
+    location?: string;
     price: number;
-    quantity: number;
-    image?: string;
   };
-  orderReference: string;
+  bookingReference: string;
 }): Promise<{ success: boolean; message: string }> {
   const startTime = Date.now();
   console.log('📧 =========== PRODUCT ORDER EMAIL SENDING ATTEMPT ===========');
   console.log(`📧 Time: ${new Date().toISOString()}`);
-  console.log(`📧 Order Reference: ${params.orderReference}`);
-  console.log(`📧 Product: ${params.productDetails.title}`);
-  console.log(`📧 Quantity: ${params.productDetails.quantity}`);
-  console.log(`📧 Total Amount: ${params.productDetails.price * params.productDetails.quantity}`);
+  console.log(`📧 Booking Reference: ${params.bookingReference}`);
+  console.log(`📧 Course: ${params.courseDetails.title}`);
   console.log(`📧 Recipient: ${params.userInfo.email}`);
   
   try {
     // Build email HTML using the modular template system
-    console.log(`📧 Building product order email HTML...`);
+    console.log(`📧 Building product order confirmation email HTML...`);
     const htmlContent = buildConfirmationEmail({
       productType: 'product',
       userInfo: params.userInfo,
       paymentDetails: {
         method: params.paymentDetails.method || '',
         status: params.paymentDetails.status || '',
-        reference: params.paymentDetails.reference,
+        reference: params.paymentDetails.paymentReference,
         invoiceNumber: params.paymentDetails.invoiceNumber,
-        amount: params.productDetails.price * params.productDetails.quantity
+        amount: params.courseDetails.price * (parseInt(params.userInfo.numberOfParticipants) || 1)
       },
       itemDetails: {
-        id: params.productDetails.id,
-        title: params.productDetails.title,
-        description: params.productDetails.description,
-        price: params.productDetails.price,
-        quantity: params.productDetails.quantity
+        id: params.courseDetails.id,
+        title: params.courseDetails.title,
+        description: params.courseDetails.description,
+        price: params.courseDetails.price,
+        start_date: params.courseDetails.start_date,
+        location: params.courseDetails.location
       },
-      reference: params.orderReference
+      reference: params.bookingReference
     });
     console.log(`📧 Email HTML built successfully`);
     
@@ -730,12 +716,12 @@ export async function sendServerProductOrderConfirmationEmail(params: {
       
       // SIMULATION MODE: Generate a test URL if in development mode
       if (process.env.NODE_ENV === 'development') {
-        console.log('📧 DEV MODE: Product order email would be sent with subject: Orderbekräftelse - Studio Clay');
-        console.log('📧 DEV MODE: Email would be sent to:', params.userInfo.email);
+        console.log('📧 DEV MODE: Product order email would be sent to:', params.userInfo.email);
+        console.log('📧 DEV MODE: Subject would be:', `Orderbekräftelse - ${params.courseDetails.title}`);
       } else {
         // PRODUCTION ERROR: Email cannot be sent
         console.error('📧 CRITICAL PRODUCTION ERROR: Cannot send product order email due to missing transporter ❌');
-        console.error(`📧 Email to ${params.userInfo.email} could not be sent`);
+        console.error(`📧 Product order email to ${params.userInfo.email} could not be sent`);
       }
       
       console.log(`📧 Total email processing time (failed): ${Date.now() - startTime}ms`);
@@ -755,14 +741,14 @@ export async function sendServerProductOrderConfirmationEmail(params: {
     const mailOptions = {
       from: authenticatedEmail,
       to: params.userInfo.email,
-      subject: `Orderbekräftelse - Studio Clay`,
+      subject: `Orderbekräftelse - ${params.courseDetails.title}`,
       html: htmlContent,
       bcc: process.env.BCC_EMAIL || undefined
     };
     
     // Send email
     console.log(`📧 Sending product order confirmation email to: ${params.userInfo.email}`);
-    console.log(`📧 Email subject: Orderbekräftelse - Studio Clay`);
+    console.log(`📧 Email subject: Orderbekräftelse - ${params.courseDetails.title}`);
     console.log(`📧 BCC: ${process.env.BCC_EMAIL || 'None'}`);
     
     // Create a keep-alive timer to keep the function running while nodemailer does its work
@@ -771,7 +757,7 @@ export async function sendServerProductOrderConfirmationEmail(params: {
     try {
       const info = await transporter.sendMail(mailOptions);
       
-      console.log(`📧 ✅ Product order email sent successfully!`);
+      console.log(`📧 ✅ Product order confirmation email sent successfully!`);
       console.log(`📧 Message ID: ${info.messageId}`);
       console.log(`📧 Accepted recipients: ${info.accepted ? info.accepted.join(', ') : 'None'}`);
       console.log(`📧 Rejected recipients: ${info.rejected ? info.rejected.join(', ') : 'None'}`);
@@ -813,334 +799,7 @@ export async function sendServerProductOrderConfirmationEmail(params: {
     
     return {
       success: false,
-      message: error instanceof Error ? error.message : 'Unknown error sending product order confirmation email'
+      message: error instanceof Error ? error.message : 'Unknown error sending product order email'
     };
   }
 }
-
-/**
- * Server Email Module
- * 
- * Hanterar e-postmeddelanden som skickas från servern. Detta inkluderar:
- * - Bekräftelse av bokningar
- * - Fakturor
- * - Presentkort
- */
-
-// Standardsvar från e-postfunktioner
-interface EmailResult {
-  success: boolean;
-  message: string;
-  messageId?: string;
-}
-
-/**
- * Skickar e-post med faktura till kunden
- */
-export async function sendEmailWithInvoice(data: {
-  userInfo: any;
-  invoiceNumber: string;
-  paymentReference: string;
-  productType: string;
-  pdfBlob?: Blob;
-  giftCardPdfUrl?: string;
-  courseDetails?: any;
-  artProduct?: any;
-  giftCardDetails?: any;
-}): Promise<EmailResult> {
-  const requestId = data.paymentReference;
-  
-  try {
-    logInfo(`Preparing to send invoice email`, { requestId });
-    
-    // Validera e-postmottagare
-    const recipientEmail = data.userInfo.email;
-    if (!recipientEmail || !recipientEmail.includes('@')) {
-      throw new Error(`Invalid recipient email: ${recipientEmail}`);
-    }
-    
-    // Skapa e-posttransport
-    const transporter = nodemailer.createTransport({
-      host: emailConfig.host,
-      port: emailConfig.port,
-      secure: emailConfig.secure,
-      auth: emailConfig.auth
-    });
-    
-    // Förbered bifogad faktura-PDF om den finns
-    const attachments = [];
-    
-    if (data.pdfBlob) {
-      logDebug(`Adding invoice PDF attachment`, { requestId });
-      
-      // Konvertera PDF-blob till buffer
-      const arrayBuffer = await data.pdfBlob.arrayBuffer();
-      const pdfBuffer = Buffer.from(arrayBuffer);
-      
-      attachments.push({
-        filename: `faktura-${data.invoiceNumber}.pdf`,
-        content: pdfBuffer,
-        contentType: 'application/pdf'
-      });
-    }
-    
-    // Generera ämnesrad och innehåll baserat på produkttyp
-    const validProductType = getValidProductType(data.productType);
-    let subject = '';
-    let htmlContent = '';
-    
-    if (validProductType === PRODUCT_TYPES.COURSE) {
-      // Kursbokningar
-      const courseTitle = data.courseDetails?.title || 'din kurs';
-      subject = `Din faktura för bokning av ${courseTitle}`;
-      
-      // Formatera kursdatum om det finns
-      let formattedDate = '';
-      if (data.courseDetails?.start_date) {
-        const courseDate = new Date(data.courseDetails.start_date);
-        formattedDate = courseDate.toLocaleDateString('sv-SE', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long', 
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-      }
-      
-      // HTML-innehåll för kursbokningar
-      htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #42857a;">Tack för din bokning!</h1>
-          <p>Hej ${data.userInfo.firstName},</p>
-          <p>Tack för din bokning av kursen "${courseTitle}"${formattedDate ? ` den ${formattedDate}` : ''}.</p>
-          <p>Din faktura är bifogad i detta e-postmeddelande. Betalningsvillkor är 14 dagar.</p>
-          <p><strong>Fakturanummer:</strong> ${data.invoiceNumber}</p>
-          <p><strong>Betalningsreferens:</strong> ${data.paymentReference}</p>
-          <p>Vi ser fram emot att träffa dig på kursen!</p>
-          <p>Vänliga hälsningar,<br>Studio Clay</p>
-        </div>
-      `;
-    } else if (validProductType === PRODUCT_TYPES.GIFT_CARD) {
-      // Presentkort
-      subject = 'Ditt presentkort från Studio Clay';
-      
-      // HTML-innehåll för presentkort
-      htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #42857a;">Tack för ditt köp av presentkort!</h1>
-          <p>Hej ${data.userInfo.firstName},</p>
-          <p>Tack för ditt köp av presentkort till Studio Clay på ${data.giftCardDetails?.amount || ''} kr.</p>
-          <p>Din faktura är bifogad i detta e-postmeddelande. Betalningsvillkor är 14 dagar.</p>
-          <p><strong>Fakturanummer:</strong> ${data.invoiceNumber}</p>
-          <p><strong>Betalningsreferens:</strong> ${data.paymentReference}</p>
-          ${data.giftCardDetails?.code ? `<p><strong>Presentkortskod:</strong> ${data.giftCardDetails.code}</p>` : ''}
-          <p>Efter betalning kan presentkortet användas för att boka kurser eller köpa produkter på vår hemsida.</p>
-          <p>Vänliga hälsningar,<br>Studio Clay</p>
-        </div>
-      `;
-      
-      // Lägg till länk till presentkorts-PDF om det finns
-      if (data.giftCardPdfUrl) {
-        htmlContent += `
-          <div style="margin-top: 20px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;">
-            <p>Du kan ladda ner ditt presentkort som PDF genom att <a href="${data.giftCardPdfUrl}" target="_blank">klicka här</a>.</p>
-          </div>
-        `;
-      }
-    } else if (validProductType === PRODUCT_TYPES.ART_PRODUCT) {
-      // Konstprodukt
-      const productName = data.artProduct?.name || 'din produkt';
-      subject = `Din faktura för köp av ${productName}`;
-      
-      // HTML-innehåll för konstprodukter
-      htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #42857a;">Tack för ditt köp!</h1>
-          <p>Hej ${data.userInfo.firstName},</p>
-          <p>Tack för ditt köp av "${productName}".</p>
-          <p>Din faktura är bifogad i detta e-postmeddelande. Betalningsvillkor är 14 dagar.</p>
-          <p><strong>Fakturanummer:</strong> ${data.invoiceNumber}</p>
-          <p><strong>Betalningsreferens:</strong> ${data.paymentReference}</p>
-          <p>Vi kommer att kontakta dig angående leverans efter att betalningen har mottagits.</p>
-          <p>Vänliga hälsningar,<br>Studio Clay</p>
-        </div>
-      `;
-    } else {
-      // Generisk
-      subject = 'Din faktura från Studio Clay';
-      
-      // Generiskt HTML-innehåll
-      htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #42857a;">Tack för ditt köp!</h1>
-          <p>Hej ${data.userInfo.firstName},</p>
-          <p>Tack för ditt köp från Studio Clay.</p>
-          <p>Din faktura är bifogad i detta e-postmeddelande. Betalningsvillkor är 14 dagar.</p>
-          <p><strong>Fakturanummer:</strong> ${data.invoiceNumber}</p>
-          <p><strong>Betalningsreferens:</strong> ${data.paymentReference}</p>
-          <p>Vänliga hälsningar,<br>Studio Clay</p>
-        </div>
-      `;
-    }
-    
-    // Skicka e-postmeddelande
-    const mailOptions = {
-      from: `"Studio Clay" <${emailSettings.from}>`,
-      to: recipientEmail,
-      subject: subject,
-      html: htmlContent,
-      attachments: attachments
-    };
-    
-    logDebug(`Sending email to ${recipientEmail}`, { 
-      requestId,
-      subject,
-      hasAttachments: attachments.length > 0 
-    });
-    
-    // Faktiskt skicka e-post
-    const info = await transporter.sendMail(mailOptions);
-    
-    logInfo(`Successfully sent email`, {
-      requestId,
-      messageId: info.messageId,
-      recipient: recipientEmail
-    });
-    
-    return {
-      success: true,
-      message: 'Email sent successfully',
-      messageId: info.messageId
-    };
-    
-  } catch (error) {
-    logError(`Failed to send invoice email`, {
-      requestId,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : 'Unknown error sending email'
-    };
-  }
-}
-
-/**
- * Skickar en bekräftelse på bokning via e-post
- */
-export async function sendBookingConfirmation(data: {
-  email: string;
-  name: string;
-  bookingReference: string;
-  courseTitle: string;
-  courseDate: string;
-  participants: number;
-}): Promise<EmailResult> {
-  try {
-    // Skapa e-posttransport
-    const transporter = nodemailer.createTransport({
-      host: emailConfig.host,
-      port: emailConfig.port,
-      secure: emailConfig.secure,
-      auth: emailConfig.auth
-    });
-    
-    // HTML-innehåll för bokningsbekräftelse
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #42857a;">Bokningsbekräftelse</h1>
-        <p>Hej ${data.name},</p>
-        <p>Vi bekräftar härmed din bokning av kursen "${data.courseTitle}" den ${data.courseDate}.</p>
-        <p><strong>Antal deltagare:</strong> ${data.participants}</p>
-        <p><strong>Bokningsreferens:</strong> ${data.bookingReference}</p>
-        <p>Vi ser fram emot att träffa dig på kursen!</p>
-        <p>Vänliga hälsningar,<br>Studio Clay</p>
-      </div>
-    `;
-    
-    // Skicka e-postmeddelande
-    const mailOptions = {
-      from: `"Studio Clay" <${emailSettings.from}>`,
-      to: data.email,
-      subject: `Bokningsbekräftelse - ${data.courseTitle}`,
-      html: htmlContent
-    };
-    
-    const info = await transporter.sendMail(mailOptions);
-    
-    return {
-      success: true,
-      message: 'Booking confirmation email sent successfully',
-      messageId: info.messageId
-    };
-    
-  } catch (error) {
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : 'Unknown error sending booking confirmation'
-    };
-  }
-}
-
-export async function sendArtOrderEmail(data: {
-  orderNumber: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone?: string;
-  productName: string;
-  productPrice: number;
-  productDescription?: string;
-  productImage?: string;
-  paymentMethod: string;
-  paymentReference: string;
-}): Promise<EmailResult> {
-  try {
-    // Create email transporter
-    const transporter = createTransporter();
-    if (!transporter) {
-      return { success: false, message: 'Email service unavailable' };
-    }
-    
-    // Generate email content
-    const htmlContent = `
-      <h1>Tack för din beställning!</h1>
-      <p>Hej ${data.firstName},</p>
-      <p>Vi har tagit emot din beställning av ${data.productName}.</p>
-      <p><strong>Ordernummer:</strong> ${data.orderNumber}</p>
-      <p><strong>Betalningssätt:</strong> ${data.paymentMethod === 'swish' ? 'Swish' : 'Faktura'}</p>
-      <p><strong>Betalningsreferens:</strong> ${data.paymentReference}</p>
-      <p><strong>Produkt:</strong> ${data.productName}</p>
-      <p><strong>Pris:</strong> ${data.productPrice} kr</p>
-      <p>Vi kommer att kontakta dig när din beställning är redo för leverans eller upphämtning.</p>
-      <p>Vänliga hälsningar,<br>Studio Clay</p>
-    `;
-    
-    // Create email options
-    const mailOptions = {
-      from: `"Studio Clay" <${emailSettings.from}>`,
-      to: data.email,
-      subject: `Orderbekräftelse - ${data.productName}`,
-      html: htmlContent
-    };
-    
-    // Send email
-    const info = await transporter.sendMail(mailOptions);
-    
-    return {
-      success: true,
-      message: 'Email sent successfully',
-      messageId: info.messageId
-    };
-    
-  } catch (error) {
-    console.error('Error sending art order email:', error);
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : 'Unknown error sending email'
-    };
-  }
-} 
