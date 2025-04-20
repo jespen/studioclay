@@ -148,27 +148,58 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
               <span className="font-semibold">Behandlar: {formatTime(processingTime)}</span>
             </p>
             
-            {processingTime > 30 && (
-              <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-md">
+            {/* Status messages that appear over time */}
+            {processingTime > 5 && processingTime <= 15 && (
+              <div className="mt-4 p-3 bg-green-50 text-green-700 rounded-md">
                 <p className="text-center text-sm">
-                  <strong>Väntar på bekräftelse från Swish.</strong>
+                  <strong>Betalning mottagen</strong>
                   <br />
-                  Om du redan har godkänt betalningen i Swish-appen, vänta medan vi bekräftar transaktionen.
+                  Vi registrerar nu din betalning i systemet.
                 </p>
               </div>
             )}
             
-            {processingTime > 60 && (
-              <div className="mt-4 p-3 bg-yellow-50 text-yellow-700 rounded-md">
+            {processingTime > 15 && processingTime <= 25 && (
+              <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-md">
                 <p className="text-center text-sm">
-                  <strong>Betalningen tar längre tid än normalt.</strong>
+                  <strong>Skapar bekräftelsedokument</strong>
                   <br />
-                  Om du har godkänt betalningen i Swish-appen, vänta lite till.
-                  <br />
-                  I vissa fall kan bekräftelser från Swish ta extra tid.
+                  Vi förbereder din faktura och/eller presentkort.
                 </p>
               </div>
             )}
+            
+            {processingTime > 25 && processingTime <= 40 && (
+              <div className="mt-4 p-3 bg-purple-50 text-purple-700 rounded-md">
+                <p className="text-center text-sm">
+                  <strong>Skickar bekräftelsemail</strong>
+                  <br />
+                  Vi skickar bekräftelsemail med alla viktiga dokument.
+                </p>
+              </div>
+            )}
+            
+            {processingTime > 40 && (
+              <div className="mt-4 p-3 bg-yellow-50 text-yellow-700 rounded-md">
+                <p className="text-center text-sm">
+                  <strong>Nästan klart...</strong>
+                  <br />
+                  Förbereder din bekräftelsesida.
+                  <br />
+                  Tack för ditt tålamod!
+                </p>
+              </div>
+            )}
+            
+            {/* Progress bar to visually indicate progress */}
+            <div className="w-full mt-4 bg-gray-200 rounded-full h-2.5">
+              <div 
+                className="bg-primary h-2.5 rounded-full transition-all duration-300 ease-in-out" 
+                style={{ 
+                  width: `${Math.min(100, (processingTime / 45) * 100)}%` 
+                }}
+              ></div>
+            </div>
           </div>
         )}
 
