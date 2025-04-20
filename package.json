@@ -7,7 +7,7 @@
     "dev:clean": "rm -rf .next && next dev",
     "dev:reset": "pkill -f 'node.*next' || true && rm -rf .next node_modules/.cache && npm run dev",
     "build": "next build",
-    "vercel-build": "next build",
+    "vercel-build": "NEXT_DISABLE_STATIC_OPTIMIZATION=true next build",
     "start": "next start",
     "lint": "next lint",
     "migrate": "node src/scripts/run-migration.js"
