@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
  *      "crons": [
  *        {
  *          "path": "/api/cron/job-processor",
- *          "schedule": "*/5 * * * *"
+ *          "schedule": "0 0 * * *"
  *        }
  *      ]
  *    }
