@@ -177,8 +177,9 @@ BEGIN
 
                     -- Update product stock
                     UPDATE products
-                    SET stock = stock - 1
-                    WHERE id = v_product_id AND stock > 0;
+                    SET stock_quantity = stock_quantity - 1, 
+                        in_stock = CASE WHEN stock_quantity - 1 > 0 THEN true ELSE false END
+                    WHERE id = v_product_id AND stock_quantity > 0;
             END CASE;
         END IF;
 

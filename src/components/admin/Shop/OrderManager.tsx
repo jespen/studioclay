@@ -160,7 +160,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
 
   return (
     <div className={styles.pageContainer}>
-      {showHeader && <AdminHeader title="Beställningar" />}
+      {showHeader && <AdminHeader title="Beställningar" subtitle="Hantera Köpta produkter i webshopen"/>}
       <main className={styles.mainContent}>
         <SectionContainer title="Hantera beställningar">
           <div className="overflow-x-auto">

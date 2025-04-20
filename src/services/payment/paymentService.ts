@@ -8,6 +8,7 @@
 import { setPaymentInfo, setPaymentReference, getPaymentInfo } from '@/utils/dataStorage';
 import { PaymentMethod, ProductType, ProductData, UserData } from '@/types/productData';
 import { FlowType } from '@/components/common/BookingStepper';
+import { PAYMENT_STATUSES } from '@/constants/statusCodes';
 
 interface PaymentCompletionData {
   paymentMethod: PaymentMethod | string;
@@ -15,6 +16,7 @@ interface PaymentCompletionData {
   userData: UserData | any;
   paymentReference: string;
   amount?: number;
+  status?: string;
   additionalData?: any;
 }
 
@@ -35,12 +37,22 @@ export class PaymentService {
     // Calculate amount based on product data
     const amount = data.amount || this.calculateAmount(data.productData);
     
+    // Determine payment status from input data or additionalData, use CREATED as default for invoice
+    let status = data.status || data.additionalData?.status;
+    
+    // Set default status based on payment method if not provided
+    if (!status) {
+      status = method === 'swish' ? PAYMENT_STATUSES.PAID : PAYMENT_STATUSES.CREATED;
+    }
+    
+    console.log(`PaymentService: Setting payment status to ${status}`);
+    
     // Set payment reference
     setPaymentReference(reference);
     
     // Save standardized payment info in localStorage
     setPaymentInfo({
-      status: 'PAID',
+      status: status,
       method: method,
       reference: reference,
       amount: amount,

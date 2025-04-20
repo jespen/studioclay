@@ -1,90 +1,166 @@
 /**
- * Simple logging utility for debugging and error tracking
+ * Loggningssystem för att spåra alla händelser och fel relaterade till betalningar
+ * 
+ * Detta system fokuserar på att tillhandahålla spårbara och detaljerade loggar
+ * för alla betalningsrelaterade händelser, vilket möjliggör enkel felsökning och 
+ * spårning av transaktioner genom hela systemet.
  */
 
 import { createServerSupabaseClient } from '@/utils/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
-interface LogEntry {
-  level: 'debug' | 'info' | 'error';
-  message: string;
-  data?: any;
-  timestamp: string;
-  request_id?: string;
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface LogContext {
+  requestId?: string;
+  operation?: string;
+  productType?: string;
+  paymentMethod?: string;
+  reference?: string;
+  [key: string]: any;
 }
 
 /**
- * Log debug information
- * @param message The log message
- * @param data Optional data to include
+ * Skapa en ny loggkontext med ett unikt request ID
  */
-export async function logDebug(message: string, data?: any): Promise<void> {
-  const entry: LogEntry = {
-    level: 'debug',
+export function createLogContext(operation: string, additionalContext: Partial<LogContext> = {}): LogContext {
+  return {
+    requestId: uuidv4(),
+    operation,
+    timestamp: new Date().toISOString(),
+    ...additionalContext
+  };
+}
+
+/**
+ * Basfunktion för att logga ett meddelande med en viss nivå
+ */
+export function log(level: LogLevel, message: string, context?: LogContext, data?: any): void {
+  const logEntry = {
+    level,
     message,
+    context: context || {},
     data,
-    timestamp: new Date().toISOString(),
-    request_id: uuidv4().substring(0, 8)
+    timestamp: new Date().toISOString()
   };
 
-  console.log(`[DEBUG] ${entry.message}`, entry.data || '');
+  // Alltid logga till konsolen
+  const logPrefix = context?.requestId ? `[${context.requestId}]` : '';
+  
+  if (level === 'debug') {
+    console.debug(`${logPrefix} ${message}`, { context, data });
+  } else if (level === 'info') {
+    console.info(`${logPrefix} ${message}`, { context, data });
+  } else if (level === 'warn') {
+    console.warn(`${logPrefix} ${message}`, { context, data });
+  } else if (level === 'error') {
+    console.error(`${logPrefix} ${message}`, { context, data });
+  }
 
-  try {
-    const supabase = createServerSupabaseClient();
-    await supabase.from('logs').insert(entry);
-  } catch (error) {
-    console.error('Failed to save debug log to database:', error);
+  // För produktionsmiljö, spara även till databasen om det är ett fel
+  if (process.env.NODE_ENV === 'production' && (level === 'error' || level === 'warn')) {
+    saveLogToDatabase(logEntry).catch(err => {
+      console.error('Kunde inte spara logg till databas:', err);
+    });
   }
 }
 
 /**
- * Log informational messages
- * @param message The log message
- * @param data Optional data to include
+ * Logga debug-information
  */
-export async function logInfo(message: string, data?: any): Promise<void> {
-  const entry: LogEntry = {
-    level: 'info',
-    message,
-    data,
-    timestamp: new Date().toISOString(),
-    request_id: uuidv4().substring(0, 8)
-  };
+export function logDebug(message: string, context?: LogContext, data?: any): void {
+  log('debug', message, context, data);
+}
 
-  console.log(`[INFO] ${entry.message}`, entry.data || '');
+/**
+ * Logga normal information
+ */
+export function logInfo(message: string, context?: LogContext, data?: any): void {
+  log('info', message, context, data);
+}
 
+/**
+ * Logga varningar
+ */
+export function logWarning(message: string, context?: LogContext, data?: any): void {
+  log('warn', message, context, data);
+}
+
+/**
+ * Logga fel
+ */
+export function logError(message: string, context?: LogContext, error?: any): void {
+  // Formatera feldata
+  const errorData = formatError(error);
+  
+  log('error', message, context, errorData);
+}
+
+/**
+ * Spara logginformation till databasen för framtida analys
+ */
+async function saveLogToDatabase(logEntry: any): Promise<void> {
   try {
     const supabase = createServerSupabaseClient();
-    await supabase.from('logs').insert(entry);
-  } catch (error) {
-    console.error('Failed to save info log to database:', error);
+    
+    const { error } = await supabase
+      .from('error_logs')
+      .insert({
+        request_id: logEntry.context?.requestId || uuidv4(),
+        error_type: logEntry.context?.operation || 'unknown',
+        error_message: logEntry.message,
+        error_level: logEntry.level,
+        error_stack: logEntry.data?.stack || null,
+        request_data: {
+          context: logEntry.context,
+          data: logEntry.data
+        },
+        timestamp: new Date().toISOString()
+      });
+    
+    if (error) {
+      console.error('Fel vid sparande av logg:', error);
+    }
+  } catch (err) {
+    console.error('Kunde inte spara logg till databas:', err);
   }
 }
 
 /**
- * Log error information
- * @param message The error message
- * @param error The error object or details
+ * Omvandla ett fel till ett format som kan loggas säkert
  */
-export async function logError(message: string, error: any): Promise<void> {
-  const errorDetails = error instanceof Error
-    ? { message: error.message, stack: error.stack }
-    : error;
-
-  const entry: LogEntry = {
-    level: 'error',
-    message,
-    data: errorDetails,
-    timestamp: new Date().toISOString(),
-    request_id: uuidv4().substring(0, 8)
-  };
-
-  console.error(`[ERROR] ${entry.message}`, entry.data || '');
-
-  try {
-    const supabase = createServerSupabaseClient();
-    await supabase.from('logs').insert(entry);
-  } catch (dbError) {
-    console.error('Failed to save error log to database:', dbError);
+function formatError(error: any): any {
+  if (!error) return null;
+  
+  if (error instanceof Error) {
+    // Skapa en kopia av Error-objektet för att undvika circular references
+    const errorObj: Record<string, any> = {
+      errorMessage: error.message,
+      errorName: error.name,
+      errorStack: error.stack,
+    };
+    
+    // Lägg till eventuella egna fält på Error-objektet
+    Object.keys(error).forEach(key => {
+      if (!['message', 'name', 'stack'].includes(key)) {
+        errorObj[key] = (error as any)[key];
+      }
+    });
+    
+    return errorObj;
   }
+  
+  if (typeof error === 'object') {
+    try {
+      // Försök konvertera till ett säkert JSON-objekt
+      const safeError = JSON.parse(JSON.stringify(error));
+      return safeError;
+    } catch {
+      // Om det inte går att konvertera, returnera som sträng
+      return { stringValue: String(error) };
+    }
+  }
+  
+  // Returnera som sträng om inget annat fungerar
+  return { stringValue: String(error) };
 } 

@@ -1,13 +1,24 @@
+/**
+ * DEPRECATED - DENNA FIL ANVÄNDS INTE LÄNGRE
+ * 
+ * Denna komponent har ersatts av nyare implementationer i enlighet med betalningsrefaktoriseringen.
+ * Behåller tills vidare för referens, men kan tas bort.
+ * 
+ * Om du ser detta och applikationen fortfarande fungerar korrekt, 
+ * är det säkert att ta bort denna fil.
+ */
+
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Box, Alert, TextField, Grid, Stack, Typography } from '@mui/material';
-import { UserInfo } from '@/utils/dataFetcher';
-import { PaymentStatus, PAYMENT_STATUSES } from '@/constants/statusCodes';
-import { setPaymentReference } from '@/utils/flowStorage';
-import { v4 as uuidv4 } from 'uuid';
+import { UserInfo, InvoiceDetails } from '@/types/booking';
+import { PAYMENT_METHODS, PAYMENT_STATUSES, PRODUCT_TYPES, ProductType, getValidProductType } from '@/constants/statusCodes';
+import { createInvoicePayment } from '@/services/invoice/invoiceService';
+import { InvoicePaymentRequest } from '@/types/paymentTypes';
 
+// Export the ref interface for importing in other components
 export interface InvoicePaymentSectionRef {
   validateForm: () => boolean;
-  getInvoiceDetails: () => any;
+  getInvoiceDetails: () => InvoiceDetails;
   submitInvoicePayment: () => Promise<boolean>;
 }
 
@@ -20,158 +31,121 @@ interface InvoicePaymentSectionProps {
   onValidationError?: (error: string) => void;
 }
 
+// Create the component
 const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymentSectionProps>(
-  ({ userInfo, courseId, amount, product_type = 'course', onPaymentComplete, onValidationError }, ref) => {
+  ({ userInfo, courseId, amount, product_type = PRODUCT_TYPES.COURSE, onPaymentComplete, onValidationError }, ref) => {
     const [address, setAddress] = useState('');
     const [postalCode, setPostalCode] = useState('');
     const [city, setCity] = useState('');
     const [reference, setReference] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [idempotencyKey, setIdempotencyKey] = useState('');
-    const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(PAYMENT_STATUSES.CREATED);
     const [invoiceFormError, setInvoiceFormError] = useState<string | null>(null);
     
-    console.log('[InvoicePaymentSection] Initializing with props:', {
-      userInfoProvided: !!userInfo,
-      courseId,
-      amount,
-      product_type,
-      hasPaymentCompleteCallback: !!onPaymentComplete,
-      hasValidationErrorCallback: !!onValidationError
+    // Säkerställ att produkt-typen är giltig
+    const validProductType = getValidProductType(product_type);
+    
+    console.log('[InvoicePaymentSection] Initializing with:', {
+      productType: validProductType,
+      productId: courseId,
+      amount
     });
 
-    // Create idempotency key if needed
+    // Autofill address fields from userInfo if present
     useEffect(() => {
-      if (!idempotencyKey) {
-        const newKey = uuidv4();
-        console.log('[InvoicePaymentSection] Generated new idempotency key:', newKey);
-        setIdempotencyKey(newKey);
+      if (userInfo) {
+        if (userInfo.address) setAddress(userInfo.address);
+        if (userInfo.postalCode) setPostalCode(userInfo.postalCode);
+        if (userInfo.city) setCity(userInfo.city);
       }
-    }, [idempotencyKey]);
+    }, [userInfo]);
 
     useImperativeHandle(ref, () => ({
-      validateForm: () => {
-        console.log('[InvoicePaymentSection] Validating form');
-        if (!address) {
-          const error = 'Faktureringsadress är obligatorisk';
-          setInvoiceFormError(error);
-          if (onValidationError) onValidationError(error);
-          return false;
-        }
-        if (!postalCode) {
-          const error = 'Postnummer är obligatoriskt';
-          setInvoiceFormError(error);
-          if (onValidationError) onValidationError(error);
-          return false;
-        }
-        if (!city) {
-          const error = 'Ort är obligatorisk';
-          setInvoiceFormError(error);
-          if (onValidationError) onValidationError(error);
-          return false;
-        }
-        
-        setInvoiceFormError(null);
-        return true;
-      },
-      getInvoiceDetails: () => {
-        return {
-          address,
-          postalCode,
-          city,
-          reference
-        };
-      },
-      submitInvoicePayment: async () => {
-        return await handleInvoicePayment();
-      }
+      validateForm,
+      getInvoiceDetails: () => ({
+        address,
+        postalCode,
+        city,
+        reference
+      }),
+      submitInvoicePayment: handleSubmit
     }));
 
-    const handleInvoicePayment = async (): Promise<boolean> => {
-      console.log('[InvoicePaymentSection] Starting invoice payment submission');
-      setIsSubmitting(true);
+    const validateForm = (): boolean => {
+      // Clear previous errors
       setInvoiceFormError(null);
       
+      if (!address.trim()) {
+        const error = 'Adress är obligatoriskt';
+        setInvoiceFormError(error);
+        if (onValidationError) onValidationError(error);
+        return false;
+      }
+      
+      if (!postalCode.trim()) {
+        const error = 'Postnummer är obligatoriskt';
+        setInvoiceFormError(error);
+        if (onValidationError) onValidationError(error);
+        return false;
+      }
+      
+      if (!city.trim()) {
+        const error = 'Ort är obligatoriskt';
+        setInvoiceFormError(error);
+        if (onValidationError) onValidationError(error);
+        return false;
+      }
+      
+      return true;
+    };
+
+    const handleSubmit = async (): Promise<boolean> => {
+      console.log('[InvoicePaymentSection] Submitting invoice payment');
+      
+      if (!validateForm()) {
+        return false;
+      }
+
+      setIsSubmitting(true);
+
       try {
-        if (!userInfo) {
-          throw new Error('Användarinformation saknas');
-        }
-        
-        // Generate a unique payment reference
-        const paymentRef = `${product_type.substring(0, 1)}-inv-${Date.now()}`;
-        console.log('[InvoicePaymentSection] Generated payment reference:', paymentRef);
-        
-        // Store the reference in local storage
-        setPaymentReference(paymentRef);
-        
-        // Create standardized invoice payment request body
-        const requestBody = {
-          payment_method: "invoice",
-          amount,
-          product_type,
+        // Construct the request data for the service call
+        const requestData: Omit<InvoicePaymentRequest, 'idempotency_key'> = {
+          payment_method: PAYMENT_METHODS.INVOICE,
+          amount: amount,
           product_id: courseId,
-          payment_reference: paymentRef,
-          idempotency_key: idempotencyKey,
-          userInfo: {
-            firstName: userInfo.firstName,
-            lastName: userInfo.lastName,
-            email: userInfo.email,
-            phone: userInfo.phone,
-            numberOfParticipants: userInfo.numberOfParticipants || 1
-          },
+          product_type: validProductType,
+          userInfo: userInfo,
           invoiceDetails: {
-            address,
-            postalCode,
-            city,
-            reference
+            address: address.trim(),
+            postalCode: postalCode.trim(),
+            city: city.trim(),
+            reference: reference || ''
           }
         };
 
-        console.log('[InvoicePaymentSection] Sending invoice payment request:', requestBody);
-
-        // Make API call to create invoice payment
-        const response = await fetch('/api/payments/invoice/create', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
+        // Add extra debug logging to check values
+        console.log('[InvoicePaymentSection] Invoice details values:', {
+          address: address.trim(),
+          postalCode: postalCode.trim(),
+          city: city.trim(),
+          hasEmptyValues: !address.trim() || !postalCode.trim() || !city.trim()
         });
-
-        console.log('[InvoicePaymentSection] API response status:', response.status);
         
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('[InvoicePaymentSection] API error response:', errorData);
-          throw new Error(errorData.message || errorData.error || 'Ett fel uppstod vid fakturabetalning');
-        }
-
-        const data = await response.json();
-        console.log('[InvoicePaymentSection] Invoice payment creation success:', data);
+        // Use invoice service to make the API call
+        const responseData = await createInvoicePayment(requestData);
         
-        // Handle successful payment
-        setPaymentStatus(PAYMENT_STATUSES.PAID);
+        console.log('[InvoicePaymentSection] Response data:', JSON.stringify(responseData, null, 2));
         
-        // Call onPaymentComplete callback if provided
+        // Call the success callback with response data
         if (onPaymentComplete) {
-          console.log('[InvoicePaymentSection] Calling onPaymentComplete with data:', data);
-          onPaymentComplete(data);
-        } else {
-          console.warn('[InvoicePaymentSection] No onPaymentComplete callback provided');
+          onPaymentComplete(responseData);
         }
         
         setIsSubmitting(false);
         return true;
       } catch (error) {
-        console.error('[InvoicePaymentSection] Invoice payment error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Ett fel uppstod vid fakturabetalning';
-        setInvoiceFormError(errorMessage);
-        
-        if (onValidationError) {
-          console.log('[InvoicePaymentSection] Calling onValidationError with:', errorMessage);
-          onValidationError(errorMessage);
-        }
-        
+        console.error('[InvoicePaymentSection] Error:', error);
+        setInvoiceFormError(error instanceof Error ? error.message : 'Ett fel uppstod');
         setIsSubmitting(false);
         return false;
       }
@@ -198,6 +172,7 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
               onChange={(e) => setAddress(e.target.value)}
               required
               disabled={isSubmitting}
+              error={!address && !!invoiceFormError}
             />
           </Grid>
           <Grid item xs={6}>
@@ -208,6 +183,7 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
               onChange={(e) => setPostalCode(e.target.value)}
               required
               disabled={isSubmitting}
+              error={!postalCode && !!invoiceFormError}
             />
           </Grid>
           <Grid item xs={6}>
@@ -218,15 +194,17 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
               onChange={(e) => setCity(e.target.value)}
               required
               disabled={isSubmitting}
+              error={!city && !!invoiceFormError}
             />
           </Grid>
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Er referens (valfri)"
+              label="Referens (frivilligt)"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
               disabled={isSubmitting}
+              placeholder="t.ex. ert ordernummer"
             />
           </Grid>
         </Grid>
@@ -239,6 +217,6 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
   }
 );
 
-InvoicePaymentSection.displayName = 'InvoicePaymentSection';
-
+// Export the component as default AND named export
+export { InvoicePaymentSection };
 export default InvoicePaymentSection; 
