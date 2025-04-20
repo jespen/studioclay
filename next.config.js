@@ -7,6 +7,9 @@ const nextConfig = {
       bodySizeLimit: '5mb',
     },
   },
+  // Explicitly disable static optimization for API routes
+  // to avoid issues with Vercel deployments
+  unstable_excludeFiles: ['**/src/app/api/**/*.ts'],
   images: {
     remotePatterns: [
       {
@@ -32,7 +35,7 @@ const nextConfig = {
   // Disable static generation attempts for API routes in production
   // This helps with Vercel deployment issues
   env: {
-    NEXT_DISABLE_STATIC_OPTIMIZATION: process.env.NODE_ENV === 'production' ? 'true' : 'false',
+    NEXT_DISABLE_STATIC_OPTIMIZATION: 'true',
   },
   typescript: {
     ignoreBuildErrors: true,
