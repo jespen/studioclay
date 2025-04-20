@@ -164,7 +164,7 @@ const SwishPaymentDialog: React.FC<SwishPaymentDialogProps> = ({
                 <p className="text-center text-sm">
                   <strong>Skapar bekräftelsedokument</strong>
                   <br />
-                  Vi förbereder din faktura och/eller presentkort.
+                  Vi förbereder din bekräftelse.
                 </p>
               </div>
             )}
