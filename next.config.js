@@ -7,9 +7,6 @@ const nextConfig = {
       bodySizeLimit: '5mb',
     },
   },
-  // Explicitly disable static optimization for API routes
-  // to avoid issues with Vercel deployments
-  unstable_excludeFiles: ['**/src/app/api/**/*.ts'],
   images: {
     remotePatterns: [
       {

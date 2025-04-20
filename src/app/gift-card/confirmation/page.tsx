@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { Container, Typography, Box, Paper, Button, CircularProgress, Divider, Card, CardContent } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
@@ -37,7 +37,7 @@ interface PaymentDetails {
   giftCard?: GiftCardData;
 }
 
-export default function GiftCardConfirmation() {
+function ConfirmationContent() {
   const [loading, setLoading] = useState(true);
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -374,5 +374,27 @@ export default function GiftCardConfirmation() {
         </Box>
       </Paper>
     </Container>
+  );
+}
+
+// Add loading fallback for Suspense
+function LoadingFallback() {
+  return (
+    <Container maxWidth="md" sx={{ py: 8 }}>
+      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="50vh">
+        <CircularProgress size={60} thickness={4} />
+        <Typography variant="h6" sx={{ mt: 3 }}>
+          Laddar presentkortsinformation...
+        </Typography>
+      </Box>
+    </Container>
+  );
+}
+
+export default function GiftCardConfirmation() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ConfirmationContent />
+    </Suspense>
   );
 } 
