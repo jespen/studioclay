@@ -20,7 +20,11 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'www.studioclay.se',
-      }
+      },
+      {
+        protocol: 'https',
+        hostname: 'xaptrspjxqzgtddsqzwo.supabase.co',
+      },
     ],
     domains: ['xaptrspjxqzgtddsqzwo.supabase.co'],
   },
@@ -39,4 +43,4 @@ const nextConfig = {
   }
 };
 
-export default nextConfig; 
+module.exports = nextConfig; 
