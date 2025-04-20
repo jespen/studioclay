@@ -873,6 +873,51 @@ Baserat på de förbättringar som gjorts i fakturaflödet, kommer Swish-integra
    - Samma PDF-genererings- och lagringsmekanismer
    - Liknande bekräftelseprocess och e-postutskick
 
+### Förbättrade Processfeedback-Dialoger
+
+För att förbättra användarupplevelsen under de längre bearbetningstiderna (30-45 sekunder) för betalningar, har vi implementerat förbättrade dialogrutor som ger användarna detaljerad feedback om vad som sker i bakgrunden:
+
+#### SwishPaymentDialog
+
+Vi har förbättrat SwishPaymentDialog med:
+
+1. **Stegvis Statusuppdatering**:
+   - Visar olika informativa meddelanden vid specifika tidpunkter i betalningsprocessen
+   - 5-15 sek: "Betalning mottagen - Vi registrerar din betalning"
+   - 15-25 sek: "Skapar bekräftelsedokument - Vi förbereder faktura/presentkort"
+   - 25-40 sek: "Skickar bekräftelsemail - Med viktiga dokument"
+   - >40 sek: "Nästan klart - Förbereder bekräftelsesidan"
+
+2. **Visuell Progress-Indikator**:
+   - En progress bar som visuellt visar hur långt i processen användaren kommit
+   - Ger en känsla av framsteg under den längre väntetiden
+
+3. **Förbättrad Läsbarhet**:
+   - Färgkodade statusmeddelanden med tydliga rubriker
+   - Responsiv design som fungerar väl på olika skärmstorlekar
+
+#### InvoicePaymentDialog
+
+Fakturadialogrutan har fått en ännu mer detaljerad processfeedback:
+
+1. **Processlista med Tydliga Steg**:
+   - Visar fyra tydliga steg i faktureringsprocessen:
+     - Registrerar fakturainformation
+     - Genererar fakturadokument
+     - Förbereder och bearbetar orderinformation
+     - Skickar bekräftelsemail
+
+2. **Visuella Statusindikationer**:
+   - Steg markeras med grön bock när de slutförts
+   - Aktivt steg framhävs med bakgrundsfärg och fetstil
+   - Spinner-animation för aktuellt processteg
+
+3. **Tidvisning och Progress**:
+   - Visar exakt processtid i minuter:sekunder
+   - Linear progress bar för visuell indikering av total framgång
+
+Dessa förbättringar ger användaren bättre insyn i vad som faktiskt sker under den relativt långa bearbetningstiden för betalningar, vilket minskar risken att användare avbryter processen av frustration eller osäkerhet.
+
 ### Rekommendationer för Framtida Förbättringar
 
 1. **Databasstruktur**:
@@ -884,8 +929,10 @@ Baserat på de förbättringar som gjorts i fakturaflödet, kommer Swish-integra
    - Skapa en admin-panel för att granska och omköra misslyckade jobb
 
 3. **UI-förbättringar**:
-   - Visa tydligare laddningsindikatorer under PDF-generering
+   - ✅ Implementera tydligare laddningsindikatorer under PDF-generering (Klart!)
+   - ✅ Förbättra processfeedback för både Swish och fakturering (Klart!)
    - Implementera automatisk uppdatering av bekräftelsesidan när PDF:er blir tillgängliga
+   - Överväg ytterligare optimeringspunkter för bakgrundsprocesser
 
 4. **Loggning och Övervakning**:
    - Centralisera loggningen för bättre spårbarhet
