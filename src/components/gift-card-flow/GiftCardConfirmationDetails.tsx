@@ -33,6 +33,49 @@ const addOneYear = (dateString: string) => {
   return formatDate(date.toISOString());
 };
 
+// Helper function to get gift card details from localStorage
+const getGiftCardDetailsFromStorage = () => {
+  try {
+    // Try different keys that might contain gift card details
+    const possibleKeys = ['giftCardDetails', 'gift_card_details', 'itemDetails', 'item_details'];
+    
+    for (const key of possibleKeys) {
+      const storedData = localStorage.getItem(key);
+      if (storedData) {
+        try {
+          const parsedData = JSON.parse(storedData);
+          console.log(`Found gift card details in localStorage with key "${key}":`, parsedData);
+          return parsedData;
+        } catch (e) {
+          console.warn(`Failed to parse JSON from localStorage key "${key}"`, e);
+        }
+      }
+    }
+    
+    // Also check if we have a payment reference stored
+    const paymentInfo = localStorage.getItem('payment_info') || localStorage.getItem('paymentInfo');
+    if (paymentInfo) {
+      try {
+        const parsedPaymentInfo = JSON.parse(paymentInfo);
+        console.log('Found payment info in localStorage:', parsedPaymentInfo);
+        
+        if (parsedPaymentInfo.reference || parsedPaymentInfo.metadata?.paymentReference) {
+          return {
+            payment_reference: parsedPaymentInfo.reference || parsedPaymentInfo.metadata?.paymentReference
+          };
+        }
+      } catch (e) {
+        console.warn('Failed to parse payment info from localStorage', e);
+      }
+    }
+    
+    return null;
+  } catch (e) {
+    console.error('Error accessing localStorage:', e);
+    return null;
+  }
+};
+
 const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = ({ 
   giftCardDetails, 
   userInfo 
@@ -41,9 +84,19 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
   const [error, setError] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loadedGiftCardDetails, setLoadedGiftCardDetails] = useState<any>(null);
+  const [detailsFromStorage, setDetailsFromStorage] = useState<any>(null);
 
-  // Use either loaded details from DB or the passed details
-  const currentGiftCardDetails = loadedGiftCardDetails || giftCardDetails;
+  // On mount, try to get details from localStorage
+  useEffect(() => {
+    const storageDetails = getGiftCardDetailsFromStorage();
+    if (storageDetails) {
+      setDetailsFromStorage(storageDetails);
+      console.log('DETAILS-STORAGE: Using gift card details from localStorage:', storageDetails);
+    }
+  }, []);
+
+  // Use either loaded details from DB, passed details, or localStorage details
+  const currentGiftCardDetails = loadedGiftCardDetails || giftCardDetails || detailsFromStorage;
   
   // Use payment_reference if code is not available
   const giftCardNumber = currentGiftCardDetails?.code || currentGiftCardDetails?.payment_reference;
@@ -51,9 +104,9 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
   useEffect(() => {
     // If we have a payment reference but no code, try to fetch the full gift card details
     const fetchGiftCardByReference = async () => {
-      if (!giftCardDetails?.code && (giftCardDetails?.payment_reference || giftCardDetails?.paymentReference)) {
+      if (!giftCardDetails?.code && (giftCardDetails?.payment_reference || giftCardDetails?.paymentReference || detailsFromStorage?.payment_reference)) {
         try {
-          const reference = giftCardDetails?.payment_reference || giftCardDetails?.paymentReference;
+          const reference = giftCardDetails?.payment_reference || giftCardDetails?.paymentReference || detailsFromStorage?.payment_reference;
           console.log('DETAILS-2: Fetching gift card details for reference:', reference);
           
           const response = await fetch(`/api/gift-cards/by-reference?reference=${reference}`);
@@ -75,7 +128,7 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
     };
     
     fetchGiftCardByReference();
-  }, [giftCardDetails]);
+  }, [giftCardDetails, detailsFromStorage]);
   
   if (!giftCardNumber) {
     console.error('No gift card code found in details:', giftCardDetails);
@@ -96,12 +149,19 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
     ? currentGiftCardDetails.amount
     : Number(currentGiftCardDetails?.amount) || 0;
 
+  // Extract the message from various possible locations
+  const messageFromDetails = 
+    typeof currentGiftCardDetails?.details === 'object' && currentGiftCardDetails?.details?.message 
+      ? currentGiftCardDetails.details.message 
+      : currentGiftCardDetails?.message || '';
+
   console.log('DETAILS-1: GiftCardConfirmationDetails rendering with:', {
     giftCardNumber,
     amount,
     originalAmount: currentGiftCardDetails?.amount,
     recipient_name: currentGiftCardDetails?.recipient_name || currentGiftCardDetails?.recipientName,
     recipient_email: currentGiftCardDetails?.recipient_email || currentGiftCardDetails?.recipientEmail,
+    message: messageFromDetails,
     id: currentGiftCardDetails?.id
   });
 
@@ -110,74 +170,97 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
     try {
       setCheckingPdf(true);
       setError(null);
-      console.log('DETAILS-3: Checking for gift card PDF with ID:', currentGiftCardDetails?.id);
+      console.log('DETAILS-3: Checking for gift card PDF with the following details:', {
+        id: currentGiftCardDetails?.id,
+        code: currentGiftCardDetails?.code,
+        payment_reference: currentGiftCardDetails?.payment_reference || currentGiftCardDetails?.paymentReference
+      });
       
-      if (!currentGiftCardDetails?.id && !currentGiftCardDetails?.payment_reference) {
-        console.error('DETAILS-ERROR-1: Missing gift card ID and payment reference');
-        setError('Det går inte att visa presentkortet: Saknar identifierare');
+      // If we don't have enough info to find the PDF
+      if (!currentGiftCardDetails?.id && 
+          !currentGiftCardDetails?.payment_reference && 
+          !currentGiftCardDetails?.paymentReference && 
+          !currentGiftCardDetails?.code) {
+        console.error('DETAILS-ERROR-1: Missing all identifiers - cannot locate PDF');
+        setError('Det går inte att visa presentkortet: Saknar alla nödvändiga identifierare');
         setCheckingPdf(false);
         return;
       }
       
-      // First check if the PDF exists in storage
+      // Try different file name formats
       const bucketName = 'giftcards';
-      // Använd payment_reference istället för giftCardNumber för filnamn
-      const fileName = `${currentGiftCardDetails?.payment_reference || currentGiftCardDetails?.paymentReference || giftCardNumber}.pdf`;
-      const potentialPdfUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucketName}/${fileName}`;
+      const reference = currentGiftCardDetails?.payment_reference || currentGiftCardDetails?.paymentReference;
+      const code = currentGiftCardDetails?.code;
       
-      console.log('DETAILS-4: Checking if PDF exists at URL:', potentialPdfUrl);
+      // List of potential file names in order of priority
+      const potentialFileNames = [];
       
-      try {
-        // Try to do a HEAD request to check if the file exists
-        const checkResponse = await fetch(potentialPdfUrl, { method: 'HEAD' });
+      if (reference) {
+        potentialFileNames.push(
+          `${reference.replace(/[^a-zA-Z0-9-_.]/g, '_')}.pdf`, // Clean reference
+          `${reference}.pdf` // Exact reference
+        );
+      }
+      
+      if (code) {
+        potentialFileNames.push(
+          `${code.replace(/[^a-zA-Z0-9-_.]/g, '_')}.pdf`, // Clean code
+          `${code}.pdf`, // Exact code
+          `gift-card-${code}.pdf` // Legacy format
+        );
+      }
+      
+      if (currentGiftCardDetails?.id) {
+        potentialFileNames.push(`giftcard-${currentGiftCardDetails.id}.pdf`);
+      }
+      
+      console.log('DETAILS-4: Will try these potential PDF filenames:', potentialFileNames);
+      
+      // Try each file name until we find one that works
+      for (const fileName of potentialFileNames) {
+        const potentialPdfUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucketName}/${fileName}`;
         
-        if (checkResponse.ok) {
-          // File exists, use it directly
-          console.log('DETAILS-5: PDF exists, opening file');
-          setPdfUrl(potentialPdfUrl);
+        console.log(`DETAILS-5: Checking if PDF exists at: ${potentialPdfUrl}`);
+        
+        try {
+          // Try to do a HEAD request to check if the file exists
+          const checkResponse = await fetch(potentialPdfUrl, { method: 'HEAD' });
           
-          // Open PDF in new tab
-          window.open(potentialPdfUrl, '_blank');
-          setCheckingPdf(false);
-          return;
-        } else {
-          console.log('DETAILS-6: PDF does not exist yet or is not accessible');
-          // Försök med den gamla metoden också (fall-back)
-          const oldFileName = `gift-card-${currentGiftCardDetails?.code}.pdf`;
-          const oldPdfUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucketName}/${oldFileName}`;
-          
-          // Kontrollera om den gamla filen existerar
-          const oldCheckResponse = await fetch(oldPdfUrl, { method: 'HEAD' });
-          
-          if (oldCheckResponse.ok) {
-            console.log('DETAILS-5b: PDF exists with old naming convention, opening file');
-            setPdfUrl(oldPdfUrl);
-            window.open(oldPdfUrl, '_blank');
+          if (checkResponse.ok) {
+            // File exists, use it directly
+            console.log(`DETAILS-6: PDF found at: ${potentialPdfUrl}`);
+            setPdfUrl(potentialPdfUrl);
+            
+            // Open PDF in new tab
+            window.open(potentialPdfUrl, '_blank');
             setCheckingPdf(false);
             return;
+          } else {
+            console.log(`DETAILS-7: PDF not found at: ${potentialPdfUrl}, status: ${checkResponse.status}`);
           }
-          
-          setError(
-            'Presentkortet har inte genererats ännu. Detta görs normalt automatiskt inom 10-15 minuter. ' +
-            'Om du fortfarande inte kan se ditt presentkort efter denna tid, vänligen kontakta oss på ' +
-            'eva@studioclay.se och ange presentkortskoden: ' + (currentGiftCardDetails?.payment_reference || currentGiftCardDetails?.paymentReference)
-          );
-          setCheckingPdf(false);
-          return;
+        } catch (checkError) {
+          console.error(`DETAILS-8: Error checking for PDF at ${potentialPdfUrl}:`, checkError);
         }
-      } catch (checkError) {
-        console.log('DETAILS-7: Error checking for existing PDF:', checkError);
-        setError(
-          'Kunde inte hitta presentkortet. Vänligen kontakta oss på ' +
-          'eva@studioclay.se och ange presentkortskoden: ' + (currentGiftCardDetails?.payment_reference || currentGiftCardDetails?.paymentReference)
-        );
-        setCheckingPdf(false);
-        return;
       }
+      
+      // If we get here, no PDF was found
+      console.warn('DETAILS-9: No PDF found with any of the potential filenames');
+      
+      // Check if the background job might still be processing
+      const jobCheckMessage = reference 
+        ? `Bakgrundsjobbet för presentkortet (ref: ${reference}) kan fortfarande bearbetas.`
+        : `Bakgrundsjobbet för presentkortet kan fortfarande bearbetas.`;
+      
+      setError(
+        `Presentkortet har inte genererats ännu. ${jobCheckMessage} ` + 
+        'Detta görs normalt automatiskt inom 10-15 minuter efter betalning. ' +
+        'Om du fortfarande inte kan se ditt presentkort efter denna tid, vänligen kontakta oss på ' +
+        'eva@studioclay.se och ange presentkortskoden eller referensnumret.'
+      );
+      setCheckingPdf(false);
     } catch (err) {
       console.error('DETAILS-ERROR-4: Unhandled error:', err);
       setError(`Det gick inte att ladda presentkortet: ${err instanceof Error ? err.message : 'Okänt fel'}`);
-    } finally {
       setCheckingPdf(false);
     }
   };
@@ -231,7 +314,11 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
           </Typography>
         </Box>
         
-        {/* PDF Download Button */}
+        {/* PDF Download Button - TEMPORARILY DISABLED
+         * This functionality has been temporarily disabled due to issues with file naming and retrieval.
+         * It will be reimplemented in a future update. The gift card is still sent via email.
+         */}
+        {/* 
         <Grid item xs={12} sm={6}>
           <Button
             variant="contained"
@@ -244,12 +331,14 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
             {checkingPdf ? 'Söker presentkort...' : 'Visa & ladda ner presentkort'}
           </Button>
         </Grid>
+        */}
+        
         {/* Debug info */}
-        <Box sx={{ mt: 1, textAlign: 'center' }}>
+        {/* <Box sx={{ mt: 1, textAlign: 'center' }}>
           <Typography variant="caption" color="text.secondary">
             {currentGiftCardDetails?.id ? 'Presentkorts-ID: ' + currentGiftCardDetails.id : 'Inget presentkorts-ID hittat'}
           </Typography>
-        </Box>
+        </Box> */}
       </Box>
       
       {/* Recipient Information */}
@@ -273,11 +362,11 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
               <Typography variant="body1">{currentGiftCardDetails.recipient_email || currentGiftCardDetails.recipientEmail || 'Ej angiven'}</Typography>
             </Grid>
             
-            {(currentGiftCardDetails.message || currentGiftCardDetails.message) && (
+            {messageFromDetails && (
               <Grid item xs={12} sx={{ mt: 2 }}>
                 <Typography variant="body2" color="text.secondary">Personligt meddelande</Typography>
                 <Typography variant="body1" sx={{ fontStyle: 'italic', p: 2, bgcolor: 'rgba(84, 114, 100, 0.05)', borderRadius: 1 }}>
-                  "{currentGiftCardDetails.message || currentGiftCardDetails.message}"
+                  "{messageFromDetails}"
                 </Typography>
               </Grid>
             )}

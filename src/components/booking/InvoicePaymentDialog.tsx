@@ -1,17 +1,5 @@
-/**
- * DEPRECATED - DENNA FIL ANVÄNDS TROLIGEN INTE LÄNGRE
- * 
- * Denna komponent har ersatts av nyare implementationer i enlighet med 
- * betalningsrefaktoriseringen.
- * 
- * Behåller tills vidare för referens, men kan tas bort om testerna visar att
- * den inte längre används.
- * 
- * Om du ser detta och applikationen fortfarande fungerar korrekt, 
- * är det säkert att ta bort denna fil.
- */
 
-/*
+
 import React, { useEffect } from 'react';
 import {
   Dialog,
@@ -24,6 +12,8 @@ import {
   CircularProgress,
 } from '@mui/material';
 import ReceiptIcon from '@mui/icons-material/Receipt';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
 
 interface InvoicePaymentDialogProps {
   open: boolean;
@@ -40,18 +30,21 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
   invoiceNumber,
   bookingReference,
 }) => {
-  // Automatiskt stäng dialogrutan och fortsätt till bekräftelsesidan vid 'success'
+  // Automatically close the dialog and proceed to the confirmation page on 'success'
   useEffect(() => {
     if (status === 'success' && open) {
-      // Stäng direkt utan att visa success-meddelandet
-      onClose();
+      // Add a small delay to allow the user to see the success state
+      const timer = setTimeout(() => {
+        onClose();
+      }, 1500);
+      return () => clearTimeout(timer);
     }
   }, [status, open, onClose]);
 
   return (
     <Dialog 
       open={open} 
-      onClose={onClose}
+      onClose={status !== 'loading' ? onClose : undefined}
       maxWidth="sm"
       fullWidth
     >
@@ -71,46 +64,55 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
             <CircularProgress size={60} sx={{ mb: 2 }} />
             <Typography variant="body1" align="center">
               Vi skapar din faktura och skickar den till din e-postadress.
-              Detta tar bara några sekunder...
+              Detta kan ta upp till 1 minut - stäng inga fönster du kommer bli omdirigerad till beräftelse sidan strax.
             </Typography>
           </Box>
         )}
 
         {status === 'success' && (
-          <Box sx={{ py: 2 }}>
-            <Typography variant="body1" paragraph>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
+            <CheckCircleIcon color="success" sx={{ fontSize: 48, mb: 2 }} />
+            <Typography variant="body1" paragraph align="center">
               Din faktura har skapats framgångsrikt!
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Fakturanummer: {invoiceNumber}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Bokningsreferens: {bookingReference}
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 2 }}>
+            {invoiceNumber && (
+              <Typography variant="body2" color="text.secondary">
+                Fakturanummer: {invoiceNumber}
+              </Typography>
+            )}
+            {bookingReference && (
+              <Typography variant="body2" color="text.secondary">
+                Bokningsreferens: {bookingReference}
+              </Typography>
+            )}
+            <Typography variant="body2" sx={{ mt: 2 }} align="center">
               En bekräftelse har skickats till din e-postadress.
+              <br />
+              Du kommer att omdirigeras till bekräftelsesidan...
             </Typography>
           </Box>
         )}
 
         {status === 'error' && (
-          <Typography variant="body1" color="error">
-            Ett fel uppstod när vi försökte skapa din faktura. 
-            Vänligen försök igen eller kontakta support om problemet kvarstår.
-          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
+            <ErrorIcon color="error" sx={{ fontSize: 48, mb: 2 }} />
+            <Typography variant="body1" color="error" align="center">
+              Ett fel uppstod när vi försökte skapa din faktura. 
+              Vänligen försök igen eller kontakta support om problemet kvarstår.
+            </Typography>
+          </Box>
         )}
       </DialogContent>
 
-      <DialogActions>
-        {status === 'error' && (
+      {status === 'error' && (
+        <DialogActions>
           <Button onClick={onClose} variant="contained" color="primary">
             Stäng
           </Button>
-        )}
-      </DialogActions>
+        </DialogActions>
+      )}
     </Dialog>
   );
 };
 
-export default InvoicePaymentDialog;
-*/ 
+export default InvoicePaymentDialog; 

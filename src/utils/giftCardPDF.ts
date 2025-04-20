@@ -113,10 +113,26 @@ export async function generateGiftCardPDF(giftCardData: GiftCardData): Promise<B
     doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
     doc.text('PRESENTKORT', pageWidth / 2, margin + 25, { align: 'center' });
     
-    // Add gift card reference - less space (using either code or payment_reference)
-    doc.setFontSize(16);
+    // Add gift card reference - make it more visible
+    doc.setFontSize(14);
     doc.setTextColor(50, 50, 50);
     doc.text(`Referens: ${referenceToUse}`, pageWidth / 2, margin + 32, { align: 'center' });
+    
+    // Add a reference box (subtle background) to make it stand out
+    const referenceTextWidth = doc.getTextWidth(`Referens: ${referenceToUse}`);
+    doc.setFillColor(245, 245, 245);
+    doc.roundedRect(
+      pageWidth / 2 - (referenceTextWidth / 2) - 5, 
+      margin + 32 - 10, 
+      referenceTextWidth + 10, 
+      14, 
+      2, 2, 'F'
+    );
+    
+    // Draw reference text again on top of the background
+    doc.setTextColor(50, 50, 50);
+    doc.text(`Referens: ${referenceToUse}`, pageWidth / 2, margin + 32, { align: 'center' });
+    
     logInfo(`📝 GIFT CARD PDF GENERATOR - Added reference to PDF`, {
       referenceType: giftCardData.payment_reference ? 'payment_reference' : 'code',
       referenceValue: referenceToUse

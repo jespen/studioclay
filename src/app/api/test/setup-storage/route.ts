@@ -70,7 +70,7 @@ export async function GET() {
                   public: true,
                   allowedMimeTypes: ['application/pdf']
                 });
-              
+            
               if (updateError) {
                 logWarning(`Error making bucket ${bucketName} public`, {
                   requestId, 
@@ -81,7 +81,7 @@ export async function GET() {
               }
             } catch (policyError) {
               logWarning(`Exception updating bucket ${bucketName}`, {
-                requestId,
+                requestId, 
                 error: policyError instanceof Error ? policyError.message : 'Unknown policy error'
               });
             }

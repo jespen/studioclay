@@ -281,23 +281,27 @@ export async function generateAndStoreGiftCardPdf(options: GiftCardPdfOptions): 
     }
     
     // Use payment_reference or code as the filename
-    const fileName = giftCardData.payment_reference || paymentReference || giftCardData.code;
+    const fileName = giftCardData.payment_reference || paymentReference || giftCardData.code || `giftcard-${Date.now()}`;
     
     logInfo(`💾 Storing PDF with filename based on payment reference or code`, {
-      requestId,
       fileName,
-      usedPaymentReference: !!giftCardData.payment_reference || !!paymentReference,
-      usedCode: !giftCardData.payment_reference && !paymentReference && !!giftCardData.code,
-      referenceSource: giftCardData.payment_reference 
-        ? 'gift_card_data.payment_reference' 
-        : (paymentReference ? 'options.paymentReference' : 'gift_card_data.code')
+    });
+    
+    // Ensure filename has .pdf extension and is URL safe
+    const safeFileName = fileName.toLowerCase().endsWith('.pdf') 
+      ? `${fileName.replace(/[^a-zA-Z0-9-_.]/g, '_')}` 
+      : `${fileName.replace(/[^a-zA-Z0-9-_.]/g, '_')}.pdf`;
+    
+    logInfo(`📄 Using safe filename for bucket storage`, {
+      originalFileName: fileName,
+      safeFileName,
     });
     
     // Store the PDF in the bucket
     return await storePdfToBucket(
       pdfBlob, 
       'giftcards', 
-      fileName,
+      safeFileName,
       requestId
     );
   } catch (error) {
@@ -373,12 +377,16 @@ async function storePdfToBucket(
     const pdfUint8Array = new Uint8Array(arrayBuffer);
     
     // Generera filnamn med tidsstämpel för att förhindra konflikter
-    const safeFileName = `${fileName.replace(/[^a-zA-Z0-9-]/g, '_')}.pdf`;
+    // Ensure the filename has the .pdf extension
+    const safeFileName = fileName.toLowerCase().endsWith('.pdf') 
+      ? `${fileName.replace(/[^a-zA-Z0-9-_.]/g, '_')}` 
+      : `${fileName.replace(/[^a-zA-Z0-9-_.]/g, '_')}.pdf`;
     
     logDebug(`Attempting to upload PDF to storage`, {
       requestId,
       bucketName,
-      fileName: safeFileName,
+      originalFileName: fileName,
+      safeFileName,
       fileSize: pdfUint8Array.length
     });
     
@@ -412,23 +420,28 @@ async function storePdfToBucket(
     logDebug(`Getting public URL for uploaded PDF`, {
       requestId,
       bucketName,
-      path: uploadData.path
+      path: uploadData.path,
+      safeFileName
     });
+    
+    // Use the exact path returned from the upload response
+    const storagePath = uploadData.path || safeFileName;
     
     const { data: urlData } = await supabase
       .storage
       .from(bucketName)
-      .getPublicUrl(safeFileName);
+      .getPublicUrl(storagePath);
     
     if (!urlData || !urlData.publicUrl) {
       logWarning(`Could not get public URL for uploaded PDF`, {
         requestId,
-        path: uploadData.path,
+        path: storagePath,
         bucketName
       });
     } else {
       logDebug(`Generated public URL for PDF`, {
         requestId,
+        url: urlData.publicUrl,
         hasUrl: !!urlData.publicUrl
       });
     }

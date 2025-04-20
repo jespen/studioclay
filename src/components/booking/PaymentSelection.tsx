@@ -74,12 +74,19 @@ import {
   getGiftCardDetails 
 } from '@/utils/flowStorage';
 import { getPreviousStepUrl, getNextStepUrl } from '@/utils/flowNavigation';
-import { PAYMENT_STATUSES, PAYMENT_METHODS, PRODUCT_TYPES } from '@/constants/statusCodes';
+import { 
+  PAYMENT_STATUSES, 
+  PAYMENT_METHODS, 
+  PRODUCT_TYPES,
+  type PaymentStatus
+} from '@/constants/statusCodes';
 import { PaymentService } from '@/services/payment/paymentService';
 import { validatePaymentRequest } from '@/lib/validation/paymentSchemas';
 import { type ProductType } from '@/constants/statusCodes';
 import InvoicePaymentSection, { InvoicePaymentSectionRef } from '../payment/InvoicePaymentSection';
 import { StandardPaymentResponse, PaymentReferenceData } from '@/types/paymentTypes';
+import SwishPaymentDialog from './SwishPaymentDialog';
+import InvoicePaymentDialog from './InvoicePaymentDialog';
 
 interface PaymentSelectionProps {
   courseId: string;
@@ -130,6 +137,25 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     { id: 'processing', label: 'Bearbetar betalningen...', completed: false },
     { id: 'redirect', label: 'Förbereder bekräftelse...', completed: false }
   ]);
+
+  // Dialog state
+  const [swishDialogOpen, setSwishDialogOpen] = useState(false);
+  const [swishPaymentStatus, setSwishPaymentStatus] = useState<"CREATED" | "PAID" | "ERROR" | "DECLINED">(PAYMENT_STATUSES.CREATED);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const [invoiceStatus, setInvoiceStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+  const [bookingReference, setBookingReference] = useState<string>('');
+
+  // Add an effect to ensure the dialog's state is properly managed
+  useEffect(() => {
+    if (isSubmitting && selectedPaymentMethod === 'invoice') {
+      setInvoiceDialogOpen(true);
+      setInvoiceStatus('loading');
+    } else if (isSubmitting && selectedPaymentMethod === 'swish') {
+      setSwishDialogOpen(true);
+      setSwishPaymentStatus(PAYMENT_STATUSES.CREATED);
+    }
+  }, [isSubmitting, selectedPaymentMethod]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -199,6 +225,15 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     setIsSubmitting(true);
     setSubmitError(null);
     
+    // Force open appropriate dialog immediately
+    if (selectedPaymentMethod === 'invoice') {
+      setInvoiceDialogOpen(true);
+      setInvoiceStatus('loading');
+    } else if (selectedPaymentMethod === 'swish') {
+      setSwishDialogOpen(true);
+      setSwishPaymentStatus(PAYMENT_STATUSES.CREATED);
+    }
+    
     try {
       if (!userInfo) {
         console.error('[PaymentSelection] No user info available');
@@ -218,6 +253,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             setIsSubmitting(false);
             return;
           } else {
+            setSwishPaymentStatus(PAYMENT_STATUSES.ERROR);
             throw new Error('Betalningen kunde inte genomföras');
           }
         } else {
@@ -247,85 +283,48 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
           throw new Error('Fakturasektionen kunde inte initialiseras');
         }
       } else {
-        console.error('[PaymentSelection] Invalid payment method selected:', selectedPaymentMethod);
-        throw new Error('Välj en giltig betalningsmetod');
+        console.error('[PaymentSelection] No valid payment method selected');
+        setFormErrors(prev => ({ ...prev, paymentMethod: 'Välj en betalningsmetod' }));
       }
-    } catch (err) {
-      console.error('[PaymentSelection] Payment submission error:', err);
-      setSubmitError(err instanceof Error ? err.message : 'Ett fel uppstod');
+    } catch (error) {
+      console.error('[PaymentSelection] Error submitting payment:', error);
+      setSubmitError(error instanceof Error ? error.message : 'Ett fel uppstod');
+      
+      // Update dialog states for errors
+      if (selectedPaymentMethod === 'swish') {
+        setSwishPaymentStatus(PAYMENT_STATUSES.ERROR);
+      } else if (selectedPaymentMethod === 'invoice') {
+        setInvoiceStatus('error');
+      }
+    } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleInvoicePayment = async (): Promise<boolean> => {
-    console.log('[PaymentSelection] Starting invoice payment flow');
-    
-    if (!invoicePaymentRef.current || !userInfo) {
-      console.error('[PaymentSelection] Invoice form reference is not available or userInfo is missing');
-      return false;
-    }
-    
-    // Validera formuläret med den befintliga valideringsfunktionen
-    if (!invoicePaymentRef.current.validateForm()) {
-      console.log('[PaymentSelection] Form validation failed');
-      return false;
-    }
-    
-    // Visa processindikatorn
-    preparePaymentProcessSteps();
-    setIsSubmitting(true);
-    setSubmitError(null);
-    
     try {
-      // Använd den befintliga metoden för att skicka fakturabetalningen
-      const success = await invoicePaymentRef.current.submitInvoicePayment();
-      console.log('[PaymentSelection] Invoice payment result:', success);
-      
-      if (!success) {
-        // Återställ processtegen vid fel
-        setPaymentProcessStarted(false);
+      if (!invoicePaymentRef.current) {
+        throw new Error('Kunde inte hitta fakturaformulär');
       }
-      
-      setIsSubmitting(false);
-      return success;
-    } catch (error) {
-      console.error('[PaymentSelection] Error in handleInvoicePayment:', error);
-      setSubmitError(error instanceof Error ? error.message : 'Ett fel uppstod');
-      setIsSubmitting(false);
-      
-      // Återställ processtegen vid fel
-      setPaymentProcessStarted(false);
-      
-      return false;
-    }
-  };
 
-  const handleSwishPayment = async (): Promise<boolean> => {
-    console.log('[PaymentSelection] Starting Swish payment flow');
-    
-    if (!swishPaymentRef.current) {
-      console.error('[PaymentSelection] No Swish payment ref available');
-      return false;
-    }
-    
-    // Visa processindikatorn för Swish
-    preparePaymentProcessSteps();
-    
-    try {
-      const success = await swishPaymentRef.current.submitSwishPayment();
+      // Get invoice details from the invoice payment section
+      const invoiceDetails = invoicePaymentRef.current.getInvoiceDetails();
       
-      if (!success) {
-        // Återställ processtegen vid fel
-        setPaymentProcessStarted(false);
+      // Submit the invoice payment
+      const result = await invoicePaymentRef.current.submitInvoicePayment();
+      
+      if (result) {
+        // Success! Update dialog state
+        setInvoiceStatus('success');
+        return true;
+      } else {
+        // Error occurred
+        setInvoiceStatus('error');
+        return false;
       }
-      
-      return success;
     } catch (error) {
-      console.error('[PaymentSelection] Error in Swish payment:', error);
-      
-      // Återställ processtegen vid fel
-      setPaymentProcessStarted(false);
-      
+      console.error('[PaymentSelection] Invoice payment error:', error);
+      setInvoiceStatus('error');
       return false;
     }
   };
@@ -333,60 +332,51 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const handlePaymentComplete = (paymentData: any) => {
     console.log('[PaymentSelection] Payment completed:', paymentData);
     
-    // Sätt success-state
+    // Set success state
     setPaymentSuccess(true);
     
-    // Visa feedback till användaren innan redirect
-    setProcessingSteps(current => 
-      current.map(step => 
-        step.id === 'payment' ? { ...step, completed: true } : step
-      )
-    );
+    // Update dialog states based on payment method
+    if (selectedPaymentMethod === 'swish') {
+      setSwishPaymentStatus(PAYMENT_STATUSES.PAID);
+    } else if (selectedPaymentMethod === 'invoice') {
+      setInvoiceStatus('success');
+      if (paymentData.invoiceNumber) {
+        setInvoiceNumber(paymentData.invoiceNumber);
+      }
+      if (paymentData.paymentReference || paymentData.bookingReference) {
+        setBookingReference(paymentData.paymentReference || paymentData.bookingReference);
+      }
+    }
     
-    // Kort fördröjning för att användaren ska hinna se att betalningen lyckades
+    // Delay redirect to allow user to see the success state
     setTimeout(() => {
-      setProcessingSteps(current => 
-        current.map(step => 
-          step.id === 'processing' ? { ...step, completed: true } : step
-        )
-      );
+      // Prioritize redirect-URL from API-svar om den finns
+      if (paymentData?.redirectUrl) {
+        console.log('[PaymentSelection] Redirecting to URL from API:', paymentData.redirectUrl);
+        router.push(paymentData.redirectUrl);
+        return;
+      }
       
-      // Ytterligare fördröjning innan redirect
-      setTimeout(() => {
-        setProcessingSteps(current => 
-          current.map(step => 
-            step.id === 'redirect' ? { ...step, completed: true, label: 'Omdirigerar till bekräftelsesidan...' } : step
-          )
-        );
-        
-        // Prioritera redirect-URL från API-svar om den finns
-        if (paymentData?.redirectUrl) {
-          console.log('[PaymentSelection] Redirecting to URL from API:', paymentData.redirectUrl);
-          router.push(paymentData.redirectUrl);
-          return;
-        }
-        
-        // Fallback till standardrutter baserat på flowType
-        let redirectPath = '/payment/confirmation';
-        
-        if (paymentData?.paymentReference) {
-          redirectPath = `/payment/confirmation/${paymentData.paymentReference}`;
-        }
-        
-        if (flowType === FlowType.COURSE_BOOKING) {
-          redirectPath = `/booking/confirmation?reference=${paymentData?.paymentReference || ''}`;
-        } else if (flowType === FlowType.GIFT_CARD) {
-          redirectPath = `/gift-card/confirmation?reference=${paymentData?.paymentReference || ''}`;
-        } else if (flowType === FlowType.ART_PURCHASE) {
-          redirectPath = `/art/confirmation?reference=${paymentData?.paymentReference || ''}`;
-        }
-        
-        console.log('[PaymentSelection] Redirecting to:', redirectPath);
-        router.push(redirectPath);
-      }, 500);
-    }, 1000);
+      // Fallback till standardrutter baserat på flowType
+      let redirectPath = '/payment/confirmation';
+      
+      if (paymentData?.paymentReference) {
+        redirectPath = `/payment/confirmation/${paymentData.paymentReference}`;
+      }
+      
+      if (flowType === FlowType.COURSE_BOOKING) {
+        redirectPath = `/booking/confirmation?reference=${paymentData?.paymentReference || ''}`;
+      } else if (flowType === FlowType.GIFT_CARD) {
+        redirectPath = `/gift-card/confirmation?reference=${paymentData?.paymentReference || ''}`;
+      } else if (flowType === FlowType.ART_PURCHASE) {
+        redirectPath = `/art/confirmation?reference=${paymentData?.paymentReference || ''}`;
+      }
+      
+      console.log('[PaymentSelection] Redirecting to:', redirectPath);
+      router.push(redirectPath);
+    }, 1500);
     
-    // Anropa även onNext om det finns en sådan callback
+    // Call onNext if a callback exists
     if (onNext) {
       onNext(paymentData);
     }
@@ -508,28 +498,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
 
   // För att visa processindikatorn
   const renderProcessingStatus = () => {
-    if (!paymentProcessStarted) return null;
-    
-    return (
-      <Box sx={{ mt: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 2 }}>
-        <Typography variant="subtitle1" gutterBottom fontWeight="medium" color="primary">
-          Betalningsprocessen pågår
-        </Typography>
-        
-        {processingSteps.map((step) => (
-          <Box key={step.id} sx={{ display: 'flex', alignItems: 'center', my: 1 }}>
-            {step.completed ? (
-              <CheckCircleIcon color="success" sx={{ mr: 1 }} />
-            ) : (
-              <CircularProgress size={20} thickness={4} sx={{ mr: 1 }} />
-            )}
-            <Typography variant="body2">
-              {step.label}
-            </Typography>
-          </Box>
-        ))}
-      </Box>
-    );
+    // We're now using dialogs instead of the inline processing status
+    return null;
   };
 
   // If data is loading, show loading state
@@ -978,6 +948,23 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     </>
   );
 
+  // Handle closing dialogs
+  const handleSwishDialogClose = () => {
+    if (swishPaymentStatus !== PAYMENT_STATUSES.CREATED) {
+      setSwishDialogOpen(false);
+    }
+  };
+  
+  const handleInvoiceDialogClose = () => {
+    setInvoiceDialogOpen(false);
+  };
+  
+  // Handle Swish payment cancellation
+  const handleSwishCancel = () => {
+    setSwishDialogOpen(false);
+    setSubmitError('Betalningen avbröts');
+  };
+
   return (
     <>
       {/* 
@@ -1005,6 +992,22 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             {renderProcessingStatus()}
             {renderButtons()}
           </Paper>
+          
+          {/* Dialogs */}
+          <SwishPaymentDialog
+            open={swishDialogOpen}
+            onClose={handleSwishDialogClose}
+            onCancel={handleSwishCancel}
+            paymentStatus={swishPaymentStatus}
+          />
+          
+          <InvoicePaymentDialog
+            open={invoiceDialogOpen}
+            onClose={handleInvoiceDialogClose}
+            status={invoiceStatus}
+            invoiceNumber={invoiceNumber}
+            bookingReference={bookingReference}
+          />
         </GenericFlowContainer>
       ) : (
         // When wrapped by FlowStepWrapper, render only the Paper content
@@ -1024,6 +1027,22 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             {renderProcessingStatus()}
             {renderButtons()}
           </Paper>
+          
+          {/* Dialogs - These were missing in this rendering path */}
+          <SwishPaymentDialog
+            open={swishDialogOpen}
+            onClose={handleSwishDialogClose}
+            onCancel={handleSwishCancel}
+            paymentStatus={swishPaymentStatus}
+          />
+          
+          <InvoicePaymentDialog
+            open={invoiceDialogOpen}
+            onClose={handleInvoiceDialogClose}
+            status={invoiceStatus}
+            invoiceNumber={invoiceNumber}
+            bookingReference={bookingReference}
+          />
         </>
       )}
     </>

@@ -891,4 +891,9 @@ Baserat på de förbättringar som gjorts i fakturaflödet, kommer Swish-integra
    - Centralisera loggningen för bättre spårbarhet
    - Implementera alarmering för kritiska fel i betalningsprocessen
 
+5. **PDF-funktionalitet**:
+   - Fixa nedladdning av presentkorts-PDF på bekräftelsesidan 
+   - Säkerställa konsekvent namngivning av PDF-filer (payment_reference.pdf)
+   - Förbättra felhanteringen när presentkorts-PDF inte kan hittas
+
 Denna uppdaterade dokumentation reflekterar de senaste ändringarna i systemet och ger en solid grund för fortsatt utveckling av betalningsfunktionerna, särskilt för den kommande Swish-integrationen. 
