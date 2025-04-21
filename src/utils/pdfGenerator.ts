@@ -29,6 +29,7 @@ interface InvoicePdfOptions extends BasePdfGenerationOptions {
   amount: number;
   dueDate?: string;
   productDetails?: any;
+  storeToBucket?: boolean;
 }
 
 // Specifik data för presentkorts-PDF
@@ -51,9 +52,9 @@ interface PdfGenerationResult {
  * Genererar PDF för faktura
  */
 export async function generateAndStoreInvoicePdf(options: InvoicePdfOptions): Promise<PdfGenerationResult> {
-  const { requestId, userInfo, invoiceDetails, invoiceNumber, productType, productId, amount, productDetails } = options;
+  const { requestId, userInfo, invoiceDetails, invoiceNumber, productType, productId, amount, productDetails, storeToBucket = true } = options;
   
-  logInfo(`Starting invoice PDF generation`, { requestId, invoiceNumber, productType });
+  logInfo(`Starting invoice PDF generation`, { requestId, invoiceNumber, productType, storeToBucket });
   
   try {
     // 1. Förbered data för PDF-generering
@@ -135,6 +136,15 @@ export async function generateAndStoreInvoicePdf(options: InvoicePdfOptions): Pr
         requestId,
         pdfSizeBytes: pdfBlob.size
       });
+      
+      // Om vi inte vill lagra PDFen, returnera bara bloben
+      if (!storeToBucket) {
+        logInfo(`Skipping storage, returning PDF blob directly as requested`, { requestId });
+        return {
+          success: true,
+          pdfBlob
+        };
+      }
       
       // 3. Lagra PDF i Supabase-bucket
       logDebug(`Now storing PDF in bucket 'invoices'`, { 

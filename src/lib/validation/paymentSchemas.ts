@@ -46,7 +46,11 @@ export type InvoiceDetails = z.infer<typeof InvoiceDetailsSchema>;
  * Gift card details schema
  */
 export const GiftCardDetailsSchema = z.object({
-  recipientEmail: z.string().email("Recipient email must be valid"),
+  recipientEmail: z.union([
+    z.string().email("Recipient email must be valid"),
+    z.literal(""),
+    z.null()
+  ]).optional(),
   recipientName: z.string().min(1, "Recipient name is required"),
   message: z.string().optional()
 });

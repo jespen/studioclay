@@ -86,9 +86,8 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
       newErrors.recipientName = 'Vänligen ange mottagarens namn';
     }
     
-    if (!recipient.email) {
-      newErrors.recipientEmail = 'Vänligen ange mottagarens e-postadress';
-    } else if (!/\S+@\S+\.\S+/.test(recipient.email)) {
+    // Only validate email format if provided, but don't require it
+    if (recipient.email && !/\S+@\S+\.\S+/.test(recipient.email)) {
       newErrors.recipientEmail = 'Vänligen ange en giltig e-postadress';
     }
     
@@ -115,7 +114,7 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
       amount: finalAmount,
       type: 'digital',
       recipientName: recipient.name,
-      recipientEmail: recipient.email,
+      recipientEmail: recipient.email || null,
       message: recipient.message
     };
     
@@ -238,7 +237,7 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
           required
         />
         
-        <TextField
+        {/* <TextField
           fullWidth
           label="Mottagarens e-postadress"
           variant="outlined"
@@ -248,8 +247,8 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
           margin="normal"
           error={!!errors.recipientEmail}
           helperText={errors.recipientEmail}
-          required
-        />
+          placeholder="Valfritt"
+        /> */}
         
         <TextField
           fullWidth

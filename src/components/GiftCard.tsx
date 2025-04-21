@@ -297,14 +297,13 @@ const GiftCard = () => {
                     />
                   </div>
                   <div className={styles.formGroup}>
-                    <label htmlFor="recipientEmail" className={styles.label}>Mottagarens e-post</label>
+                    <label htmlFor="recipientEmail" className={styles.label}>Mottagarens e-post (valfritt)</label>
                     <input
                       type="email"
                       id="recipientEmail"
                       name="recipientEmail"
                       value={formData.recipientEmail}
                       onChange={handleChange}
-                      required={cardType === 'digital'}
                       className={styles.input}
                       placeholder="mottagare.epost@exempel.se"
                     />

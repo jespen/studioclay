@@ -8,6 +8,9 @@
  * 
  * Om du ser detta och applikationen fortfarande fungerar korrekt, 
  * är det säkert att ta bort denna fil samt övriga filer under /api/invoice/.
+ * 
+ * OBS: All PDF-generering bör ske via centraliserade funktioner i pdfGenerator.ts.
+ * Ingen kod ska anropa generateInvoicePDF eller generateGiftCardPDF direkt.
  */
 
 /*
@@ -15,9 +18,9 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendServerInvoiceEmail } from '@/utils/serverEmail';
 import { UserInfo, PaymentDetails } from '@/types/booking';
-import { generateInvoicePDF } from '@/utils/invoicePDF';
+import { generateAndStoreInvoicePdf } from '@/utils/pdfGenerator';
 import { generateBookingReference } from '@/utils/booking';
-import { generateGiftCardPDF, GiftCardData } from '@/utils/giftCardPDF';
+import { generateAndStoreGiftCardPdf } from '@/utils/pdfGenerator';
 import { generateUniqueGiftCardCode } from '@/utils/giftCardUtils';
 
 // Create a Supabase client
@@ -242,7 +245,7 @@ export async function POST(request: Request) {
                 dueDate: formattedDueDate
               };
 
-              pdfBlob = await generateInvoicePDF(invoiceData);
+              pdfBlob = await generateAndStoreInvoicePdf(invoiceData);
               pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
               console.log('12. Successfully generated PDF of size:', pdfBuffer.length, 'bytes, time:', Date.now() - backgroundStartTime, 'ms');
             } catch (pdfError) {
@@ -454,7 +457,7 @@ export async function POST(request: Request) {
                   createdAt: new Date().toLocaleDateString('sv-SE')
                 };
                 
-                pdfBlob = await generateGiftCardPDF(giftCardPdfData);
+                pdfBlob = await generateAndStoreGiftCardPdf(giftCardPdfData);
                 pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
                 console.log('8. Successfully generated PDF of size:', pdfBuffer.length, 'bytes, time:', Date.now() - backgroundStartTime, 'ms');
               } catch (pdfError) {
@@ -508,7 +511,7 @@ export async function POST(request: Request) {
                     dueDate: formattedDueDate
                   };
                   
-                  invoicePdfBlob = await generateInvoicePDF(invoiceData);
+                  invoicePdfBlob = await generateAndStoreInvoicePdf(invoiceData);
                   invoicePdfBuffer = Buffer.from(await invoicePdfBlob.arrayBuffer());
                   console.log('13b. Successfully generated invoice PDF of size:', invoicePdfBuffer.length, 'bytes, time:', Date.now() - backgroundStartTime, 'ms');
                   
@@ -845,7 +848,7 @@ export async function POST(request: Request) {
                 dueDate: formattedDueDate
               };
               
-              pdfBlob = await generateInvoicePDF(invoiceData);
+              pdfBlob = await generateAndStoreInvoicePdf(invoiceData);
               pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
               console.log('19. Successfully generated PDF of size:', pdfBuffer.length, 'bytes, time:', Date.now() - backgroundStartTime, 'ms');
             } catch (pdfError) {

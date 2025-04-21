@@ -389,6 +389,22 @@ export async function generateAndStoreGiftCardPdf(options: GiftCardPdfOptions): 
 - API-endpoint för att hämta betalningsdetaljer (`/api/payments/details/[reference]`)
 - Omfattande bekräftelseinformation för alla produkttyper
 
+### 8. Förbättrad Kodkvalitet och Arkitektur
+
+- ✅ Borttagning av duplicerad PDF-genereringskod
+- ✅ Centraliserad PDF-hantering via `pdfGenerator.ts`
+- ✅ Robustare felhantering i bakgrundsjobb för PDF-generering
+- ✅ Förbättrad kodsökning i bakgrundsjobb för att hitta rätt presentkort
+- ✅ Möjlighet att både spara och skicka PDFer utan lagring vid behov
+
+De här förbättringarna har minskat risken för fel genom att säkerställa att:
+1. All PDF-generering går via ett standardiserat API i `pdfGenerator.ts`
+2. Alla bakgrundsjobb hanterar och loggar fel på ett konsekvent sätt
+3. Koden har bättre feltolerens genom att kunna generera PDFer utan lagring om bucket-lagring misslyckas
+4. Presentkort kan hittas på flera olika sätt (via payment_reference, code eller invoice_number) för ökad robusthet
+
+Denna refaktorisering stödjer också den långsiktiga planen för återförsöksmekanismer för bakgrundsjobb genom att förenkla arkitekturen och göra komponenterna mer idempotenta.
+
 ## Pågående och Framtida Arbete
 
 ### Implementerat

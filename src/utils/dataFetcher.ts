@@ -281,7 +281,7 @@ export interface GiftCardDetails {
   amount: number;
   type: string;
   recipientName: string;
-  recipientEmail: string;
+  recipientEmail?: string | null;
   message?: string;
 }
 

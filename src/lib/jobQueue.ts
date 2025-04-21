@@ -49,10 +49,19 @@ export async function createBackgroundJob(
       return null;
     }
     
+    // KRITISKT: Bevara original payment_reference från jobData
+    // Generera aldrig nya referenser här
+    if (jobData.paymentReference) {
+      logInfo(`Using existing payment reference from job data: ${jobData.paymentReference}`, { 
+        requestId, 
+        paymentReference: jobData.paymentReference
+      });
+    }
+    
     const newJob: BackgroundJob = {
-      id: uuidv4(),
+      id: uuidv4(), // Endast jobb-ID får genereras här
       job_type: jobType,
-      job_data: jobData,
+      job_data: jobData, // Använd exakt samma jobData utan modifikationer
       status: 'pending',
       created_at: new Date().toISOString()
     };
@@ -61,7 +70,8 @@ export async function createBackgroundJob(
       requestId, 
       jobId: newJob.id,
       jobType,
-      jobStatus: 'pending'
+      jobStatus: 'pending',
+      paymentReference: jobData.paymentReference // Logga för att bekräfta att vi använder samma referens
     });
     
     const { data, error } = await supabase

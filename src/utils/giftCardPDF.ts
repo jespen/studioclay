@@ -57,7 +57,10 @@ export async function generateGiftCardPDF(giftCardData: GiftCardData): Promise<B
       hasCreatedAt: !!giftCardData.createdAt,
       hasExpiresAt: !!giftCardData.expiresAt,
       createdAtTimestamp: giftCardData.createdAt?.toISOString() || '[MISSING]',
-      expiresAtTimestamp: giftCardData.expiresAt?.toISOString() || '[MISSING]'
+      expiresAtTimestamp: giftCardData.expiresAt?.toISOString() || '[MISSING]',
+      hasMessage: !!giftCardData.message,
+      messageContent: giftCardData.message || '[NO MESSAGE]',
+      messageType: typeof giftCardData.message
     });
 
     // Determine which reference to use for the PDF
@@ -113,35 +116,35 @@ export async function generateGiftCardPDF(giftCardData: GiftCardData): Promise<B
     doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
     doc.text('PRESENTKORT', pageWidth / 2, margin + 25, { align: 'center' });
     
-    // Add gift card reference - make it more visible
+    // Add gift card reference - move it below the presentkort title
     doc.setFontSize(14);
     doc.setTextColor(50, 50, 50);
-    doc.text(`Referens: ${referenceToUse}`, pageWidth / 2, margin + 32, { align: 'center' });
+    doc.text(`Referens: ${referenceToUse}`, pageWidth / 2, margin + 40, { align: 'center' });
     
-    // Add a reference box (subtle background) to make it stand out
+    // Add a reference box (subtle background) to make it stand out - adjusted position
     const referenceTextWidth = doc.getTextWidth(`Referens: ${referenceToUse}`);
     doc.setFillColor(245, 245, 245);
     doc.roundedRect(
       pageWidth / 2 - (referenceTextWidth / 2) - 5, 
-      margin + 32 - 10, 
+      margin + 40 - 10, 
       referenceTextWidth + 10, 
       14, 
       2, 2, 'F'
     );
     
-    // Draw reference text again on top of the background
+    // Draw reference text again on top of the background - adjusted position
     doc.setTextColor(50, 50, 50);
-    doc.text(`Referens: ${referenceToUse}`, pageWidth / 2, margin + 32, { align: 'center' });
+    doc.text(`Referens: ${referenceToUse}`, pageWidth / 2, margin + 40, { align: 'center' });
     
     logInfo(`📝 GIFT CARD PDF GENERATOR - Added reference to PDF`, {
       referenceType: giftCardData.payment_reference ? 'payment_reference' : 'code',
       referenceValue: referenceToUse
     });
     
-    // Add gift card amount (make it stand out) - moved up slightly
+    // Add gift card amount (make it stand out) - moved down slightly
     doc.setFontSize(42);
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.text(`${giftCardData.amount} kr`, pageWidth / 2, pageHeight / 2 - 20, { align: 'center' });
+    doc.text(`${giftCardData.amount} kr`, pageWidth / 2, pageHeight / 2 - 10, { align: 'center' });
     
     // Add validity information
     doc.setFontSize(12);
@@ -180,18 +183,69 @@ export async function generateGiftCardPDF(giftCardData: GiftCardData): Promise<B
     
     // 2. Add personal message if available - right after recipient name
     if (giftCardData.message) {
-      // Create a box for the message
-      doc.setFillColor(245, 245, 245);
-      const messageBoxY = pageHeight / 2 + 35;
-      doc.roundedRect(margin + 20, messageBoxY, contentWidth - 40, 40, 3, 3, 'F');
+      // Logga att vi försöker lägga till meddelandet
+      logInfo(`📝 GIFT CARD PDF GENERATOR - Adding message to PDF`, {
+        messageLength: giftCardData.message.length,
+        messageContent: giftCardData.message.substring(0, 50) + (giftCardData.message.length > 50 ? '...' : ''),
+        messageType: typeof giftCardData.message
+      });
       
-      doc.setFontSize(12);
-      doc.setTextColor(80, 80, 80);
-      doc.setFont('helvetica', 'italic');
+      try {
+        // Create a box for the message
+        doc.setFillColor(245, 245, 245);
+        const messageBoxY = pageHeight / 2 + 35;
+        doc.roundedRect(margin + 20, messageBoxY, contentWidth - 40, 40, 3, 3, 'F');
+        
+        doc.setFontSize(12);
+        doc.setTextColor(80, 80, 80);
+        doc.setFont('helvetica', 'italic');
+        
+        // Wrap the message text to fit within the box
+        const splitMessage = doc.splitTextToSize(giftCardData.message, contentWidth - 60);
+        
+        // Logga efter text wrapping för att se om något gick fel
+        logInfo(`📝 GIFT CARD PDF GENERATOR - Message wrapped for PDF`, {
+          originalLength: giftCardData.message.length,
+          wrappedLines: splitMessage.length,
+          firstLine: splitMessage[0] || '[EMPTY]'
+        });
+        
+        // Explicit text position och alignment
+        doc.text(splitMessage, pageWidth / 2, messageBoxY + 15, { align: 'center' });
+        
+        // Logga att vi har lagt till meddelandet
+        logInfo(`✅ GIFT CARD PDF GENERATOR - Message added to PDF successfully`);
+      } catch (msgError) {
+        // Om något går fel med att lägga till meddelandet, logga det men fortsätt med PDF-generering
+        logError(`❌ GIFT CARD PDF GENERATOR - Error adding message to PDF`, {
+          error: msgError instanceof Error ? msgError.message : 'Unknown error',
+          message: giftCardData.message
+        });
+        
+        // Fallback: Lägg till ett mycket enkelt meddelande som garanti
+        try {
+          doc.setFontSize(10);
+          doc.setTextColor(255, 0, 0); // Röd färg för att vara extra tydlig
+          doc.text(`MEDDELANDE: ${giftCardData.message}`, pageWidth / 2, pageHeight / 2 + 50, { align: 'center' });
+        } catch (fallbackError) {
+          logError(`Even fallback message failed`, { error: fallbackError });
+        }
+      }
+    } else {
+      // Logga om det inte finns något meddelande
+      logInfo(`ℹ️ GIFT CARD PDF GENERATOR - No message to add to PDF`, {
+        message: giftCardData.message,
+        messageType: typeof giftCardData.message
+      });
       
-      // Wrap the message text to fit within the box
-      const splitMessage = doc.splitTextToSize(giftCardData.message, contentWidth - 60);
-      doc.text(splitMessage, pageWidth / 2, messageBoxY + 15, { align: 'center' });
+      // Lägg till en text som visar att det inte fanns något meddelande (för debugging)
+      try {
+        doc.setFontSize(10);
+        doc.setTextColor(200, 200, 200); // Ljusgrå text
+        doc.text("Inget personligt meddelande angivet", pageWidth / 2, pageHeight / 2 + 50, { align: 'center' });
+      } catch (error) {
+        logError(`Failed to add debug text for missing message`, { error });
+      }
     }
     
     // 3. Add sender information - centered

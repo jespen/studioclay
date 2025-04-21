@@ -210,7 +210,16 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
       giftCardDetails
     } = jobData;
     
-    // Validate required job data
+    // Validera och logga nyckeldata för felsökning
+    if (!paymentReference) {
+      logError(`KRITISKT: Saknar payment_reference i jobbdata`, { 
+        requestId,
+        jobDataKeys: Object.keys(jobData) 
+      });
+      throw new Error('Missing payment_reference in job data');
+    }
+    
+    // Validera att vi har all nödvändig data
     if (!paymentReference || !invoiceNumber || !productType || !productId || !userInfo || !amount) {
       logError(`Missing required job data`, {
         requestId,
@@ -443,7 +452,8 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
           productId,
           amount,
           productDetails,
-          paymentReference
+          paymentReference,
+          storeToBucket: true // Explicit ange att vi vill lagra PDFen
         };
         
         logDebug(`Calling generateAndStoreInvoicePdf with options`, { 
@@ -458,52 +468,42 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
         pdfResult = await generateAndStoreInvoicePdf(pdfOptions);
         
         if (!pdfResult.success) {
-          throw new Error(pdfResult.error || 'PDF generation failed without specific error');
+          // Om PDF-generering misslyckas med lagring, försök utan lagring
+          logWarning(`PDF generation with storage failed, trying without storage`, {
+            requestId,
+            invoiceNumber,
+            error: pdfResult.error
+          });
+          
+          pdfOptions.storeToBucket = false;
+          pdfResult = await generateAndStoreInvoicePdf(pdfOptions);
+          
+          if (!pdfResult.success) {
+            throw new Error(pdfResult.error || 'PDF generation failed completely');
+          }
+          
+          logInfo(`Successfully generated PDF without storage`, {
+            requestId,
+            invoiceNumber,
+            pdfBlob: !!pdfResult.pdfBlob
+          });
+        } else {
+          logInfo(`Successfully stored PDF in Supabase bucket`, {
+            requestId,
+            invoiceNumber,
+            storagePath: pdfResult.storagePath,
+            publicUrl: pdfResult.publicUrl
+          });
         }
-        
-        logInfo(`Successfully stored PDF in Supabase bucket`, {
-          requestId,
-          invoiceNumber,
-          storagePath: pdfResult.storagePath,
-          publicUrl: pdfResult.publicUrl
-        });
       } catch (pdfGenerationError) {
-        // Om centraliserad PDF-generering misslyckas, logga detaljerat fel
-        logError(`PDF generation and storage failed, falling back to direct generation`, {
+        // Logga felet ordentligt och låt det bubbla uppåt
+        logError(`PDF generation failed completely`, {
           requestId,
           invoiceNumber,
           error: pdfGenerationError instanceof Error ? pdfGenerationError.message : 'Unknown error',
           stack: pdfGenerationError instanceof Error ? pdfGenerationError.stack : undefined
         });
-        
-        // Fallback: Generera PDF direkt utan att spara i bucket
-        logDebug(`Importing direct PDF generation module as fallback`, { requestId });
-        const { generateInvoicePDF } = await import('@/utils/invoicePDF');
-        
-        if (!generateInvoicePDF) {
-          throw new Error('Cannot import PDF generation module');
-        }
-        
-        logDebug(`Attempting direct PDF generation`, { requestId });
-        const pdfBlob = await generateInvoicePDF(invoiceData);
-        
-        if (!pdfBlob) {
-          throw new Error('Direct PDF generation failed - returned null or undefined');
-        }
-        
-        logInfo(`Successfully generated PDF directly (without storage)`, {
-          requestId,
-          invoiceNumber,
-          pdfSizeBytes: pdfBlob.size
-        });
-        
-        // Skapa ett resultatobjekt som liknar det från generateAndStoreInvoicePdf
-        pdfResult = {
-          success: true,
-          pdfBlob: pdfBlob,
-          storagePath: null,
-          publicUrl: null
-        };
+        throw pdfGenerationError;
       }
       
       // Now, if this is a gift card, we need to also generate a gift card PDF
@@ -517,10 +517,10 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
         });
         
         try {
-          // First check if there are multiple gift cards with this payment reference
-          const { data: countData, error: countError } = await supabase
+          // Först logga hur många presentkort som finns med denna referens
+          const { count: giftCardCount, error: countError } = await supabase
             .from('gift_cards')
-            .select('id', { count: 'exact', head: true })
+            .select('*', { count: 'exact', head: true })
             .eq('payment_reference', paymentReference);
             
           if (countError) {
@@ -530,12 +530,19 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
               error: countError.message
             });
           } else {
-            const count = countData?.length || 0;
+            const count = giftCardCount || 0;
             logInfo(`Found ${count} gift cards with payment reference ${paymentReference}`, {
-              requestId
+              requestId,
+              count
             });
             
-            if (count > 1) {
+            if (count === 0) {
+              logWarning(`No gift cards found with payment_reference=${paymentReference}`, {
+                requestId,
+                paymentReference,
+                giftCardCodeFromDetails: giftCardDetails?.code
+              });
+            } else if (count > 1) {
               logWarning(`Multiple gift cards (${count}) found with same payment reference!`, {
                 requestId,
                 paymentReference
@@ -543,25 +550,77 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
             }
           }
           
-          // Now fetch the gift card, using maybeSingle to avoid errors if no rows are found
-          const { data: giftCardData, error: fetchError } = await supabase
-            .from('gift_cards')
-            .select('*')
-            .eq('payment_reference', paymentReference)
-            .maybeSingle();
-            
-          if (fetchError) {
-            logError(`Failed to fetch gift card data for PDF generation`, {
+          // Sökning i flera steg för att vara extremt robust:
+          let giftCardData = null;
+          let fetchError = null;
+          
+          // Steg 1: Sök på payment_reference (exakt match)
+          if (!giftCardData) {
+            const result = await supabase
+              .from('gift_cards')
+              .select('*')
+              .eq('payment_reference', paymentReference)
+              .maybeSingle();
+              
+            if (result.data) {
+              giftCardData = result.data;
+              logInfo(`Found gift card using exact payment_reference match`, {
+                requestId,
+                giftCardId: giftCardData.id,
+                code: giftCardData.code
+              });
+            } else {
+              fetchError = result.error;
+            }
+          }
+          
+          // Steg 2: Om ingen hittades, sök på code från giftCardDetails
+          if (!giftCardData && giftCardDetails?.code) {
+            const result = await supabase
+              .from('gift_cards')
+              .select('*')
+              .eq('code', giftCardDetails.code)
+              .maybeSingle();
+              
+            if (result.data) {
+              giftCardData = result.data;
+              logInfo(`Found gift card using code match`, {
+                requestId,
+                giftCardId: giftCardData.id,
+                code: giftCardData.code,
+                originalPaymentRef: paymentReference,
+                foundPaymentRef: giftCardData.payment_reference
+              });
+            }
+          }
+          
+          // Steg 3: Sista försök - sök på invoice_number
+          if (!giftCardData && jobData.invoiceNumber) {
+            const result = await supabase
+              .from('gift_cards')
+              .select('*')
+              .eq('invoice_number', jobData.invoiceNumber)
+              .maybeSingle();
+              
+            if (result.data) {
+              giftCardData = result.data;
+              logInfo(`Found gift card using invoice_number match`, {
+                requestId,
+                giftCardId: giftCardData.id,
+                invoiceNumber: jobData.invoiceNumber
+              });
+            }
+          }
+          
+          // Slutlig kontroll - hittades något presentkort?
+          if (!giftCardData) {
+            logError(`No gift card found after multiple search attempts`, {
               requestId,
-              paymentReference, 
-              error: fetchError.message
+              paymentReference,
+              giftCardCode: giftCardDetails?.code,
+              invoiceNumber: jobData.invoiceNumber
             });
-            // Continue without gift card PDF if we can't fetch it
-          } else if (!giftCardData) {
-            logError(`No gift card found with payment reference ${paymentReference}`, {
-              requestId
-            });
-            // Continue without gift card PDF if we can't fetch it
+            // Fortsätt utan presentkorts-PDF om inget hittas
           } else {
             logInfo(`🎁 Retrieved gift card data for PDF generation`, {
               requestId,
@@ -580,6 +639,7 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
               recipientName: giftCardData.recipient_name,
               recipientEmail: giftCardData.recipient_email,
               senderName: giftCardData.sender_name,
+              message: giftCardData.message,
               createdAt: new Date(giftCardData.created_at),
               expiresAt: new Date(giftCardData.expires_at)
             };
