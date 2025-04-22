@@ -46,12 +46,12 @@ interface InvoiceEmailParams {
  * 
  * This function is deprecated. Use sendServerInvoiceEmail from serverEmail.ts instead.
  */
-export async function sendInvoiceEmail(params: InvoiceEmailParams): Promise<{success: boolean; message: string}> {
-  console.warn('DEPRECATED: Using obsolete sendInvoiceEmail function. Use sendServerInvoiceEmail instead.');
-  return {
-    success: false,
-    message: 'This function is deprecated. Use sendServerInvoiceEmail from serverEmail.ts instead.'
-  };
+// export async function sendInvoiceEmail(params: InvoiceEmailParams): Promise<{success: boolean; message: string}> {
+//   console.warn('DEPRECATED: Using obsolete sendInvoiceEmail function. Use sendServerInvoiceEmail instead.');
+//   return {
+//     success: false,
+//     message: 'This function is deprecated. Use sendServerInvoiceEmail from serverEmail.ts instead.'
+//   };
   
   /* Original code removed for clarity
   try {
