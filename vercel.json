@@ -38,11 +38,5 @@
         }
       ]
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/job-processor",
-      "schedule": "*/5 * * * *"
-    }
   ]
 } 
