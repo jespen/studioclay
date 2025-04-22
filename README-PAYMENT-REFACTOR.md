@@ -960,3 +960,121 @@ Dessa förbättringar ger användaren bättre insyn i vad som faktiskt sker unde
    - Förbättra felhanteringen när presentkorts-PDF inte kan hittas
 
 Denna uppdaterade dokumentation reflekterar de senaste ändringarna i systemet och ger en solid grund för fortsatt utveckling av betalningsfunktionerna, särskilt för den kommande Swish-integrationen. 
+
+## Produktions- och Felsökningsverktyg
+
+För att underlätta felsökning och diagnostik i olika miljöer har vi implementerat en uppsättning testendpoints som kan användas för att verifiera systemets komponenter. Dessa endpoints är särskilt användbara i produktionsmiljön för att identifiera och lösa problem relaterade till betalningsflödet.
+
+### Testendpoints för Felsökning
+
+Följande endpoints kan anropas för att testa och diagnostisera olika delar av systemet:
+
+#### Generella Systemkontroller
+
+| Endpoint | Beskrivning | Användning |
+|----------|-------------|------------|
+| `/api/test-env` | Visar alla miljövariabler (säkra versioner) | `curl https://studioclay.se/api/test-env` |
+| `/api/test-supabase` | Testar Supabase-anslutning | `curl https://studioclay.se/api/test-supabase` |
+
+#### Storage och Buckets
+
+| Endpoint | Beskrivning | Användning |
+|----------|-------------|------------|
+| `/api/test/check-bucket-policies` | Testar rättigheter och policys för storage buckets | `curl https://studioclay.se/api/test/check-bucket-policies` |
+| `/api/test/setup-storage` | Verifierar och skapar storage buckets vid behov | `curl https://studioclay.se/api/test/setup-storage` |
+| `/api/test/check-storage` | Kontrollerar status för alla storage buckets | `curl https://studioclay.se/api/test/check-storage` |
+
+#### Email-konfiguration
+
+| Endpoint | Beskrivning | Användning |
+|----------|-------------|------------|
+| `/api/test-email-config` | Testar e-postkonfiguration och SMTP-anslutning | `curl https://studioclay.se/api/test-email-config` |
+
+#### Bakgrundsjobb
+
+| Endpoint | Beskrivning | Användning |
+|----------|-------------|------------|
+| `/api/test/test-job-processor` | Testar jobbprocessorn direkt och visar resultat | `curl https://studioclay.se/api/test/test-job-processor` |
+| `/api/test/process-jobs` | Manuellt processar nästa väntande jobb i kön | `curl https://studioclay.se/api/test/process-jobs` |
+| `/api/test/job-stats` | Visar statistik över bakgrundsjobb | `curl https://studioclay.se/api/test/job-stats` |
+| `/api/test/job-status` | Kontrollerar status för specifika jobb | `curl https://studioclay.se/api/test/job-status?id=JOB_ID` |
+
+#### Swish-integration
+
+| Endpoint | Beskrivning | Användning |
+|----------|-------------|------------|
+| `/api/payments/swish/quicktest` | Testar Swish-konfiguration och certifikat | `curl https://studioclay.se/api/payments/swish/quicktest` |
+| `/api/payments/swish/testflow` | Simulerar ett Swish-betalningsflöde | `curl https://studioclay.se/api/payments/swish/testflow` |
+
+#### PDF-generering
+
+| Endpoint | Beskrivning | Användning |
+|----------|-------------|------------|
+| `/api/test/generate-invoice` | Testar faktura-PDF-generering | `curl https://studioclay.se/api/test/generate-invoice` |
+
+### Felsökningsstrategi i Produktion
+
+När problem uppstår i produktionsmiljön, följ denna systematiska metod för felsökning:
+
+1. **Verifiera miljövariabler**
+   ```bash
+   curl https://studioclay.se/api/test-env
+   ```
+   
+   Kontrollera att alla nödvändiga miljövariabler finns och har korrekta värden, särskilt:
+   - `NEXT_PUBLIC_BASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - Email-konfiguration (`EMAIL_SMTP_HOST`, `EMAIL_USER`, etc.)
+
+2. **Kontrollera Supabase-anslutning och lagringsbuckets**
+   ```bash
+   curl https://studioclay.se/api/test-supabase
+   curl https://studioclay.se/api/test/check-bucket-policies
+   ```
+   
+   Verifierar att applikationen kan ansluta till Supabase och har korrekta rättigheter för bucket-åtkomst.
+
+3. **Testa e-postkonfiguration**
+   ```bash
+   curl https://studioclay.se/api/test-email-config
+   ```
+   
+   Kontrollerar att SMTP-anslutning fungerar och att e-post kan skickas.
+
+4. **Inspektera bakgrundsjobbkön**
+   ```bash
+   curl https://studioclay.se/api/test/job-stats
+   curl https://studioclay.se/api/test/test-job-processor
+   ```
+   
+   Visar status för bakgrundsjobb och testar jobbprocessorn för att säkerställa att jobb bearbetas korrekt.
+
+5. **Manuellt processa jobb vid behov**
+   ```bash
+   curl https://studioclay.se/api/test/process-jobs
+   ```
+   
+   Tvingar fram bearbetning av nästa väntande jobb i kön. Användbart när cron-jobbet inte verkar köras.
+
+### Förslag på Flöde för Produktionsfelsökning
+
+1. **Identifiera problemområde**
+   - Fakturering → Kontrollera PDF-generering och e-post
+   - Swish → Kontrollera Swish-konfiguration och certifikat
+   - Bakgrundsjobb → Kontrollera jobbkön och processorn
+
+2. **Kontrollera grundläggande infrastruktur**
+   - Miljövariabler
+   - Databas och Storage-anslutning
+   - E-postkonfiguration
+
+3. **Testa specifika komponenter**
+   - Använd relevanta testendpoints för att isolera problemet
+   - Granska loggar i Vercel-dashboard för detaljerad felsökningsinformation
+
+4. **Åtgärda identifierade problem**
+   - Justera miljövariabler om nödvändigt
+   - Se till att alla buckets existerar och har rätt behörigheter
+   - Se till att cron-jobbet för bakgrundsjobben är korrekt konfigurerat
+
+Genom att använda dessa verktyg systematiskt kan de flesta produktionsproblem diagnostiseras och åtgärdas utan behov av kodändringar eller omdeployering. 
