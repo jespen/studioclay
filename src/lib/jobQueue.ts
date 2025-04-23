@@ -100,69 +100,67 @@ export async function createBackgroundJob(
       }
     });
     
-    // Om vi är i utvecklingsmiljö, bearbeta jobb direkt via lokal import
-    if (process.env.NODE_ENV === 'development') {
-      logInfo(`Development environment detected - processing job immediately`, {
+    // Process jobs regardless of environment
+    logInfo(`Processing job immediately`, {
+      requestId,
+      jobId: data.id
+    });
+    
+    // Vänta på eventuell fördröjning om det är angett
+    if (options.delay && options.delay > 0) {
+      logDebug(`Delaying job processing by ${options.delay}ms`, {
+        requestId,
+        jobId: data.id,
+        delay: options.delay
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, options.delay));
+    }
+    
+    // Försök att använda direkt access till processNextJob
+    try {
+      // Dynamisk import för att förhindra cirkelberoende
+      const { processNextJob } = await import('../app/api/jobs/process/utils');
+      
+      logInfo(`Directly executing job processor for ${data.id}`, {
+        requestId,
+        jobId: data.id,
+        jobType
+      });
+      
+      const result = await processNextJob(requestId);
+      
+      if (result.success) {
+        logInfo(`Successfully processed job ${result.jobId || 'unknown'} directly`, {
+          requestId,
+          jobId: data.id,
+          processedJobId: result.jobId
+        });
+      } else {
+        logWarning(`Direct job processing failed: ${result.error || 'Unknown error'}`, {
+          requestId,
+          jobId: data.id
+        });
+        
+        // Fallback till HTTP om direkt bearbetning misslyckades
+        const httpResult = await processJobs(requestId);
+        logInfo(`Fallback HTTP job processing ${httpResult ? 'succeeded' : 'failed'}`, {
+          requestId, 
+          jobId: data.id
+        });
+      }
+    } catch (importError) {
+      logWarning(`Could not directly process job, trying HTTP fallback: ${importError instanceof Error ? importError.message : 'Unknown error'}`, {
         requestId,
         jobId: data.id
       });
       
-      // Vänta på eventuell fördröjning om det är angett
-      if (options.delay && options.delay > 0) {
-        logDebug(`Delaying job processing by ${options.delay}ms`, {
-          requestId,
-          jobId: data.id,
-          delay: options.delay
-        });
-        
-        await new Promise(resolve => setTimeout(resolve, options.delay));
-      }
-      
-      // I utvecklingsmiljö, försök att använda direkt access till processNextJob
-      try {
-        // Dynamisk import för att förhindra cirkelberoende
-        const { processNextJob } = await import('../app/api/jobs/process/utils');
-        
-        logInfo(`Directly executing job processor for ${data.id}`, {
-          requestId,
-          jobId: data.id,
-          jobType
-        });
-        
-        const result = await processNextJob(requestId);
-        
-        if (result.success) {
-          logInfo(`Successfully processed job ${result.jobId || 'unknown'} directly`, {
-            requestId,
-            jobId: data.id,
-            processedJobId: result.jobId
-          });
-        } else {
-          logWarning(`Direct job processing failed: ${result.error || 'Unknown error'}`, {
-            requestId,
-            jobId: data.id
-          });
-          
-          // Fallback till HTTP om direkt bearbetning misslyckades
-          const httpResult = await processJobs(requestId);
-          logInfo(`Fallback HTTP job processing ${httpResult ? 'succeeded' : 'failed'}`, {
-            requestId, 
-            jobId: data.id
-          });
-        }
-      } catch (importError) {
-        logWarning(`Could not directly process job, trying HTTP fallback: ${importError instanceof Error ? importError.message : 'Unknown error'}`, {
-          requestId,
-          jobId: data.id
-        });
-        
-        // Fallback till HTTP om direkt bearbetning inte är tillgänglig
-        const processed = await processJobs(requestId);
-        logInfo(`Immediate job processing via HTTP ${processed ? 'successful' : 'failed'}`, {
-          requestId,
-          jobId: data.id
-        });
-      }
+      // Fallback till HTTP om direkt bearbetning inte är tillgänglig
+      const processed = await processJobs(requestId);
+      logInfo(`Immediate job processing via HTTP ${processed ? 'successful' : 'failed'}`, {
+        requestId,
+        jobId: data.id
+      });
     }
     
     return data.id;

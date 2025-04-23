@@ -8,6 +8,7 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PRODUCT_TYPES } from '@/constants/statusCodes';
+import JobProcessor from '@/components/common/JobProcessor';
 
 interface PaymentDetails {
   status: string;
@@ -277,6 +278,9 @@ export default function PaymentConfirmation({ params }: { params: { reference: s
             </Button>
           )}
         </Box>
+        
+        {/* Silent job processor to ensure any pending jobs are processed */}
+        <JobProcessor paymentReference={params.reference} />
       </Paper>
     </Container>
   );

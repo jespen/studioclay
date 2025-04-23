@@ -9,6 +9,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import EmailIcon from '@mui/icons-material/Email';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import JobProcessor from '@/components/common/JobProcessor';
 
 interface GiftCardData {
   code?: string;
@@ -360,7 +361,7 @@ function ConfirmationContent() {
             href="/"
             sx={{ minWidth: 200 }}
           >
-            Gå till startsidan
+            Återgå till butiken
           </Button>
           
           <Button
@@ -372,6 +373,9 @@ function ConfirmationContent() {
             Köp fler presentkort
           </Button>
         </Box>
+        
+        {/* Silent job processor */}
+        <JobProcessor paymentReference={reference || undefined} />
       </Paper>
     </Container>
   );
