@@ -37,38 +37,38 @@ const ConstructionBanner = () => {
 
   if (!isVisible) return null;
 
-  return (
-    <div className={styles.banner}>
-      <div className={styles.container}>
-        <div className={styles.content}>
+  // return (
+  //   <div className={styles.banner}>
+  //     <div className={styles.container}>
+  //       <div className={styles.content}>
     
-          <p className={styles.message}>
-            <strong>⚠️ Under uppbyggnad</strong> Denna webbplats är under uppbyggnad. Det mesta skall fungera (ej swish) men skulle du hitta något som inte fungerar - kontakta <a href="mailto:eva@studioclay.se">eva@studioclay.se </a>.
-          </p>
-        </div>
-        <button
-          onClick={dismissBanner}
-          className={styles.closeButton}
-          aria-label="Stäng meddelande"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className={styles.closeIcon}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
+  //         <p className={styles.message}>
+  //           <strong>⚠️ Under uppbyggnad</strong> Denna webbplats är under uppbyggnad. Det mesta skall fungera (ej swish) men skulle du hitta något som inte fungerar - kontakta <a href="mailto:eva@studioclay.se">eva@studioclay.se </a>.
+  //         </p>
+  //       </div>
+  //       <button
+  //         onClick={dismissBanner}
+  //         className={styles.closeButton}
+  //         aria-label="Stäng meddelande"
+  //       >
+  //         <svg
+  //           xmlns="http://www.w3.org/2000/svg"
+  //           fill="none"
+  //           viewBox="0 0 24 24"
+  //           strokeWidth={1.5}
+  //           stroke="currentColor"
+  //           className={styles.closeIcon}
+  //         >
+  //           <path
+  //             strokeLinecap="round"
+  //             strokeLinejoin="round"
+  //             d="M6 18L18 6M6 6l12 12"
+  //           />
+  //         </svg>
+  //       </button>
+  //     </div>
+  //   </div>
+  // );
 };
 
 export default ConstructionBanner; 

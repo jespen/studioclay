@@ -1085,3 +1085,36 @@ Genom att använda dessa verktyg systematiskt kan de flesta produktionsproblem d
    - Kontrollera att bakgrundsjobb processas korrekt
 
 Genom att använda dessa verktyg systematiskt kan de flesta produktionsproblem diagnostiseras och åtgärdas utan behov av kodändringar eller omdeployering. 
+
+## Jobbhantering
+
+### Ny Arkitektur (Direkt Bearbetning)
+
+I den nya arkitekturen bearbetas jobb direkt när de skapas, oavsett miljö (utveckling eller produktion). Detta ger flera fördelar:
+
+1. **Konsekvent beteende** - Samma beteende i alla miljöer
+2. **Transaktionell process** - Om ett steg misslyckas, markeras hela jobbet som misslyckat
+3. **Omedelbar feedback** - Problem upptäcks direkt istället för att vänta på asynkron bearbetning
+4. **Inga beroenden** - Ingen behov av cron-jobb eller externa tjänster
+
+### Jobbtyper
+
+Systemet hanterar följande typer av jobb:
+
+1. **invoice_email** - Skickar faktura via e-post
+2. **order_confirmation** - Skickar orderbekräftelse
+3. **gift_card_delivery** - Skickar presentkort
+
+### Jobbflöde
+
+1. Jobb skapas med `createBackgroundJob()`
+2. Jobbet bearbetas omedelbart
+3. Resultatet loggas och jobbet markeras som slutfört eller misslyckat
+
+### Felsökning
+
+Om ett jobb misslyckas:
+
+1. Kontrollera jobbets status i Supabase-tabellen `background_jobs`
+2. Använd testendpointen `/api/jobs/status` för att se jobbstatistik
+3. Använd `/api/jobs/process` för att manuellt bearbeta jobb

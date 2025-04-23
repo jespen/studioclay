@@ -116,7 +116,9 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [submitError, setSubmitError] = useState<string | null>(null);
   
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('swish');
+  // const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('swish');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('invoice');
+
   const [error, setError] = useState<string | null>(null);
   const [paymentInfo, setPaymentInfo] = useState<any>(null);
   

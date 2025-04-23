@@ -19,7 +19,6 @@ import StyledButton from './StyledButton';
 import { FlowStateData } from './FlowStepWrapper';
 import { FlowType } from './BookingStepper';
 import { cleanupCheckoutFlow } from '@/utils/dataStorage';
-import JobProcessor from './JobProcessor';
 
 import CourseConfirmationDetails from '../booking/CourseConfirmationDetails';
 import GiftCardConfirmationDetails from '../gift-card-flow/GiftCardConfirmationDetails';
@@ -384,9 +383,6 @@ const GenericConfirmation: React.FC<GenericConfirmationProps> = ({
           </Link>
         </Box>
       </Paper>
-
-      {/* Silent job processor to ensure background jobs are processed */}
-      <JobProcessor paymentReference={data.orderReference} />
     </>
   );
 };
