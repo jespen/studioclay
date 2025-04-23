@@ -1054,7 +1054,14 @@ När problem uppstår i produktionsmiljön, följ denna systematiska metod för 
    curl https://studioclay.se/api/test/process-jobs
    ```
    
-   Tvingar fram bearbetning av nästa väntande jobb i kön. Användbart när cron-jobbet inte verkar köras.
+   Tvingar fram bearbetning av nästa väntande jobb i kön. Användbart för att manuellt processa jobb.
+
+4. **Åtgärda identifierade problem**
+   - Justera miljövariabler om nödvändigt
+   - Se till att alla buckets existerar och har rätt behörigheter
+   - Kontrollera att bakgrundsjobb processas korrekt
+
+Genom att använda dessa verktyg systematiskt kan de flesta produktionsproblem diagnostiseras och åtgärdas utan behov av kodändringar eller omdeployering. 
 
 ### Förslag på Flöde för Produktionsfelsökning
 
@@ -1075,6 +1082,6 @@ När problem uppstår i produktionsmiljön, följ denna systematiska metod för 
 4. **Åtgärda identifierade problem**
    - Justera miljövariabler om nödvändigt
    - Se till att alla buckets existerar och har rätt behörigheter
-   - Se till att cron-jobbet för bakgrundsjobben är korrekt konfigurerat
+   - Kontrollera att bakgrundsjobb processas korrekt
 
 Genom att använda dessa verktyg systematiskt kan de flesta produktionsproblem diagnostiseras och åtgärdas utan behov av kodändringar eller omdeployering. 

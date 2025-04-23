@@ -38,7 +38,7 @@ const jobId = await createBackgroundJob('invoice_email', {
 ### Job Processing
 
 The job processor runs either:
-- Automatically every 5 minutes via Vercel cron jobs (in production)
+- Automatically during user transactions
 - Immediately after job creation (in development mode)
 - Manually via the test endpoint (for troubleshooting)
 
@@ -56,8 +56,7 @@ When processing a job, the system:
 
 ## Deployment Requirements
 
-1. **Vercel Cron Job** - Configured in vercel.json to run every 5 minutes
-2. **Storage Buckets** - Two required buckets in Supabase:
+1. **Storage Buckets** - Two required buckets in Supabase:
    - `invoices` - For storing invoice PDFs
    - `giftcards` - For storing gift card PDFs
 
@@ -84,14 +83,14 @@ In development, background jobs are processed immediately after creation. If you
 
 ### Production Environment
 
-In production, the jobs are processed by the Vercel cron job every 5 minutes. You can monitor jobs in the database by checking the `background_jobs` table.
+In production, jobs are processed automatically during user transactions. For any failed jobs, you can manually trigger processing or check the database directly. You can monitor jobs in the database by checking the `background_jobs` table.
 
 ### Common Issues
 
 1. **Jobs not being processed**:
-   - Verify the Vercel cron job is configured correctly in vercel.json
    - Check that the job processor endpoint is working by calling it manually
-   - Check the Vercel logs for any errors in the cron job execution
+   - Verify the job status in the database
+   - Check the Vercel logs for any errors in job processing
 
 2. **PDF generation failing**:
    - Ensure the required storage buckets exist (use the setup-storage endpoint)

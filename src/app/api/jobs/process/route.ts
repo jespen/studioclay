@@ -24,7 +24,6 @@ export const GET = async (req: NextRequest) => {
     logInfo(`Job processor triggered via API`, { 
       requestId,
       hasToken: !!token,
-      isVercelCron: req.headers.get('x-vercel-cron') === 'true',
       isDevelopment
     });
     
