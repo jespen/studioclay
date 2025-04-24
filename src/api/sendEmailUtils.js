@@ -72,4 +72,22 @@ export async function sendEmail(options) {
       message: error.message || 'Unknown error sending email'
     };
   }
-} 
+}
+
+/**
+ * Konvertera UTC-tid till svensk tid
+ * @param {string} isoDate - ISO-formaterad datum/tid-sträng
+ * @returns {string} Formaterad datum/tid-sträng i svensk format
+ */
+function formatSwedishDateTime(isoDate) {
+  return new Intl.DateTimeFormat('sv-SE', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    timeZone: 'Europe/Stockholm'
+  }).format(new Date(isoDate));
+}
+
+// Använd denna funktion konsekvent i all kod som visar datum/tid 
