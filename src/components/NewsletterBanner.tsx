@@ -1,19 +1,47 @@
 'use client';
 
 import { useState } from 'react';
-import { TextField, Button } from '@mui/material';
+import { TextField, Button, CircularProgress } from '@mui/material';
 import styles from '@/styles/NewsletterBanner.module.css';
 
 const NewsletterBanner = () => {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you would typically handle the newsletter subscription
-    // For now, we'll just show a success message
-    setSubscribed(true);
-    setEmail('');
+    setLoading(true);
+    setError('');
+    
+    try {
+      // Send email data to Eva's email address
+      const response = await fetch('/api/newsletter-subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          subscriberEmail: email,
+          recipientEmail: 'eva@studioclay.se'
+        }),
+      });
+      
+      if (response.ok) {
+        setSubscribed(true);
+        setEmail('');
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Något gick fel. Försök igen senare.');
+        console.error('Failed to subscribe to newsletter', errorData);
+      }
+    } catch (error) {
+      setError('Något gick fel. Försök igen senare.');
+      console.error('Error subscribing to newsletter:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -35,7 +63,10 @@ const NewsletterBanner = () => {
                 placeholder="Din e-postadress"
                 type="email"
                 required
+                disabled={loading}
                 size="small"
+                error={!!error}
+                helperText={error}
                 sx={{
                   width: '340px',
                   '& .MuiOutlinedInput-root': {
@@ -47,6 +78,7 @@ const NewsletterBanner = () => {
               <Button
                 type="submit"
                 variant="contained"
+                disabled={loading}
                 sx={{
                   backgroundColor: '#547264',
                   '&:hover': {
@@ -54,9 +86,12 @@ const NewsletterBanner = () => {
                   }
                 }}
               >
-                Prenumerera
+                {loading ? <CircularProgress size={24} color="inherit" /> : 'Prenumerera'}
               </Button>
             </form>
+            {error && (
+              <p className={styles.error}>{error}</p>
+            )}
           </>
         ) : (
           <div className={styles.success}>
