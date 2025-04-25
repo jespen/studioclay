@@ -219,23 +219,23 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
       // Try each file name until we find one that works
       for (const fileName of potentialFileNames) {
         const potentialPdfUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${bucketName}/${fileName}`;
-        
+      
         console.log(`DETAILS-5: Checking if PDF exists at: ${potentialPdfUrl}`);
+      
+      try {
+        // Try to do a HEAD request to check if the file exists
+        const checkResponse = await fetch(potentialPdfUrl, { method: 'HEAD' });
         
-        try {
-          // Try to do a HEAD request to check if the file exists
-          const checkResponse = await fetch(potentialPdfUrl, { method: 'HEAD' });
-          
-          if (checkResponse.ok) {
-            // File exists, use it directly
+        if (checkResponse.ok) {
+          // File exists, use it directly
             console.log(`DETAILS-6: PDF found at: ${potentialPdfUrl}`);
-            setPdfUrl(potentialPdfUrl);
-            
-            // Open PDF in new tab
-            window.open(potentialPdfUrl, '_blank');
-            setCheckingPdf(false);
-            return;
-          } else {
+          setPdfUrl(potentialPdfUrl);
+          
+          // Open PDF in new tab
+          window.open(potentialPdfUrl, '_blank');
+          setCheckingPdf(false);
+          return;
+        } else {
             console.log(`DETAILS-7: PDF not found at: ${potentialPdfUrl}, status: ${checkResponse.status}`);
           }
         } catch (checkError) {
@@ -251,13 +251,13 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
         ? `Bakgrundsjobbet för presentkortet (ref: ${reference}) kan fortfarande bearbetas.`
         : `Bakgrundsjobbet för presentkortet kan fortfarande bearbetas.`;
       
-      setError(
+        setError(
         `Presentkortet har inte genererats ännu. ${jobCheckMessage} ` + 
         'Detta görs normalt automatiskt inom 10-15 minuter efter betalning. ' +
         'Om du fortfarande inte kan se ditt presentkort efter denna tid, vänligen kontakta oss på ' +
         'eva@studioclay.se och ange presentkortskoden eller referensnumret.'
-      );
-      setCheckingPdf(false);
+        );
+        setCheckingPdf(false);
     } catch (err) {
       console.error('DETAILS-ERROR-4: Unhandled error:', err);
       setError(`Det gick inte att ladda presentkortet: ${err instanceof Error ? err.message : 'Okänt fel'}`);

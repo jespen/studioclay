@@ -413,7 +413,7 @@ async function generateInvoiceAndSendEmail(
               .update({
                 pdf_url: giftCardPdfUrl,
                 pdf_generated: true,
-                updated_at: new Date().toISOString()
+                updated_at: new Date()
               })
               .eq('id', giftCardDatabaseId);
               
@@ -522,7 +522,7 @@ async function generateInvoiceAndSendEmail(
           .from('payments')
           .update({
             email_sent_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            updated_at: new Date()
           })
           .eq('payment_reference', paymentReference);
           
@@ -1038,6 +1038,142 @@ export const POST = async (req: Request) => {
               error: artOrderError instanceof Error ? artOrderError.message : 'Unknown error'
             });
             // Fortsätt trots fel med art order - vi har fortfarande payment record
+          }
+        }
+        
+        // If this is a course, create a booking record and update the course participant count
+        if (productType === PRODUCT_TYPES.COURSE) {
+          try {
+            // Create booking reference for the course
+            const bookingReference = `BC-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+            
+            logInfo(`Creating course booking record for invoice payment`, {
+              requestId,
+              courseId: productId,
+              bookingReference
+            });
+            
+            // First check if the course exists and get its current data
+            const { data: courseData, error: courseError } = await supabase
+              .from('course_instances')
+              .select('current_participants, max_participants, price')
+              .eq('id', productId)
+              .single();
+              
+            if (courseError) {
+              logWarning(`Failed to fetch course data for booking creation, continuing`, {
+                requestId,
+                error: courseError
+              });
+              // Continue despite error - we still have the payment record
+            } else {
+              // Check if the course is full - this shouldn't happen due to validation earlier, but best to check
+              const participantsToAdd = parseInt(userInfoObj.numberOfParticipants?.toString() || '1');
+              const currentParticipants = courseData.current_participants || 0;
+              const maxParticipants = courseData.max_participants || 999;
+              
+              if (currentParticipants + participantsToAdd > maxParticipants) {
+                logWarning(`Course is full, cannot add booking`, {
+                  requestId,
+                  courseId: productId,
+                  currentParticipants,
+                  maxParticipants,
+                  participantsToAdd
+                });
+              } else {
+                // Create booking record
+                const { data: booking, error: bookingError } = await supabase
+                  .from('bookings')
+                  .insert({
+                    course_id: productId,
+                    customer_name: `${userInfoObj.firstName} ${userInfoObj.lastName}`,
+                    customer_email: userInfoObj.email,
+                    customer_phone: userInfoObj.phoneNumber || '',
+                    number_of_participants: participantsToAdd,
+                    booking_reference: bookingReference,
+                    payment_reference: paymentReference,
+                    invoice_number: invoiceNumber,
+                    invoice_address: invoiceDetails.address,
+                    invoice_postal_code: invoiceDetails.postalCode,
+                    invoice_city: invoiceDetails.city,
+                    invoice_reference: invoiceDetails.reference,
+                    booking_date: new Date().toISOString(),
+                    status: 'confirmed',
+                    payment_status: 'CREATED',
+                    payment_method: 'invoice',
+                    unit_price: courseData.price || requestData.amount,
+                    total_price: (courseData.price || requestData.amount) * participantsToAdd,
+                    currency: 'SEK'
+                  })
+                  .select()
+                  .single();
+                  
+                if (bookingError) {
+                  logWarning(`Failed to create booking record, continuing`, {
+                    requestId,
+                    error: bookingError
+                  });
+                } else {
+                  logInfo(`Booking created successfully`, {
+                    requestId,
+                    bookingId: booking.id,
+                    bookingReference
+                  });
+                  
+                  // Update course participants count
+                  const newParticipantCount = currentParticipants + participantsToAdd;
+                  
+                  const { error: updateError } = await supabase
+                    .from('course_instances')
+                    .update({ 
+                      current_participants: newParticipantCount
+                    })
+                    .eq('id', productId);
+                    
+                  if (updateError) {
+                    logWarning(`Failed to update course participant count, continuing`, {
+                      requestId,
+                      error: updateError
+                    });
+                  } else {
+                    logInfo(`Course participant count updated successfully`, {
+                      requestId,
+                      courseId: productId,
+                      oldCount: currentParticipants,
+                      addedCount: participantsToAdd,
+                      newCount: newParticipantCount
+                    });
+                  }
+                  
+                  // Link payment to booking
+                  const { error: linkError } = await supabase
+                    .from('payments')
+                    .update({
+                      booking_id: booking.id
+                    })
+                    .eq('payment_reference', paymentReference);
+                    
+                  if (linkError) {
+                    logWarning(`Failed to link payment to booking, continuing`, {
+                      requestId,
+                      error: linkError
+                    });
+                  } else {
+                    logInfo(`Payment linked to booking successfully`, {
+                      requestId,
+                      paymentReference,
+                      bookingId: booking.id
+                    });
+                  }
+                }
+              }
+            }
+          } catch (bookingError) {
+            logError(`Error creating booking record`, {
+              requestId,
+              error: bookingError instanceof Error ? bookingError.message : 'Unknown error'
+            });
+            // Continue despite error with booking - we still have the payment record
           }
         }
         
