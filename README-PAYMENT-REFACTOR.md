@@ -1118,3 +1118,280 @@ Om ett jobb misslyckas:
 1. Kontrollera jobbets status i Supabase-tabellen `background_jobs`
 2. Använd testendpointen `/api/jobs/status` för att se jobbstatistik
 3. Använd `/api/jobs/process` för att manuellt bearbeta jobb
+
+## Databas och Tabellarkitektur
+
+Betalningssystemet använder flera nyckelkomponenter i databasen, där olika produkttyper interagerar med specifika tabeller. Nedan är en detaljerad beskrivning av tabellerna och hur de används.
+
+### Nyckelkomponenter i tabellstrukturen
+
+1. **payments** - Central tabell för alla betalningar
+   - Innehåller grundläggande betalningsinformation: belopp, status, metod, etc.
+   - Länkas till produktspecifika tabeller via `payment_reference` och `product_id`
+
+2. **bookings** - För kursbokning
+   - Innehåller kursbokningsinformation
+   - Länkas till `payments` via `payment_reference` 
+   - Länkas till `course_instances` via `course_id`
+
+3. **course_instances** - Kursinformation
+   - Innehåller kursdetaljer, inklusive `current_participants` som uppdateras vid bokningar
+   - Hanterar tillgängliga platser och bokningsstatus
+
+4. **gift_cards** - Presentkortsinformation
+   - Innehåller presentkortsdetaljer som kod, belopp, mottagare, etc.
+   - Länkas till `payments` via `payment_reference`
+
+5. **art_orders** - För konstprodukter
+   - Innehåller orderinformation för konstprodukter
+   - Länkas till `payments` via `payment_reference`
+
+6. **background_jobs** - För bakgrundsbearbetning
+   - Hanterar asynkrona processer som PDF-generering och e-postutskick
+   - Innehåller jobbstatus, typ och resultat
+
+### Nyligen åtgärdade problem: Kursbokningar med faktura
+
+Ett problem identifierades i kursbokningsflödet för fakturabetalningar. Systemet kunde inte skapa bokningsposter korrekt på grund av en databaskonflikt. Specifikt var problemet:
+
+1. I `src/app/api/payments/invoice/create/route.ts` försökte koden skapa en bokning i `bookings`-tabellen med ett fält kallat `payment_reference`.
+2. Detta fält fanns inte i `bookings`-tabellen, vilket orsakade ett databasfel.
+3. På grund av detta fel uppdaterades inte `current_participants` i `course_instances`, vilket gjorde att kursen inte registrerade bokningar korrekt.
+
+**Lösningen:**
+1. Lägga till `payment_reference`-kolumnen i `bookings`-tabellen i Supabase.
+2. Bekräfta att korrekt kod för att uppdatera `current_participants` i `course_instances` redan fanns implementerad.
+3. Verifiera att hela flödet fungerar korrekt genom testning.
+
+Den befintliga koden i `src/app/api/payments/invoice/create/route.ts` hanterar nu korrekt:
+1. Skapande av bokningspost med `payment_reference`
+2. Uppdatering av kursens `current_participants`-antal
+3. Koppling av betalningen till bokningen
+
+### Produktflöden i detalj
+
+#### 1. Kursbokningsflöde med fakturabetalning
+
+**Processflöde:**
+1. Användaren väljer en kurs och faktura som betalningsmetod
+2. Ett betalningsreferensnummer (`payment_reference`) genereras, t.ex. `SC-20250425-9EA699`
+3. Ett fakturabokningsmummer (`invoice_number`) genereras, t.ex. `INV-2504-8F73`
+4. En `payments`-post skapas med status "CREATED"
+5. Ett bokningsrefernsnummer (`booking_reference`) genereras, t.ex. `BC-250425-279`
+6. En `bookings`-post skapas med kursdetaljer, användarinfo och betalningsreferenser
+7. `course_instances`-tabellens `current_participants` uppdateras med antalet nya deltagare
+8. Betalningsposten länkas till bokningen genom att uppdatera `booking_id` i `payments`
+9. Ett bakgrundsjobb skapas för att generera faktura-PDF och skicka e-post
+10. Bekräftelsesidan visar bokningsinformation
+
+**Databasinteraktioner:**
+```
+payments
+├── id: UUID
+├── payment_reference: "SC-20250425-9EA699"
+├── invoice_number: "INV-2504-8F73"
+├── product_type: "course"
+├── product_id: "92325c7f-fcf6-4838-abb6-a231442aa05b"
+├── status: "CREATED"
+├── payment_method: "invoice"
+├── amount: 3300
+├── booking_id: [bokningens ID] (uppdateras efter bokningsskapande)
+└── customer_info: { kunddata som JSON }
+
+bookings
+├── id: UUID
+├── course_id: "92325c7f-fcf6-4838-abb6-a231442aa05b"
+├── booking_reference: "BC-250425-279"
+├── payment_reference: "SC-20250425-9EA699"
+├── invoice_number: "INV-2504-8F73"
+├── payment_status: "CREATED"
+├── customer_name: "Jens Sahlström"
+├── number_of_participants: 1
+└── [övriga bokningsdetaljer]
+
+course_instances
+├── id: "92325c7f-fcf6-4838-abb6-a231442aa05b"
+├── title: "Dag kurs"
+├── max_participants: 10
+├── current_participants: [ökas med antal nya deltagare]
+└── [övriga kursdetaljer]
+
+background_jobs
+├── id: UUID
+├── job_type: "invoice_email"
+├── job_data: { paymentReference, invoiceNumber, productType, etc. }
+├── status: "completed"
+└── created_at: timestamp
+```
+
+#### 2. Presentkortsköp med fakturabetalning
+
+**Processflöde:**
+1. Användaren väljer presentkort och faktura som betalningsmetod
+2. Ett betalningsreferensnummer (`payment_reference`) genereras
+3. En presentkortskod (`code`) genereras, t.ex. `GC-250425-A31B`
+4. En `payments`-post skapas med status "CREATED"
+5. En `gift_cards`-post skapas med betalningsreferens, kod, belopp, etc.
+6. Ett bakgrundsjobb skapas för att:
+   - Generera faktura-PDF
+   - Generera presentkorts-PDF
+   - Skicka e-post med båda dokumenten
+7. Bekräftelsesidan visar presentkortsinformation
+
+**Databasinteraktioner:**
+```
+payments
+├── id: UUID
+├── payment_reference: "SC-20250423-F59A31"
+├── invoice_number: "INV-2304-5F81"
+├── product_type: "gift_card"
+├── product_id: [presentkortets ID]
+├── status: "CREATED"
+├── payment_method: "invoice"
+├── amount: 500
+└── customer_info: { kunddata som JSON }
+
+gift_cards
+├── id: UUID
+├── code: "GC-250423-A31B"
+├── payment_reference: "SC-20250423-F59A31"
+├── amount: 500
+├── recipient_name: "Eva Svensson"
+├── recipient_email: null (valfritt fält)
+├── sender_name: "Jens Sahlström"
+├── message: "Grattis på födelsedagen!"
+├── status: "active"
+├── pdf_url: "https://storage.url/giftcards/GC-250423-A31B.pdf"
+└── created_at: timestamp
+
+background_jobs
+├── id: UUID
+├── job_type: "invoice_email"
+├── job_data: { paymentReference, invoiceNumber, productType, etc. }
+├── status: "completed"
+└── created_at: timestamp
+```
+
+#### 3. Konstproduktköp med fakturabetalning
+
+**Processflöde:**
+1. Användaren väljer en konstprodukt och faktura som betalningsmetod
+2. Ett betalningsreferensnummer (`payment_reference`) genereras
+3. Ett orderreferensnummer (`order_reference`) genereras, t.ex. `ORD-20250425-A15A7F`
+4. En `payments`-post skapas med status "CREATED"
+5. En `art_orders`-post skapas med produktdetaljer, leveransinformation, etc.
+6. Lagret för produkten uppdateras (minskar tillgängligt antal)
+7. Ett bakgrundsjobb skapas för att generera faktura-PDF och skicka e-post
+8. Bekräftelsesidan visar orderinformation
+
+**Databasinteraktioner:**
+```
+payments
+├── id: UUID
+├── payment_reference: "SC-20250425-D315F1"
+├── invoice_number: "INV-2504-9A32"
+├── product_type: "art_product"
+├── product_id: [konstproduktens ID]
+├── status: "CREATED"
+├── payment_method: "invoice"
+├── amount: 1200
+├── order_id: [orderns ID] (uppdateras efter orderskapande)
+└── customer_info: { kunddata som JSON }
+
+art_orders
+├── id: UUID
+├── order_reference: "ORD-20250425-A15A7F"
+├── payment_reference: "SC-20250425-D315F1"
+├── product_id: [konstproduktens ID]
+├── quantity: 1
+├── status: "created"
+├── shipping_address: { leveransinformation som JSON }
+└── created_at: timestamp
+
+art_products
+├── id: [konstproduktens ID]
+├── title: "Keramikvas"
+├── price: 1200
+├── stock: [minskas med köpt antal]
+└── [övriga produktdetaljer]
+
+background_jobs
+├── id: UUID
+├── job_type: "invoice_email"
+├── job_data: { paymentReference, invoiceNumber, productType, etc. }
+├── status: "completed"
+└── created_at: timestamp
+```
+
+### Schema-relationer och dataflöde
+
+Följande diagram illustrerar relationerna mellan huvudtabellerna i betalningssystemet:
+
+```
+                           ┌─────────────────┐
+                           │                 │
+                           │    payments     │
+                           │                 │
+                           └────────┬────────┘
+                                    │
+                payment_reference   │
+                                    │
+           ┌──────────────┬─────────┴─────────┬──────────────┐
+           │              │                   │              │
+┌──────────▼────────┐ ┌───▼───────────┐ ┌─────▼──────────┐  │
+│                   │ │               │ │                │  │
+│    bookings       │ │   gift_cards  │ │   art_orders  │  │
+│                   │ │               │ │                │  │
+└──────────┬────────┘ └───────────────┘ └────────────────┘  │
+           │                                                 │
+     course_id                                               │
+           │                                                 │
+┌──────────▼────────┐                                       │
+│                   │◄──────────────────────────────────────┘
+│  course_instances │    product_id (för kursbokning)
+│                   │
+└───────────────────┘
+```
+
+### Viktiga tekniska detaljer
+
+1. **Säkerställa databasintegritet**
+   - IMPORTANT: Alla nya tabeller måste skapas genom officiella migrationer
+   - Alla nödvändiga kolumner måste definieras med rätt typer
+   - Foreign key-relationer bör övervägas för att förbättra dataintegritet
+
+2. **Hantering av references**
+   - `payment_reference` ska användas konsekvent i alla produktspecifika tabeller
+   - Detta är nyckeln till att spåra en betalning genom hela systemet
+
+3. **current_participants i course_instances**
+   - För kursbokningar är det kritiskt att uppdatera `current_participants`
+   - Detta fält används för att beräkna tillgängliga platser och förhindra överbokningar
+   - Kod för att uppdatera detta finns i `/src/app/api/payments/invoice/create/route.ts` runt rad 1125-1130
+
+4. **Background Jobs**
+   - `background_jobs` är en kritisk komponent för att hantera asynkrona processer
+   - Alla operationer som genererar PDF:er eller skickar e-post bör använda bakgrundsjobb
+   - Jobbtypen `invoice_email` hanterar genereringen av faktura-PDF:er för alla produkttyper
+
+### Best Practices och riktlinjer
+
+1. **Ändra aldrig genererade referenser**
+   - När en `payment_reference` har genererats, ska den aldrig ändras
+   - Referensen ska följa betalningen genom hela systemet
+
+2. **Implementera genomgående felhantering**
+   - Kritiska fel som förhindrar databasens integritet bör avbryta processen
+   - Mindre kritiska fel (t.ex. PDF-generering) bör loggas och fortsätta
+
+3. **Undvik duplicerade betalningsreferenser**
+   - Steg för att förhindra detta:
+     1. Använd `generatePaymentReference()` endast i betalningsskapandet
+     2. Skicka alltid vidare original-referensen till bakgrundsjobb
+     3. Använd aldrig funktioner för att skapa nya referenser i bakgrundsjobb
+
+4. **Betrakta betalningsreferensen som en "source of truth"**
+   - Säkerställ att `payment_reference` propageras korrekt genom hela systemet
+   - Använd referensen för att spåra betalningen i alla relaterade tabeller
+
+Genom att följa denna arkitektur och dessa riktlinjer kan betalningssystemet hantera olika produkttyper konsekvent och pålitligt, samtidigt som det förblir flexibelt för framtida utökningar.
