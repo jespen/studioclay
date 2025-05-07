@@ -119,7 +119,10 @@ const Courses = () => {
     
     const date = new Date(dateString);
     // Format like: "7 APRIL"
-    return `${date.getDate()} ${date.toLocaleString('sv-SE', { month: 'long' }).toUpperCase()}`;
+    return `${date.getDate()} ${date.toLocaleString('sv-SE', { 
+      month: 'long',
+      timeZone: 'Europe/Stockholm' 
+    }).toUpperCase()}`;
   };
   
   // Get weekday in Swedish
@@ -128,7 +131,10 @@ const Courses = () => {
     
     const date = new Date(dateString);
     // Get weekday in Swedish: "MÅNDAG"
-    return date.toLocaleString('sv-SE', { weekday: 'long' }).toUpperCase();
+    return date.toLocaleString('sv-SE', { 
+      weekday: 'long',
+      timeZone: 'Europe/Stockholm'
+    }).toUpperCase();
   };
   
   // Format time range like "18.00-21.00"
@@ -138,8 +144,31 @@ const Courses = () => {
     const start = new Date(startDate);
     const end = new Date(endDate);
     
+    // Create date formatter objects with Stockholm timezone
+    const startHours = new Intl.DateTimeFormat('sv-SE', { 
+      hour: '2-digit', 
+      hour12: false,
+      timeZone: 'Europe/Stockholm'
+    }).format(start).padStart(2, '0');
+    
+    const startMinutes = new Intl.DateTimeFormat('sv-SE', { 
+      minute: '2-digit',
+      timeZone: 'Europe/Stockholm'
+    }).format(start).padStart(2, '0');
+    
+    const endHours = new Intl.DateTimeFormat('sv-SE', { 
+      hour: '2-digit', 
+      hour12: false,
+      timeZone: 'Europe/Stockholm'
+    }).format(end).padStart(2, '0');
+    
+    const endMinutes = new Intl.DateTimeFormat('sv-SE', { 
+      minute: '2-digit',
+      timeZone: 'Europe/Stockholm'
+    }).format(end).padStart(2, '0');
+    
     // Format like: "18.00-21.00"
-    return `${start.getHours().toString().padStart(2, '0')}.${start.getMinutes().toString().padStart(2, '0')}-${end.getHours().toString().padStart(2, '0')}.${end.getMinutes().toString().padStart(2, '0')}`;
+    return `${startHours}.${startMinutes}-${endHours}.${endMinutes}`;
   };
 
   // Function to convert API course to display course

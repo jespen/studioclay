@@ -20,7 +20,8 @@ export function formatDate(dateString: string | Date, locale: string = 'sv-SE'):
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    timeZone: 'Europe/Stockholm'
   });
 }
 

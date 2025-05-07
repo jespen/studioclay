@@ -666,17 +666,26 @@ function getRedirectUrl(productType: string, reference: string): string {
 }
 
 export const POST = async (req: Request) => {
-  // Generera ett unikt request-ID för att spåra denna förfrågan genom systemet
+  const startTime = Date.now();
   const requestId = uuidv4();
   
-  logInfo(`[STEG 0] Received invoice payment request`, { requestId });
+  logInfo(`Invoice payment request started`, { requestId });
   
   try {
-    // Parse request body
+    // Parse the request body
     const rawData = await req.json();
-    logDebug(`[STEG 1.0] Raw request data received`, { requestId });
     
-    // Normalize field names to handle camelCase vs snake_case
+    // Add detailed logging for userInfo and participants at the beginning
+    console.log(`[Invoice API] Beginning of request - userInfo:`, {
+      requestId,
+      userInfo: rawData.userInfo ? {
+        ...rawData.userInfo,
+        numberOfParticipants: rawData.userInfo.numberOfParticipants,
+        numberOfParticipantsType: typeof rawData.userInfo.numberOfParticipants
+      } : 'No userInfo provided'
+    });
+    
+    // Normalize payment request to handle both camelCase and snake_case
     const normalizedData = normalizePaymentRequest(rawData);
     logDebug(`[STEG 1.1] Normalized request data`, { requestId });
 
@@ -761,8 +770,35 @@ export const POST = async (req: Request) => {
           lastName: getFieldWithFallback(userInfoRaw, ['lastName', 'last_name'], ''),
           email: getFieldWithFallback(userInfoRaw, ['email'], ''),
           phoneNumber: getFieldWithFallback(userInfoRaw, ['phoneNumber', 'phone_number', 'phone'], ''),
-          numberOfParticipants: getFieldWithFallback(userInfoRaw, ['numberOfParticipants', 'number_of_participants'], 1)
+          // Leta efter numberOfParticipants på flera ställen:
+          // 1. Först i det normaliserade userInfo-objektet
+          // 2. Sedan i originaldata från requesten
+          // 3. Sedan i den validerade datastrukturen
+          numberOfParticipants: getFieldWithFallback(userInfoRaw, ['numberOfParticipants', 'number_of_participants']) ||
+                               getFieldWithFallback(normalizedData.userInfo || {}, ['numberOfParticipants', 'number_of_participants']) ||
+                               getFieldWithFallback(invoicePaymentData.userInfo || {}, ['numberOfParticipants', 'number_of_participants'])
         };
+        
+        // Use type assertion for Object.keys
+        if (userInfoObj.numberOfParticipants === undefined) {
+          logError('Missing required field: numberOfParticipants', { 
+            requestId,
+            userInfoKeys: userInfoRaw ? Object.keys(userInfoRaw as Record<string, unknown>) : [],
+            normalizedUserInfoKeys: normalizedData.userInfo ? Object.keys(normalizedData.userInfo as Record<string, unknown>) : [],
+            rawRequestKeys: Object.keys(invoicePaymentData)
+          });
+          
+          return NextResponse.json(
+            createPaymentResponse.error(
+              'Missing required field: numberOfParticipants',
+              PaymentErrorCode.VALIDATION_ERROR,
+              'Number of participants is required for course bookings'
+            )
+          );
+        }
+        
+        // Convert to string to ensure consistent handling in later steps
+        userInfoObj.numberOfParticipants = String(userInfoObj.numberOfParticipants);
         
         // Skapa ett objekt med konsistent struktur för faktureringsuppgifter
         const invoiceDetails = {
@@ -1053,6 +1089,15 @@ export const POST = async (req: Request) => {
               bookingReference
             });
             
+            // Add detailed participant logging here
+            console.log(`[Invoice API] Course booking - participant tracking:`, {
+              requestId,
+              rawNumberOfParticipants: userInfoObj.numberOfParticipants,
+              typeOfNumberOfParticipants: typeof userInfoObj.numberOfParticipants,
+              userInfoObjKeys: Object.keys(userInfoObj),
+              userInfoProvided: userInfoObj
+            });
+            
             // First check if the course exists and get its current data
             const { data: courseData, error: courseError } = await supabase
               .from('course_instances')
@@ -1067,8 +1112,39 @@ export const POST = async (req: Request) => {
               });
               // Continue despite error - we still have the payment record
             } else {
-              // Check if the course is full - this shouldn't happen due to validation earlier, but best to check
-              const participantsToAdd = parseInt(userInfoObj.numberOfParticipants?.toString() || '1');
+              // The participant value should already be guaranteed to exist and be valid
+              const participantValue = userInfoObj.numberOfParticipants;
+              
+              // Now parse the string value to a number with extensive logging
+              const parsedParticipants = parseInt(String(participantValue));
+              
+              // Log detailed information about the participant count
+              console.log(`[Invoice API] Participant count details:`, {
+                requestId,
+                stringValue: participantValue,
+                parsedValue: parsedParticipants,
+                isNaN: isNaN(parsedParticipants)
+              });
+              
+              // If the parsing failed or produced an invalid value, throw an error
+              if (isNaN(parsedParticipants) || parsedParticipants < 1) {
+                logError(`Invalid participant count value: "${participantValue}"`, {
+                  requestId,
+                  parsedValue: parsedParticipants
+                });
+                
+                return NextResponse.json(
+                  createPaymentResponse.error(
+                    'Invalid participant count value',
+                    PaymentErrorCode.VALIDATION_ERROR,
+                    `The participant count must be a valid number: ${participantValue}`
+                  )
+                );
+              }
+              
+              // Use the parsed value directly - we've validated it's a valid number
+              const participantsToAdd = parsedParticipants;
+              
               const currentParticipants = courseData.current_participants || 0;
               const maxParticipants = courseData.max_participants || 999;
               
@@ -1082,6 +1158,16 @@ export const POST = async (req: Request) => {
                 });
               } else {
                 // Create booking record
+                // Add detailed logging for booking creation with participant count
+                console.log(`[Invoice API] Creating booking record with participant count:`, {
+                  requestId,
+                  numberOfParticipantsFromUserInfo: userInfoObj.numberOfParticipants,
+                  originalStringValue: participantValue,
+                  parsedValue: participantsToAdd,
+                  effectiveValue: participantsToAdd,
+                  typeOfNumberOfParticipants: typeof userInfoObj.numberOfParticipants
+                });
+
                 const { data: booking, error: bookingError } = await supabase
                   .from('bookings')
                   .insert({
@@ -1123,6 +1209,16 @@ export const POST = async (req: Request) => {
                   // Update course participants count
                   const newParticipantCount = currentParticipants + participantsToAdd;
                   
+                  // Add detailed logging right before updating current_participants
+                  console.log(`[Invoice API] Updating current_participants in database:`, {
+                    requestId,
+                    courseId: productId,
+                    currentParticipants,
+                    participantsToAdd,
+                    newParticipantCount,
+                    participantsSource: 'userInfoObj.numberOfParticipants'
+                  });
+
                   const { error: updateError } = await supabase
                     .from('course_instances')
                     .update({ 

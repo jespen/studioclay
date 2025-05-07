@@ -88,7 +88,8 @@ export const generateProductDetails = (productData: {
   const purchaseDate = new Date().toLocaleDateString('sv-SE', {
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
+    timeZone: 'Europe/Stockholm'
   });
   
   return `

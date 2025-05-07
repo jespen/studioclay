@@ -173,11 +173,21 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   
   // Helper functions for date formatting
   const formatDateForInput = (date: Date): string => {
-    return date.toISOString().split('T')[0];
+    // Use a safer approach with explicit formatting
+    return date.toLocaleDateString('sv-SE', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'Europe/Stockholm'
+    }).split('-').reverse().join('-');
   };
   
   const formatTimeForInput = (date: Date): string => {
-    return date.toLocaleTimeString('sv-SE').substring(0, 5);
+    return date.toLocaleTimeString('sv-SE', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Europe/Stockholm'
+    }).substring(0, 5);
   };
   
   // Image handling functions

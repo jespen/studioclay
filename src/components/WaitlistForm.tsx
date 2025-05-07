@@ -41,9 +41,16 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
     
     // Format: "15 aug 2025, 16:00"
     const day = date.getDate();
-    const month = date.toLocaleString('sv-SE', { month: 'short' });
+    const month = date.toLocaleString('sv-SE', { 
+      month: 'short',
+      timeZone: 'Europe/Stockholm'
+    });
     const year = date.getFullYear();
-    const time = date.toLocaleString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+    const time = date.toLocaleString('sv-SE', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      timeZone: 'Europe/Stockholm'
+    });
     
     return `${day} ${month} ${year}, ${time}`;
   };
@@ -57,10 +64,21 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
     
     // If start and end are on the same day
     if (end && start.toDateString() === end.toDateString()) {
-      const startTime = start.toLocaleString('sv-SE', { hour: '2-digit', minute: '2-digit' });
-      const endTime = end.toLocaleString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+      const startTime = start.toLocaleString('sv-SE', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: 'Europe/Stockholm'
+      });
+      const endTime = end.toLocaleString('sv-SE', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: 'Europe/Stockholm'
+      });
       const day = start.getDate();
-      const month = start.toLocaleString('sv-SE', { month: 'short' });
+      const month = start.toLocaleString('sv-SE', { 
+        month: 'short',
+        timeZone: 'Europe/Stockholm'
+      });
       const year = start.getFullYear();
       
       return `${day} ${month} ${year}, ${startTime} - ${endTime}`;
@@ -75,21 +93,44 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
       if (diffDays > 14) {
         // Weekly course
         const startDay = start.getDate();
-        const startMonth = start.toLocaleString('sv-SE', { month: 'short' });
+        const startMonth = start.toLocaleString('sv-SE', { 
+          month: 'short',
+          timeZone: 'Europe/Stockholm'
+        });
         const endDay = end.getDate();
-        const endMonth = end.toLocaleString('sv-SE', { month: 'short' });
+        const endMonth = end.toLocaleString('sv-SE', { 
+          month: 'short',
+          timeZone: 'Europe/Stockholm'
+        });
         const year = start.getFullYear();
-        const dayOfWeek = start.toLocaleString('sv-SE', { weekday: 'long' });
-        const startTime = start.toLocaleString('sv-SE', { hour: '2-digit', minute: '2-digit' });
-        const endTime = end.toLocaleString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+        const dayOfWeek = start.toLocaleString('sv-SE', { 
+          weekday: 'long',
+          timeZone: 'Europe/Stockholm'
+        });
+        const startTime = start.toLocaleString('sv-SE', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          timeZone: 'Europe/Stockholm'
+        });
+        const endTime = end.toLocaleString('sv-SE', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          timeZone: 'Europe/Stockholm'
+        });
         
         return `${dayOfWeek}ar, ${startDay} ${startMonth} - ${endDay} ${endMonth} ${year}, ${startTime} - ${endTime}`;
       } else {
         // Weekend course or short course
         const startDay = start.getDate();
-        const startMonth = start.toLocaleString('sv-SE', { month: 'short' });
+        const startMonth = start.toLocaleString('sv-SE', { 
+          month: 'short',
+          timeZone: 'Europe/Stockholm'
+        });
         const endDay = end.getDate();
-        const endMonth = end.toLocaleString('sv-SE', { month: 'short' });
+        const endMonth = end.toLocaleString('sv-SE', { 
+          month: 'short',
+          timeZone: 'Europe/Stockholm'
+        });
         const year = start.getFullYear();
         
         return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${year}`;

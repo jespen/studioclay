@@ -72,7 +72,8 @@ export function buildConfirmationEmail(params: {
           month: 'long',
           day: 'numeric',
           hour: '2-digit',
-          minute: '2-digit'
+          minute: '2-digit',
+          timeZone: 'Europe/Stockholm'
         })
       : 'Ej angivet';
     
@@ -111,7 +112,8 @@ export function buildConfirmationEmail(params: {
       purchaseDate = new Date(currentDate).toLocaleDateString('sv-SE', {
         year: 'numeric',
         month: 'long',
-        day: 'numeric'
+        day: 'numeric',
+        timeZone: 'Europe/Stockholm'
       });
     } catch (e) {
       console.error('Error formatting purchase date:', e);

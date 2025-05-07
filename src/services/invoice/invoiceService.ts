@@ -71,6 +71,14 @@ export async function createStandardizedInvoicePayment(
     const idempotencyKey = uuidv4();
     const requestId = uuidv4();
     
+    // Add detailed logging for participant count
+    console.log("[InvoiceService] Tracking number of participants:", {
+      rawNumberOfParticipants: data.userInfo.numberOfParticipants,
+      typeOfValue: typeof data.userInfo.numberOfParticipants,
+      parsedValue: parseInt(data.userInfo.numberOfParticipants?.toString() || '1'),
+      requestId
+    });
+    
     logInfo("Preparing standardized invoice payment request", 
       { requestId, operation: "create_invoice" },
       {

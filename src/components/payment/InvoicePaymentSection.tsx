@@ -201,6 +201,13 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
 
         // Loggning för felsökning
         console.log('[InvoicePaymentSection] Request data:', requestData);
+        // Add more detailed logging for numberOfParticipants specifically
+        console.log('[InvoicePaymentSection] Number of participants tracking:', {
+          rawValue: userInfo.numberOfParticipants,
+          parsedValue: parseInt(userInfo.numberOfParticipants?.toString() || '1'),
+          typeOf: typeof userInfo.numberOfParticipants,
+          inRequestData: requestData.userInfo.numberOfParticipants
+        });
         
         // Använd vår nya standardiserade API-tjänst
         const response: StandardPaymentResponse = await createStandardizedInvoicePayment(requestData);
