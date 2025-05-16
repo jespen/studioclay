@@ -47,7 +47,7 @@
 }
 
 .logoText span:first-child {
-  font-family: 'Eyesore Script', cursive;
+  font-family: 'Eyesore Script', 'Brush Script MT', 'Comic Sans MS', cursive;
   font-weight: normal;
 }
 

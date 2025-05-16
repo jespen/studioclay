@@ -41,7 +41,7 @@
 }
 
 .highlightText span:first-child {
-  font-family: 'Eyesore Script', cursive;
+  font-family: 'Eyesore Script', 'Brush Script MT', 'Comic Sans MS', cursive;
   font-weight: normal;
 }
 
@@ -114,8 +114,6 @@
   transform: translateY(-5px);
 }
 
-
-
 .image {
   width: 100%;
   height: 100%;
@@ -156,7 +154,7 @@
 }
 
 .logoText span:first-child {
-  font-family: 'Eyesore Script', cursive;
+  font-family: 'Eyesore Script', 'Brush Script MT', 'Comic Sans MS', cursive;
   font-weight: normal;
 }
 
