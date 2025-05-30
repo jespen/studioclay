@@ -1,14 +1,13 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { supabaseClient as supabase } from '@/lib/supabase';
+import { getBrowserSupabaseInstance } from '@/utils/supabase';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
-import { SupabaseClient } from '@supabase/supabase-js';
 
-interface AdminHeaderProps {
+export interface AdminHeaderProps {
   title: string;
   subtitle?: string;
-  userEmail?: string;
+  userEmail?: string | null;
   showBackButton?: boolean;
 }
 
@@ -16,6 +15,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
   const router = useRouter();
   const pathname = usePathname();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const supabase = getBrowserSupabaseInstance();
 
   const handleLogout = async () => {
     try {

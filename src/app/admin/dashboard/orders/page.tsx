@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabaseClient as supabase } from '../../../../lib/supabase';
+import { getBrowserSupabaseInstance } from '../../../../utils/supabase';
 import OrderManager from '../../../../components/admin/Shop/OrderManager';
 
 export default function OrdersAdminPage() {
@@ -11,6 +11,7 @@ export default function OrdersAdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const router = useRouter();
+  const supabase = getBrowserSupabaseInstance();
 
   useEffect(() => {
     async function checkAuthentication() {

@@ -27,16 +27,23 @@ export default function CourseManagementPage({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshData, setRefreshData] = useState(1);
-  const [openAddUserModal, setOpenAddUserModal] = useState(false);
+  
+  // Add User Dialog state (adapted from BookingsList edit dialog)
+  const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [addUserFormData, setAddUserFormData] = useState({
-    name: '',
-    address: '',
-    postalCode: '',
-    city: '',
-    email: '',
-    phone: '',
-    numberOfParticipants: '1',
-    paymentMethod: 'invoice' // Default to invoice
+    customer_name: '',
+    customer_email: '',
+    customer_phone: '',
+    number_of_participants: 1,
+    payment_method: 'invoice',
+    payment_status: 'PAID', // Admin-added users are typically already paid
+    status: 'confirmed', // Admin-added users should be confirmed
+    message: '',
+    // Billing information for invoice payments
+    invoice_address: '',
+    invoice_postal_code: '',
+    invoice_city: '',
+    invoice_reference: ''
   });
   const [addUserLoading, setAddUserLoading] = useState(false);
   
@@ -138,98 +145,190 @@ export default function CourseManagementPage({
     setRefreshData(prev => prev + 1);
   };
 
+  // Add User Dialog functions (adapted from BookingsList)
   const handleOpenAddUserModal = () => {
-    setOpenAddUserModal(true);
+    setAddUserDialogOpen(true);
   };
 
   const handleCloseAddUserModal = () => {
-    setOpenAddUserModal(false);
+    setAddUserDialogOpen(false);
     // Reset form data
     setAddUserFormData({
-      name: '',
-      address: '',
-      postalCode: '',
-      city: '',
-      email: '',
-      phone: '',
-      numberOfParticipants: '1',
-      paymentMethod: 'invoice'
+      customer_name: '',
+      customer_email: '',
+      customer_phone: '',
+      number_of_participants: 1,
+      payment_method: 'invoice',
+      payment_status: 'PAID', // Admin-added users are typically already paid
+      status: 'confirmed', // Admin-added users should be confirmed
+      message: '',
+      invoice_address: '',
+      invoice_postal_code: '',
+      invoice_city: '',
+      invoice_reference: ''
     });
   };
 
-  const handleAddUserFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+  // Handle form changes (adapted from BookingsList)
+  const handleAddUserFormChange = (field: string, value: any) => {
     setAddUserFormData(prev => ({
       ...prev,
-      [name]: value
+      [field]: value
     }));
   };
 
-  const handleSelectChange = (e: SelectChangeEvent) => {
-    const { name, value } = e.target;
-    setAddUserFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
+  // Handle adding new user (adapted from BookingsList edit save but for POST)
   const handleAddUser = async () => {
     try {
       setAddUserLoading(true);
       
-      // Use the invoice/create endpoint which handles both booking creation and invoice generation
-      const invoiceData = {
-        courseId: courseId,
-        userInfo: {
-          firstName: addUserFormData.name.split(' ')[0],
-          lastName: addUserFormData.name.split(' ').slice(1).join(' '),
-          email: addUserFormData.email,
-          phone: addUserFormData.phone,
-          address: addUserFormData.address,
-          postalCode: addUserFormData.postalCode,
-          city: addUserFormData.city,
-          numberOfParticipants: addUserFormData.numberOfParticipants,
-          specialRequirements: '' // Optional field
-        },
-        paymentDetails: {
-          method: addUserFormData.paymentMethod,
-          invoiceDetails: {
-            address: addUserFormData.address,
-            postalCode: addUserFormData.postalCode,
-            city: addUserFormData.city,
-          }
+      console.log('=== FRONTEND: Creating booking data ===');
+      console.log('Form data:', addUserFormData);
+      console.log('Course data:', { id: courseId, price: course.price });
+      
+      // Validate required fields before sending
+      if (!addUserFormData.customer_name.trim()) {
+        throw new Error('Kundens namn är obligatoriskt');
+      }
+      if (!addUserFormData.customer_email.trim()) {
+        throw new Error('E-post är obligatoriskt');
+      }
+      if (!course.price || course.price <= 0) {
+        throw new Error('Kurspris är inte satt eller ogiltigt');
+      }
+      if (addUserFormData.payment_method === 'invoice') {
+        if (!addUserFormData.invoice_address.trim()) {
+          throw new Error('Faktureringsadress är obligatorisk för fakturabetalning');
         }
+        if (!addUserFormData.invoice_postal_code.trim()) {
+          throw new Error('Postnummer är obligatoriskt för fakturabetalning');
+        }
+        if (!addUserFormData.invoice_city.trim()) {
+          throw new Error('Ort är obligatorisk för fakturabetalning');
+        }
+      }
+      
+      const generateBookingReference = () => {
+        const timestamp = Date.now().toString(36).toUpperCase();
+        const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+        return `BK-${timestamp}-${random}`;
+      };
+      
+      const generatePaymentReference = () => {
+        const timestamp = Date.now().toString(36).toUpperCase();
+        const random = Math.random().toString(36).substring(2, 7).toUpperCase();
+        return `PAY-${timestamp}-${random}`;
+      };
+      
+      const generateInvoiceNumber = () => {
+        const date = new Date();
+        const year = date.getFullYear().toString().slice(-2);
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+        return `INV-${year}${month}-${random}`;
+      };
+      
+      const bookingReference = generateBookingReference();
+      const paymentReference = addUserFormData.payment_method === 'invoice' ? generatePaymentReference() : null;
+      const invoiceNumber = addUserFormData.payment_method === 'invoice' ? generateInvoiceNumber() : null;
+      
+      console.log('Generated references:', {
+        bookingReference,
+        paymentReference,
+        invoiceNumber,
+        paymentMethod: addUserFormData.payment_method
+      });
+      
+      // Base booking data that's always included
+      const baseBookingData = {
+        course_id: courseId,
+        customer_name: addUserFormData.customer_name,
+        customer_email: addUserFormData.customer_email,
+        customer_phone: addUserFormData.customer_phone,
+        number_of_participants: addUserFormData.number_of_participants,
+        booking_date: new Date().toISOString(),
+        status: addUserFormData.status,
+        payment_status: addUserFormData.payment_status,
+        payment_method: addUserFormData.payment_method,
+        unit_price: course.price,
+        total_price: course.price * addUserFormData.number_of_participants,
+        currency: 'SEK',
+        message: addUserFormData.message,
+        booking_reference: bookingReference,
+        payment_reference: paymentReference
+      };
+      
+      console.log('Base booking data:', baseBookingData);
+      
+      // Add invoice details if payment method is invoice
+      let invoiceData: any = {};
+      if (addUserFormData.payment_method === 'invoice') {
+        invoiceData = {
+          invoice_number: invoiceNumber,
+          invoice_address: addUserFormData.invoice_address,
+          invoice_postal_code: addUserFormData.invoice_postal_code,
+          invoice_city: addUserFormData.invoice_city,
+          invoice_reference: addUserFormData.invoice_reference
+        };
+        console.log('Invoice specific data:', invoiceData);
+      }
+      
+      // Combine all data
+      const bookingData = {
+        ...baseBookingData,
+        ...invoiceData
       };
 
-      console.log('Sending invoice data:', invoiceData);
+      console.log('=== FINAL BOOKING DATA BEING SENT ===');
+      console.log('Complete booking data:', JSON.stringify(bookingData, null, 2));
       
-      const invoiceResponse = await fetch('/api/invoice/create', {
+      // Check each field value explicitly
+      console.log('=== FIELD VERIFICATION ===');
+      Object.keys(bookingData).forEach(key => {
+        const value = (bookingData as any)[key];
+        console.log(`${key}: ${value} (${typeof value})`);
+      });
+      
+      // Use the same API as BookingsList edit function but with POST for new booking
+      const response = await fetch('/api/bookings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(invoiceData),
+        body: JSON.stringify(bookingData),
       });
 
-      if (!invoiceResponse.ok) {
-        const errorData = await invoiceResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to create invoice and booking');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to create booking');
       }
 
-      const result = await invoiceResponse.json();
-      console.log("Invoice and booking created successfully:", result);
+      const result = await response.json();
+      console.log("Booking created successfully:", result);
 
-      // Close modal and refresh data
+      // Close dialog and refresh data
       handleCloseAddUserModal();
       handleDataUpdate();
-      alert('Användare har lagts till och faktura har skickats');
+      
+      // Show success message with booking details
+      const successMessage = addUserFormData.payment_method === 'invoice' 
+        ? `Deltagare har lagts till framgångsrikt! Fakturanummer: ${bookingData.invoice_number}`
+        : 'Deltagare har lagts till framgångsrikt!';
+      alert(successMessage);
+      
     } catch (err) {
       console.error('Error adding user:', err);
-      alert('Kunde inte lägga till användare: ' + (err instanceof Error ? err.message : String(err)));
+      alert('Kunde inte lägga till deltagare: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setAddUserLoading(false);
     }
   };
+
+  // Calculate available spots
+  const currentParticipants = bookings
+    .filter(b => b.status === 'confirmed')
+    .reduce((sum, b) => sum + b.number_of_participants, 0);
+  const availableSpots = (course?.max_participants || 0) - currentParticipants;
 
   if (error) {
     return (
@@ -301,6 +400,7 @@ export default function CourseManagementPage({
                 color="primary"
                 startIcon={<AddIcon />}
                 onClick={handleOpenAddUserModal}
+                disabled={availableSpots <= 0}
                 sx={{ 
                   backgroundColor: primaryColor,
                   '&:hover': {
@@ -308,7 +408,7 @@ export default function CourseManagementPage({
                   }
                 }}
               >
-                Lägg till deltagare
+                {availableSpots <= 0 ? 'Kursen är fullbokad' : 'Lägg till deltagare'}
               </Button>
             </Box>
             
@@ -319,9 +419,7 @@ export default function CourseManagementPage({
               error={error}
               status="confirmed"
               onBookingUpdate={handleDataUpdate}
-              participantInfo={`${bookings
-                .filter(b => b.status === 'confirmed')
-                .reduce((sum, b) => sum + b.number_of_participants, 0)} av ${course?.max_participants || 0}`}
+              participantInfo={`${currentParticipants} av ${course?.max_participants || 0}`}
             />
             
             <BookingsTable
@@ -348,48 +446,22 @@ export default function CourseManagementPage({
                 .reduce((sum, b) => sum + b.number_of_participants, 0)}`}
             />
             
-            {/* Add User Modal */}
-            <Dialog open={openAddUserModal} onClose={handleCloseAddUserModal} fullWidth maxWidth="md">
-              <DialogTitle>Lägg till användare på kursen</DialogTitle>
+            {/* Add User Dialog - Adapted from BookingsList edit dialog */}
+            <Dialog
+              open={addUserDialogOpen}
+              onClose={handleCloseAddUserModal}
+              fullWidth
+              maxWidth="md"
+            >
+              <DialogTitle>Lägg till ny deltagare</DialogTitle>
               <DialogContent>
                 <Grid container spacing={2} sx={{ mt: 1 }}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Namn"
-                      name="name"
-                      value={addUserFormData.name}
-                      onChange={handleAddUserFormChange}
-                      required
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Adress"
-                      name="address"
-                      value={addUserFormData.address}
-                      onChange={handleAddUserFormChange}
-                      required
-                    />
-                  </Grid>
                   <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
-                      label="Postnummer"
-                      name="postalCode"
-                      value={addUserFormData.postalCode}
-                      onChange={handleAddUserFormChange}
-                      required
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Ort"
-                      name="city"
-                      value={addUserFormData.city}
-                      onChange={handleAddUserFormChange}
+                      label="Kundens namn"
+                      value={addUserFormData.customer_name}
+                      onChange={(e) => handleAddUserFormChange('customer_name', e.target.value)}
                       required
                     />
                   </Grid>
@@ -397,10 +469,8 @@ export default function CourseManagementPage({
                     <TextField
                       fullWidth
                       label="E-post"
-                      name="email"
-                      type="email"
-                      value={addUserFormData.email}
-                      onChange={handleAddUserFormChange}
+                      value={addUserFormData.customer_email}
+                      onChange={(e) => handleAddUserFormChange('customer_email', e.target.value)}
                       required
                     />
                   </Grid>
@@ -408,73 +478,106 @@ export default function CourseManagementPage({
                     <TextField
                       fullWidth
                       label="Telefon"
-                      name="phone"
-                      value={addUserFormData.phone}
-                      onChange={handleAddUserFormChange}
+                      value={addUserFormData.customer_phone}
+                      onChange={(e) => handleAddUserFormChange('customer_phone', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Antal deltagare"
+                      value={addUserFormData.number_of_participants}
+                      onChange={(e) => handleAddUserFormChange('number_of_participants', parseInt(e.target.value, 10))}
+                      InputProps={{ inputProps: { min: 1, max: availableSpots } }}
                       required
                     />
                   </Grid>
-                  <Grid item xs={12}>
-                    <FormControl fullWidth required>
-                      <InputLabel id="payment-method-label">Betalningsmetod</InputLabel>
+                  <Grid item xs={12} md={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Betalningsmetod</InputLabel>
                       <Select
-                        labelId="payment-method-label"
-                        name="paymentMethod"
-                        value={addUserFormData.paymentMethod}
+                        value={addUserFormData.payment_method}
                         label="Betalningsmetod"
-                        onChange={handleSelectChange}
+                        onChange={(e) => handleAddUserFormChange('payment_method', e.target.value)}
                       >
                         <MenuItem value="invoice">Faktura</MenuItem>
                         <MenuItem value="swish">Swish</MenuItem>
-                        <MenuItem value="giftCard">Presentkort</MenuItem>
+                        <MenuItem value="admin">Admin-skapad</MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
-                  <Grid item xs={12}>
-                    <FormControl fullWidth required>
-                      <InputLabel id="participants-label">Antal deltagare</InputLabel>
-                      {(() => {
-                        // Calculate available spots
-                        const currentParticipants = bookings
-                          .filter(b => b.status === 'confirmed')
-                          .reduce((sum, b) => sum + b.number_of_participants, 0);
-                        const availableSpots = (course?.max_participants || 0) - currentParticipants;
-                        const maxOptions = Math.min(10, Math.max(1, availableSpots));
-                        
-                        return (
-                          <Select
-                            labelId="participants-label"
-                            name="numberOfParticipants"
-                            value={addUserFormData.numberOfParticipants}
-                            label="Antal deltagare"
-                            onChange={handleSelectChange}
-                          >
-                            {availableSpots <= 0 ? (
-                              <MenuItem value="0" disabled>Inga platser kvar</MenuItem>
-                            ) : (
-                              [...Array(maxOptions)].map((_, i) => (
-                                <MenuItem key={i+1} value={(i+1).toString()}>{i+1}</MenuItem>
-                              ))
-                            )}
-                          </Select>
-                        );
-                      })()}
+                  <Grid item xs={12} md={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Betalningsstatus</InputLabel>
+                      <Select
+                        value={addUserFormData.payment_status}
+                        label="Betalningsstatus"
+                        onChange={(e) => handleAddUserFormChange('payment_status', e.target.value)}
+                      >
+                        <MenuItem value="PAID">Betald</MenuItem>
+                        <MenuItem value="CREATED">Ej betald</MenuItem>
+                      </Select>
                     </FormControl>
-                    {(() => {
-                      const currentParticipants = bookings
-                        .filter(b => b.status === 'confirmed')
-                        .reduce((sum, b) => sum + b.number_of_participants, 0);
-                      const availableSpots = (course?.max_participants || 0) - currentParticipants;
-                      
-                      return (
-                        <Typography variant="caption" color={availableSpots <= 0 ? "error" : "text.secondary"} sx={{ display: 'block', mt: 1 }}>
-                          {availableSpots <= 0 
-                            ? "Kursen är fullbokad. Inga platser kvar."
-                            : `${currentParticipants} deltagare av ${course?.max_participants} registrerade (${availableSpots} platser kvar)`
-                          }
+                  </Grid>
+                  
+                  {/* Billing Information - Show only for invoice payments */}
+                  {addUserFormData.payment_method === 'invoice' && (
+                    <>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, color: primaryColor }}>
+                          Faktureringsuppgifter
                         </Typography>
-                      );
-                    })()}
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          label="Faktureringsadress"
+                          value={addUserFormData.invoice_address}
+                          onChange={(e) => handleAddUserFormChange('invoice_address', e.target.value)}
+                          required={addUserFormData.payment_method === 'invoice'}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Postnummer"
+                          value={addUserFormData.invoice_postal_code}
+                          onChange={(e) => handleAddUserFormChange('invoice_postal_code', e.target.value)}
+                          required={addUserFormData.payment_method === 'invoice'}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Ort"
+                          value={addUserFormData.invoice_city}
+                          onChange={(e) => handleAddUserFormChange('invoice_city', e.target.value)}
+                          required={addUserFormData.payment_method === 'invoice'}
+                        />
+                      </Grid>
+                    </>
+                  )}
+                  
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Meddelande (valfritt)"
+                      value={addUserFormData.message}
+                      onChange={(e) => handleAddUserFormChange('message', e.target.value)}
+                      multiline
+                      rows={3}
+                    />
+                  </Grid>
+                  
+                  {/* Information about available spots */}
+                  <Grid item xs={12}>
+                    <Typography variant="caption" color={availableSpots <= 0 ? "error" : "text.secondary"} sx={{ display: 'block', mt: 1 }}>
+                      {availableSpots <= 0 
+                        ? "Kursen är fullbokad. Inga platser kvar."
+                        : `${currentParticipants} deltagare av ${course?.max_participants} registrerade (${availableSpots} platser kvar)`
+                      }
+                    </Typography>
                   </Grid>
                 </Grid>
               </DialogContent>
@@ -483,22 +586,10 @@ export default function CourseManagementPage({
                 <Button 
                   onClick={handleAddUser} 
                   variant="contained" 
-                  color="primary"
-                  disabled={addUserLoading || (() => {
-                    const currentParticipants = bookings
-                      .filter(b => b.status === 'confirmed')
-                      .reduce((sum, b) => sum + b.number_of_participants, 0);
-                    const availableSpots = (course?.max_participants || 0) - currentParticipants;
-                    return availableSpots <= 0;
-                  })()}
-                  sx={{ 
-                    backgroundColor: primaryColor,
-                    '&:hover': {
-                      backgroundColor: 'rgba(84, 114, 100, 0.9)'
-                    }
-                  }}
+                  disabled={addUserLoading || availableSpots <= 0}
+                  sx={{ backgroundColor: primaryColor, '&:hover': { backgroundColor: 'rgba(84, 114, 100, 0.9)' } }}
                 >
-                  {addUserLoading ? 'Bearbetar...' : 'Lägg till och skicka faktura'}
+                  {addUserLoading ? 'Lägger till...' : 'Lägg till deltagare'}
                 </Button>
               </DialogActions>
             </Dialog>

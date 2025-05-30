@@ -59,6 +59,10 @@ export async function PATCH(
     
     const body = await request.json();
     
+    console.log('=== PATCH BOOKING START ===');
+    console.log('Booking ID:', id);
+    console.log('Update data:', body);
+    
     // Validate invoice fields
     if (body.invoice_address || body.invoice_postal_code || body.invoice_city) {
       // If any invoice field is provided, make sure required fields are present
@@ -69,6 +73,25 @@ export async function PATCH(
         );
       }
     }
+    
+    // *** FIX: Get the old booking data BEFORE updating ***
+    const { data: oldBooking } = await supabaseAdmin
+      .from('bookings')
+      .select('number_of_participants, status, course_id')
+      .eq('id', id)
+      .single();
+    
+    if (!oldBooking) {
+      return NextResponse.json(
+        { error: 'Booking not found' },
+        { status: 404 }
+      );
+    }
+    
+    console.log('=== OLD BOOKING DATA ===');
+    console.log('Old participants:', oldBooking.number_of_participants);
+    console.log('Old status:', oldBooking.status);
+    console.log('Course ID:', oldBooking.course_id);
     
     // Prepare the update data
     const updateData = {
@@ -87,75 +110,85 @@ export async function PATCH(
       throw error;
     }
     
-    // Update course participants count if needed
-    if (body.number_of_participants && body.course_id) {
-      // Get the old booking to calculate difference
-      const { data: oldBooking } = await supabaseAdmin
-        .from('bookings')
-        .select('number_of_participants, status')
-        .eq('id', id)
-        .single();
+    console.log('=== BOOKING UPDATED SUCCESSFULLY ===');
+    
+    // *** FIX: Update course participants count - use course_id from old booking ***
+    const courseId = body.course_id || oldBooking.course_id;
+    
+    if (courseId) {
+      console.log('=== UPDATING COURSE PARTICIPANTS ===');
       
-      if (oldBooking) {
-        // Only adjust participant count if the booking was previously confirmed/pending and still is
-        const wasActive = oldBooking.status === 'confirmed' || oldBooking.status === 'pending';
-        const isStillActive = body.status === 'confirmed' || body.status === 'pending';
+      // Determine the old and new participant counts and statuses
+      const oldParticipants = oldBooking.number_of_participants || 0;
+      const newParticipants = body.number_of_participants !== undefined ? body.number_of_participants : oldParticipants;
+      const oldStatus = oldBooking.status;
+      const newStatus = body.status !== undefined ? body.status : oldStatus;
+      
+      console.log('Participants change:', oldParticipants, '->', newParticipants);
+      console.log('Status change:', oldStatus, '->', newStatus);
+      
+      // Only adjust participant count for confirmed and pending bookings
+      const wasActive = oldStatus === 'confirmed' || oldStatus === 'pending';
+      const isStillActive = newStatus === 'confirmed' || newStatus === 'pending';
+      
+      console.log('Was active:', wasActive, 'Is still active:', isStillActive);
+      
+      // Get current course participants
+      const { data: course } = await supabaseAdmin
+        .from('course_instances')
+        .select('current_participants')
+        .eq('id', courseId)
+        .single();
+        
+      if (course) {
+        let newCurrentParticipants = course.current_participants;
+        
+        console.log('Current course participants:', course.current_participants);
         
         if (wasActive && isStillActive) {
-          const participantDifference = body.number_of_participants - oldBooking.number_of_participants;
+          // Both old and new status are active - calculate participant difference
+          const participantDifference = newParticipants - oldParticipants;
+          console.log('Participant difference:', participantDifference);
           
           if (participantDifference !== 0) {
-            // Get current course participants
-            const { data: course } = await supabaseAdmin
-              .from('course_instances')
-              .select('current_participants')
-              .eq('id', body.course_id)
-              .single();
-              
-            if (course) {
-              // Update course participants
-              await supabaseAdmin
-                .from('course_instances')
-                .update({
-                  current_participants: Math.max(0, course.current_participants + participantDifference)
-                })
-                .eq('id', body.course_id);
-            }
+            newCurrentParticipants = Math.max(0, course.current_participants + participantDifference);
+            console.log('Adjusting by difference:', participantDifference, 'New total:', newCurrentParticipants);
           }
         } else if (wasActive && !isStillActive) {
-          // Booking was active but is now cancelled/completed, remove participants
-          const { data: course } = await supabaseAdmin
-            .from('course_instances')
-            .select('current_participants')
-            .eq('id', body.course_id)
-            .single();
-            
-          if (course) {
-            await supabaseAdmin
-              .from('course_instances')
-              .update({
-                current_participants: Math.max(0, course.current_participants - oldBooking.number_of_participants)
-              })
-              .eq('id', body.course_id);
-          }
+          // Booking was active but is now cancelled/completed - remove old participants
+          newCurrentParticipants = Math.max(0, course.current_participants - oldParticipants);
+          console.log('Removing participants (cancelled):', oldParticipants, 'New total:', newCurrentParticipants);
         } else if (!wasActive && isStillActive) {
-          // Booking was not active but is now confirmed/pending, add participants
-          const { data: course } = await supabaseAdmin
-            .from('course_instances')
-            .select('current_participants')
-            .eq('id', body.course_id)
-            .single();
-            
-          if (course) {
-            await supabaseAdmin
-              .from('course_instances')
-              .update({
-                current_participants: Math.max(0, course.current_participants + body.number_of_participants)
-              })
-              .eq('id', body.course_id);
-          }
+          // Booking was not active but is now confirmed/pending - add new participants
+          newCurrentParticipants = Math.max(0, course.current_participants + newParticipants);
+          console.log('Adding participants (reactivated):', newParticipants, 'New total:', newCurrentParticipants);
         }
+        
+        // Update course participants if there's a change
+        if (newCurrentParticipants !== course.current_participants) {
+          console.log('=== UPDATING COURSE_INSTANCES ===');
+          console.log('Before:', course.current_participants, 'After:', newCurrentParticipants);
+          
+          const { error: updateError } = await supabaseAdmin
+            .from('course_instances')
+            .update({
+              current_participants: newCurrentParticipants
+            })
+            .eq('id', courseId);
+            
+          if (updateError) {
+            console.error('Error updating course participants:', updateError);
+          } else {
+            console.log('Successfully updated course participants');
+          }
+        } else {
+          console.log('No change in course participants needed');
+        }
+      } else {
+        console.error('Course not found:', courseId);
       }
+    } else {
+      console.log('No course ID available for participant update');
     }
     
     return NextResponse.json({

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabaseClient as supabase } from '@/lib/supabase';
+import { getBrowserSupabaseInstance } from '@/utils/supabase';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 
 // Typdefinitioner för beställningar
@@ -63,7 +63,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onUpdate }) => {
     setError(null);
     
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getBrowserSupabaseInstance()
         .from('art_orders')
         .update({
           customer_name: currentOrder.customer_name,
