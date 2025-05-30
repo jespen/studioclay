@@ -179,9 +179,9 @@ export const generatePaymentDetails = (paymentData: {
 /**
  * Generate reference number section
  */
-export const generateReferenceSection = (reference: string): string => {
-  return `<p>Din referens: <strong>${reference}</strong></p>`;
-};
+// export const generateReferenceSection = (reference: string): string => {
+//   return `<p>Din referens: <strong>${reference}</strong></p>`;
+// };
 
 /**
  * Generate footer with contact information
