@@ -59,7 +59,7 @@ export async function generateAndStoreInvoicePdf(options: InvoicePdfOptions): Pr
   try {
     // 1. Förbered data för PDF-generering
     const dueDate = options.dueDate || 
-      new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toLocaleDateString('sv-SE');
+      new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toLocaleDateString('sv-SE');
     
     logDebug(`Preparing PDF data with parameters`, {
       requestId,

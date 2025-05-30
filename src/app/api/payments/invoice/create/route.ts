@@ -865,6 +865,7 @@ export const POST = async (req: Request) => {
             product_type: getValidProductType(requestData.product_type),
             product_id: requestData.product_id,
             user_info: convertObjectToSnakeCase(userInfoObj),
+            phone_number: userInfoObj.phoneNumber,
             currency: 'SEK',
             status: PAYMENT_STATUSES.CREATED,
             metadata: convertObjectToSnakeCase({
