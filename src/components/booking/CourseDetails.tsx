@@ -58,25 +58,6 @@ interface Category {
   updated_at?: string;
 }
 
-// const DEFAULT_FEATURES = [
-//   'Material ingår',
-//   'Individuell handledning',
-//   'Grundläggande tekniker',
-//   'Tillgång till verktyg',
-//   'Ta hem dina verk',
-//   'Glasering och bränning',
-// ];
-
-// Default values for missing data
-// const DEFAULT_VALUES = {
-//   price: 1995,
-//   description: 'En introduktionskurs i keramik där du får lära dig grundläggande tekniker i drejning och handbyggnad. Perfekt för nybörjare som vill prova på keramik.',
-//   rich_description: '',
-//   location: 'Studio Clay, Göteborg',
-//   current_participants: 0,
-//   max_participants: 10
-// };
-
 // Function to render rich text content safely
 const RichTextContent = ({ content }: { content: string }) => {
   return (

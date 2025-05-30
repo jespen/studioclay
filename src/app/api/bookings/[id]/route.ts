@@ -127,9 +127,10 @@ export async function PATCH(
       console.log('Participants change:', oldParticipants, '->', newParticipants);
       console.log('Status change:', oldStatus, '->', newStatus);
       
-      // Only adjust participant count for confirmed and pending bookings
-      const wasActive = oldStatus === 'confirmed' || oldStatus === 'pending';
-      const isStillActive = newStatus === 'confirmed' || newStatus === 'pending';
+      // Only confirmed bookings should count towards current_participants
+      // 'pending' bookings are waitlist and should NOT count
+      const wasActive = oldStatus === 'confirmed';
+      const isStillActive = newStatus === 'confirmed';
       
       console.log('Was active:', wasActive, 'Is still active:', isStillActive);
       
@@ -238,8 +239,9 @@ export async function DELETE(
       );
     }
     
-    // Check if we need to update course participants (only if booking was confirmed or pending)
-    const wasActive = booking.status === 'confirmed' || booking.status === 'pending';
+    // Check if we need to update course participants (only if booking was confirmed)
+    // Pending bookings (waitlist) should NOT count towards current_participants
+    const wasActive = booking.status === 'confirmed';
     
     // For Swish payments, the payment record will be automatically deleted due to CASCADE
     // For invoice payments, we only need to delete the booking

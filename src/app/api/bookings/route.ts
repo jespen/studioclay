@@ -317,8 +317,9 @@ export async function POST(request: NextRequest) {
       
       console.log('Booking created successfully with fallback method:', data?.[0]);
       
-      // Update course participant count
-      if (body.status === 'confirmed' || body.status === 'pending' || !body.status) {
+      // Update course participant count - only for confirmed bookings
+      // Pending bookings (waitlist) should NOT count towards current_participants
+      if (body.status === 'confirmed') {
         const { error: updateError } = await supabaseAdmin
           .from('course_instances')
           .update({ 
@@ -330,7 +331,19 @@ export async function POST(request: NextRequest) {
           console.error('Error updating course participants:', updateError);
           // We don't want to fail the booking if only the participant count update fails
           // Just log the error and continue
+        } else {
+          console.log('Updated course participants for confirmed booking:', {
+            courseId: body.course_id,
+            oldCount: course.current_participants,
+            addedParticipants: body.number_of_participants,
+            newCount: course.current_participants + body.number_of_participants
+          });
         }
+      } else {
+        console.log('Booking status is not confirmed, not updating current_participants:', {
+          status: body.status,
+          courseId: body.course_id
+        });
       }
       
       return NextResponse.json({
