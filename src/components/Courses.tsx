@@ -252,7 +252,36 @@ const Courses = () => {
               (course.description && course.description.toLowerCase().includes('prova på')));
     });
     
-    return { tryOn, longer };
+    // Sort both arrays by start date (earliest first)
+    const sortByStartDate = (a: DisplayCourse, b: DisplayCourse) => {
+      // Handle null/undefined start dates - put them at the end
+      if (!a.startDate && !b.startDate) return 0;
+      if (!a.startDate) return 1;
+      if (!b.startDate) return -1;
+      
+      const dateA = new Date(a.startDate);
+      const dateB = new Date(b.startDate);
+      
+      return dateA.getTime() - dateB.getTime();
+    };
+    
+    const sortedTryOn = tryOn.sort(sortByStartDate);
+    const sortedLonger = longer.sort(sortByStartDate);
+    
+    // Log the sorting results for debugging
+    console.log('Kurser sorterade efter startdatum:');
+    console.log('Prova på kurser:', sortedTryOn.map(course => ({
+      name: course.name,
+      startDate: course.startDate,
+      formattedDate: course.startDateFormatted
+    })));
+    console.log('Längre kurser:', sortedLonger.map(course => ({
+      name: course.name, 
+      startDate: course.startDate,
+      formattedDate: course.startDateFormatted
+    })));
+    
+    return { tryOn: sortedTryOn, longer: sortedLonger };
   }, []);
 
   // Fetch and process courses
