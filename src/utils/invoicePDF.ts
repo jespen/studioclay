@@ -173,7 +173,7 @@ export async function generateInvoicePDF(
       `${invoiceData.customerInfo.firstName} ${invoiceData.customerInfo.lastName}`,
       invoiceData.invoiceDetails.address,
       `${invoiceData.invoiceDetails.postalCode} ${invoiceData.invoiceDetails.city}`,
-      `Tel: ${invoiceData.customerInfo.phone}`,
+      `Tel: ${invoiceData.customerInfo.phone || 'Ej angivet'}`,
       `Email: ${invoiceData.customerInfo.email}`
     ], margin, customerY + 7);
     

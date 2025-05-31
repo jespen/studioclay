@@ -130,6 +130,7 @@ export const generatePaymentDetails = (paymentData: {
   dueDate?: string;
   amount: number;
   customerName?: string;
+  customerReference?: string;
 }): string => {
   let methodText = '';
   let detailText = '';
@@ -153,8 +154,17 @@ export const generatePaymentDetails = (paymentData: {
         ? `<p><strong>Förfallodatum:</strong> ${paymentData.dueDate}</p>`
         : '';
         
+      const referenceInfo = paymentData.customerReference 
+        ? `<p><strong>Er referens:</strong> ${paymentData.customerReference}</p>`
+        : '';
+        
+      const paymentReferenceInfo = paymentData.customerName 
+        ? `<p>Ange ditt namn (${paymentData.customerName}) som referens vid betalning.</p>`
+        : '<p>Ange ditt namn som referens vid betalning.</p>';
+        
       detailText = `
         ${invoiceInfo}
+        ${referenceInfo}
         ${dueDateInfo}
         <p><strong>Att betala:</strong> ${paymentData.amount.toFixed(2)} kr</p>
         <p>Vänligen betala fakturan inom 10 dagar till vårt bankgiro: 5938-4560.</p>
@@ -176,12 +186,11 @@ export const generatePaymentDetails = (paymentData: {
   `;
 };
 
-/**
- * Generate reference number section
- */
-// export const generateReferenceSection = (reference: string): string => {
-//   return `<p>Din referens: <strong>${reference}</strong></p>`;
-// };
+//  Generate reference for invoice
+
+export const generateReferenceSection = (referenceInfo: string): string => {
+   return `<p>Din referens: <strong>${referenceInfo}</strong></p>`;
+};
 
 /**
  * Generate footer with contact information

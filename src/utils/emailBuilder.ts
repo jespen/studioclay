@@ -46,6 +46,7 @@ export function buildConfirmationEmail(params: {
     expires_at?: string;
   };
   reference: string;
+  customerReference?: string;
 }): string {
   // Create content parts
   const parts: string[] = [];
@@ -147,7 +148,8 @@ export function buildConfirmationEmail(params: {
       invoiceNumber: params.paymentDetails.invoiceNumber,
       dueDate: dueDate,
       amount: params.paymentDetails.amount || params.itemDetails.price,
-      customerName: `${params.userInfo.firstName} ${params.userInfo.lastName}`
+      customerName: `${params.userInfo.firstName} ${params.userInfo.lastName}`,
+      customerReference: params.customerReference
     });
     
     // If it's an invoice, call it "Fakturainformation", otherwise "Betalningsinformation"
@@ -158,8 +160,10 @@ export function buildConfirmationEmail(params: {
     parts.push(generateSection(paymentTitle, paymentDetails));
   }
   
-  // Add reference section
-  parts.push(generateReferenceSection(params.reference));
+  // Add customer reference section if provided
+  if (params.customerReference && params.customerReference.trim()) {
+    parts.push(generateReferenceSection(params.customerReference));
+  }
   
   // Add footer
   parts.push(generateFooter());

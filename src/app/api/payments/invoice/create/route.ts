@@ -255,8 +255,8 @@ async function generateInvoiceAndSendEmail(
             senderName: `${userInfo.firstName} ${userInfo.lastName}`,
             senderEmail: userInfo.email,
             senderPhone: userInfo.phoneNumber || '',
-            createdAt: giftCard.created_at,
-            expiresAt: giftCard.expires_at || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+            createdAt: typeof giftCard.created_at === 'string' ? new Date(giftCard.created_at) : giftCard.created_at || new Date(),
+            expiresAt: typeof giftCard.expires_at === 'string' ? new Date(giftCard.expires_at) : giftCard.expires_at || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
           };
         } else {
           // Om vi behöver skapa ett nytt presentkort
@@ -330,8 +330,8 @@ async function generateInvoiceAndSendEmail(
               senderName: newGiftCard.sender_name,
               senderEmail: newGiftCard.sender_email,
               senderPhone: newGiftCard.sender_phone,
-              createdAt: newGiftCard.created_at,
-              expiresAt: newGiftCard.expires_at
+              createdAt: typeof newGiftCard.created_at === 'string' ? new Date(newGiftCard.created_at) : newGiftCard.created_at || new Date(),
+              expiresAt: typeof newGiftCard.expires_at === 'string' ? new Date(newGiftCard.expires_at) : newGiftCard.expires_at || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
             };
           }
         }
@@ -388,8 +388,8 @@ async function generateInvoiceAndSendEmail(
           senderEmail: giftCardDetails.senderEmail || userInfo.email,
           senderPhone: giftCardDetails.senderPhone || userInfo.phoneNumber || '',
           recipientEmail: giftCardDetails.recipientEmail || '',
-          createdAt: giftCardDetails.createdAt || new Date().toISOString(),
-          expiresAt: giftCardDetails.expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          createdAt: typeof giftCardDetails.createdAt === 'string' ? new Date(giftCardDetails.createdAt) : giftCardDetails.createdAt || new Date(),
+          expiresAt: typeof giftCardDetails.expiresAt === 'string' ? new Date(giftCardDetails.expiresAt) : giftCardDetails.expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
         };
         
         const giftCardPdfResult = await generateAndStoreGiftCardPdf({
@@ -770,6 +770,7 @@ export const POST = async (req: Request) => {
           lastName: getFieldWithFallback(userInfoRaw, ['lastName', 'last_name'], ''),
           email: getFieldWithFallback(userInfoRaw, ['email'], ''),
           phoneNumber: getFieldWithFallback(userInfoRaw, ['phoneNumber', 'phone_number', 'phone'], ''),
+          specialRequirements: getFieldWithFallback(userInfoRaw, ['specialRequirements', 'special_requirements'], ''),
           // Leta efter numberOfParticipants på flera ställen:
           // 1. Först i det normaliserade userInfo-objektet
           // 2. Sedan i originaldata från requesten
@@ -936,8 +937,8 @@ export const POST = async (req: Request) => {
                 invoice_number: invoiceNumber,
                 payment_method: 'invoice',
                 payment_status: 'CREATED',
-                created_at: new Date().toISOString(),
-                expires_at: expiryDate.toISOString()
+                created_at: typeof giftCardDetailsData.createdAt === 'string' ? new Date(giftCardDetailsData.createdAt) : giftCardDetailsData.createdAt || new Date(),
+                expires_at: typeof giftCardDetailsData.expiresAt === 'string' ? new Date(giftCardDetailsData.expiresAt) : giftCardDetailsData.expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
               })
               .select()
               .single();
@@ -1183,14 +1184,15 @@ export const POST = async (req: Request) => {
                     invoice_address: invoiceDetails.address,
                     invoice_postal_code: invoiceDetails.postalCode,
                     invoice_city: invoiceDetails.city,
-                    invoice_reference: invoiceDetails.reference,
-                    booking_date: new Date().toISOString(),
-                    status: 'confirmed',
-                    payment_status: 'CREATED',
-                    payment_method: 'invoice',
+                    invoice_reference: invoiceDetails.reference || '',
                     unit_price: courseData.price || requestData.amount,
                     total_price: (courseData.price || requestData.amount) * participantsToAdd,
-                    currency: 'SEK'
+                    currency: 'SEK',
+                    payment_method: 'invoice',
+                    payment_status: 'PAID',
+                    status: 'confirmed',
+                    booking_date: new Date().toISOString(),
+                    message: userInfoObj.specialRequirements || ''
                   })
                   .select()
                   .single();

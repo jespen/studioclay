@@ -85,15 +85,21 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flo
   };
 
   const getMethodDisplayName = (method: string) => {
-    switch (method) {
+    console.log('BookingConfirmation: payment method received:', method, 'paymentInfo:', paymentInfo);
+    switch (method.toLowerCase()) {
       case 'swish':
         return 'Swish';
       case 'credit_card':
         return 'Kreditkort';
       case 'invoice':
         return 'Faktura';
+      case 'unknown':
+      case '':
+      case undefined:
+        return 'Faktura'; // Default till Faktura för okända värden
       default:
-        return method;
+        console.warn('BookingConfirmation: unknown payment method:', method);
+        return 'Faktura'; // Default till Faktura istället för att visa okända värden
     }
   };
 
