@@ -23,7 +23,6 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -190,16 +189,35 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('=== WAITLIST FORM SUBMIT START ===');
+    console.log('Form data before processing:', JSON.stringify(formData, null, 2));
+    console.log('Course ID:', courseId);
+    
     try {
       setSubmitting(true);
       setSubmitError(null);
       
       // Ensure number_of_participants is a number
       const numberOfParticipants = parseInt(formData.number_of_participants.toString(), 10);
+      console.log('Parsed number of participants:', numberOfParticipants);
       
       if (isNaN(numberOfParticipants) || numberOfParticipants < 1) {
+        console.error('❌ Invalid number of participants:', numberOfParticipants);
         throw new Error('Antal deltagare måste vara minst 1');
       }
+      
+      // Prepare request payload
+      const requestPayload = {
+        course_id: courseId,
+        customer_name: formData.name,
+        customer_email: formData.email,
+        customer_phone: formData.phone,
+        number_of_participants: numberOfParticipants,
+        message: formData.message,
+      };
+      
+      console.log('Request payload:', JSON.stringify(requestPayload, null, 2));
+      console.log('Making API request to /api/waitlist...');
       
       // Use API endpoint instead of direct Supabase access
       const response = await fetch('/api/waitlist', {
@@ -207,36 +225,52 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          course_id: courseId,
-          customer_name: formData.name,
-          customer_email: formData.email,
-          customer_phone: formData.phone,
-          number_of_participants: numberOfParticipants,
-          message: formData.message,
-        }),
+        body: JSON.stringify(requestPayload),
       });
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Waitlist API error:', errorData);
-        throw new Error(errorData.error || 'Failed to join waitlist');
+      console.log('API response status:', response.status);
+      console.log('API response ok:', response.ok);
+      
+      // Always try to parse the response
+      let responseData;
+      try {
+        responseData = await response.json();
+        console.log('API response data:', JSON.stringify(responseData, null, 2));
+      } catch (parseError) {
+        console.error('❌ Failed to parse response JSON:', parseError);
+        console.log('Raw response text:', await response.text());
+        throw new Error('Ogiltigt svar från servern');
       }
       
-      // Success! Show success message and reset form
-      setSuccess(true);
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        number_of_participants: 1,
-        message: '',
-      });
+      if (!response.ok) {
+        console.error('❌ API request failed with status:', response.status);
+        console.error('❌ Error response:', responseData);
+        throw new Error(responseData.error || 'Failed to join waitlist');
+      }
+      
+      console.log('✅ API request successful');
+      console.log('✅ Response data:', responseData);
+      
+      // Success! Redirect to confirmation page instead of showing inline message
+      console.log('✅ Redirecting to waitlist confirmation page');
+      router.push('/waitlist-confirmation');
+      console.log('=== WAITLIST FORM SUBMIT SUCCESS ===');
+      
     } catch (err) {
-      console.error('Error submitting form:', err);
-      setSubmitError(err instanceof Error ? err.message : 'Det gick inte att anmäla sig till väntelistan. Försök igen senare.');
+      console.error('❌ Error in form submission:', err);
+      console.error('❌ Error type:', typeof err);
+      console.error('❌ Error message:', err instanceof Error ? err.message : 'Unknown error');
+      console.error('❌ Error stack:', err instanceof Error ? err.stack : 'No stack trace');
+      
+      const errorMessage = err instanceof Error ? err.message : 'Det gick inte att anmäla sig till väntelistan. Försök igen senare.';
+      console.error('❌ Setting error message:', errorMessage);
+      
+      setSubmitError(errorMessage);
+      console.log('=== WAITLIST FORM SUBMIT ERROR ===');
     } finally {
+      console.log('Setting submitting to false');
       setSubmitting(false);
+      console.log('=== WAITLIST FORM SUBMIT END ===');
     }
   };
 
@@ -369,12 +403,7 @@ const WaitlistForm: React.FC<WaitlistFormProps> = ({ courseId }) => {
           {submitting ? 'Skickar...' : 'Skriv upp mig på väntelistan'}
         </button>
         
-        {error && <p className={styles.errorMessage}>{error}</p>}
-        {success && (
-          <p className={styles.successMessage}>
-            Du har lagts till på väntelistan! Vi kontaktar dig om en plats blir ledig.
-          </p>
-        )}
+        {submitError && <p className={styles.errorMessage}>{submitError}</p>}
       </form>
     </div>
   );

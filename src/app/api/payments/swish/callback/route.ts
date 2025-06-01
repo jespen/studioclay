@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { logDebug, logError, logInfo } from '@/lib/logging';
+import { logDebug, logError, logInfo, logWarning } from '@/lib/logging';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -278,6 +278,78 @@ export async function POST(request: NextRequest) {
 
     // Process the callback
     await swishService.handleCallback(callbackData);
+    
+    // Send admin notification if payment was successful
+    if (callbackData.status === 'PAID') {
+      try {
+        logInfo(`[${requestId}] Sending admin notification for Swish payment`, {
+          paymentReference: callbackData.payeePaymentReference,
+          status: callbackData.status
+        });
+        
+        // Get payment details for admin notification
+        const { data: payment, error: paymentError } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('payment_reference', callbackData.payeePaymentReference)
+          .single();
+          
+        if (paymentError) {
+          logError(`[${requestId}] Could not fetch payment for admin notification`, { error: paymentError });
+        } else if (payment) {
+          // Import and send admin notification
+          const { sendAdminPurchaseNotification } = await import('@/utils/serverEmail');
+          
+          // Extract customer info from payment user_info
+          const userInfo = payment.user_info || {};
+          const customerName = `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim() || 'Okänd kund';
+          
+          // Get product title based on product type
+          let productTitle = 'Okänd produkt';
+          try {
+            if (payment.product_type === 'course') {
+              const { data: course } = await supabase
+                .from('course_instances')
+                .select('title')
+                .eq('id', payment.product_id)
+                .single();
+              productTitle = course?.title || 'Kurs';
+            } else if (payment.product_type === 'gift_card') {
+              productTitle = 'Presentkort';
+            } else if (payment.product_type === 'art_product') {
+              const { data: product } = await supabase
+                .from('products')
+                .select('title')
+                .eq('id', payment.product_id)
+                .single();
+              productTitle = product?.title || 'Konstprodukt';
+            }
+          } catch (productError) {
+            console.warn(`[${requestId}] Could not fetch product title:`, productError);
+          }
+          
+          const adminNotificationResult = await sendAdminPurchaseNotification({
+            productType: payment.product_type as 'course' | 'gift_card' | 'art_product',
+            productTitle: productTitle,
+            customerName: customerName,
+            customerEmail: userInfo.email || 'Okänd e-post',
+            amount: payment.amount,
+            paymentMethod: 'swish',
+            paymentReference: payment.payment_reference,
+            additionalInfo: `Swish Payment ID: ${callbackData.paymentReference || 'N/A'}`
+          });
+          
+          if (adminNotificationResult.success) {
+            logInfo(`[${requestId}] Successfully sent admin notification for Swish payment`);
+          } else {
+            console.warn(`[${requestId}] Failed to send admin notification for Swish payment:`, adminNotificationResult.message);
+          }
+        }
+      } catch (adminNotificationError) {
+        console.warn(`[${requestId}] Exception while sending admin notification for Swish payment:`, adminNotificationError);
+        // Don't throw - admin notification failure shouldn't fail the callback processing
+      }
+    }
 
     // Log processing time
     const processingTime = Date.now() - startTime;

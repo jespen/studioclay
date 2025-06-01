@@ -30,6 +30,7 @@ export interface NormalizedInvoicePaymentRequest {
     email: string;
     phoneNumber: string;
     numberOfParticipants?: string | number;
+    specialRequirements?: string;
   };
   invoiceDetails: {
     address: string;

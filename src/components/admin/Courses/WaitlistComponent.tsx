@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Paper,
   Table,
@@ -38,9 +38,11 @@ interface WaitlistEntry {
 interface WaitlistComponentProps {
   courseId: string;
   onWaitlistUpdate?: () => void;
+  onAddToCoursePrefill?: (waitlistEntry: WaitlistEntry) => void;
+  onRegisterRemoveFunction?: (removeFunction: (entryId: string) => Promise<void>) => void;
 }
 
-export default function WaitlistComponent({ courseId, onWaitlistUpdate }: WaitlistComponentProps) {
+export default function WaitlistComponent({ courseId, onWaitlistUpdate, onAddToCoursePrefill, onRegisterRemoveFunction }: WaitlistComponentProps) {
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,24 +64,83 @@ export default function WaitlistComponent({ courseId, onWaitlistUpdate }: Waitli
     fetchWaitlist();
   }, [courseId]);
   
-  const fetchWaitlist = async () => {
+  // Public function to remove a waitlist entry (called from parent)
+  const removeWaitlistEntry = useCallback(async (entryId: string) => {
+    console.log('=== WAITLIST: Removing entry from parent ===');
+    console.log('Entry ID to remove:', entryId);
+    
     try {
-      setLoading(true);
-      const response = await fetch(`/api/courses/${courseId}/waitlist`);
+      const response = await fetch(`/api/waitlist/${entryId}`, {
+        method: 'DELETE',
+      });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to delete waitlist entry');
+      }
+      
+      // Remove the entry from the state
+      setWaitlist(prev => prev.filter(entry => entry.id !== entryId));
+      
+      console.log('✅ Waitlist entry removed successfully');
+      
+      // Notify parent component if needed
+      if (onWaitlistUpdate) onWaitlistUpdate();
+      
+    } catch (err) {
+      console.error('Error removing waitlist entry:', err);
+      throw err; // Re-throw so parent can handle the error
+    }
+  }, []);
+
+  // Register the remove function with parent - only when function reference changes
+  useEffect(() => {
+    if (onRegisterRemoveFunction) {
+      onRegisterRemoveFunction(removeWaitlistEntry);
+    }
+  }, [onRegisterRemoveFunction, removeWaitlistEntry]);
+  
+  const fetchWaitlist = async () => {
+    console.log('=== WAITLIST COMPONENT FETCH START ===');
+    console.log('Fetching waitlist for courseId:', courseId);
+    
+    try {
+      setLoading(true);
+      const apiUrl = `/api/courses/${courseId}/waitlist`;
+      console.log('Making request to:', apiUrl);
+      
+      const response = await fetch(apiUrl);
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
+      if (!response.ok) {
+        console.error('❌ Response not ok, trying to parse error data...');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Error data:', errorData);
         throw new Error(errorData.error || 'Failed to fetch waitlist');
       }
       
+      console.log('✅ Response ok, parsing data...');
       const data = await response.json();
-      setWaitlist(data.waitlist || []);
+      console.log('✅ Parsed response data:', JSON.stringify(data, null, 2));
+      
+      const waitlistData = data.waitlist || [];
+      console.log('✅ Waitlist data extracted:', waitlistData);
+      console.log('✅ Number of waitlist entries:', waitlistData.length);
+      
+      setWaitlist(waitlistData);
       setError(null);
+      console.log('✅ State updated successfully');
+      console.log('=== WAITLIST COMPONENT FETCH SUCCESS ===');
     } catch (err) {
-      console.error('Error fetching waitlist:', err);
+      console.error('❌ Error fetching waitlist:', err);
+      console.error('❌ Error type:', typeof err);
+      console.error('❌ Error message:', err instanceof Error ? err.message : 'Unknown error');
       setError(err instanceof Error ? err.message : 'Could not load waitlist');
+      console.log('=== WAITLIST COMPONENT FETCH ERROR ===');
     } finally {
       setLoading(false);
+      console.log('=== WAITLIST COMPONENT FETCH END ===');
     }
   };
 
@@ -140,51 +201,21 @@ export default function WaitlistComponent({ courseId, onWaitlistUpdate }: Waitli
   const handleAddConfirm = async () => {
     if (!entryToAdd) return;
     
-    try {
-      // Create a new booking from the waitlist entry
-      const response = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          course_id: entryToAdd.course_id,
-          customer_name: entryToAdd.customer_name,
-          customer_email: entryToAdd.customer_email,
-          customer_phone: entryToAdd.customer_phone,
-          number_of_participants: entryToAdd.number_of_participants,
-          message: entryToAdd.message,
-          status: 'confirmed', // Set status to confirmed
-          payment_status: 'CREATED'
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to add to course');
-      }
-      
-      // Delete the waitlist entry
-      await fetch(`/api/waitlist/${entryToAdd.id}`, {
-        method: 'DELETE',
-      });
-      
-      // Remove the entry from the state
-      setWaitlist(waitlist.filter(entry => entry.id !== entryToAdd.id));
-      
-      // Close the dialog
-      setAddDialogOpen(false);
-      setEntryToAdd(null);
-      
-      // Show success message
-      alert('Personen har lagts till i kursen');
-      
-      // Notify parent component if needed
-      if (onWaitlistUpdate) onWaitlistUpdate();
-    } catch (err) {
-      console.error('Error adding to course:', err);
-      alert(`Kunde inte lägga till i kursen: ${err instanceof Error ? err.message : 'Okänt fel'}`);
+    console.log('=== WAITLIST: Sending data to parent for form prefill ===');
+    console.log('Entry to add:', entryToAdd);
+    
+    // Close the dialog
+    setAddDialogOpen(false);
+    
+    // Send the waitlist entry to parent to prefill the add user form
+    if (onAddToCoursePrefill) {
+      onAddToCoursePrefill(entryToAdd);
+    } else {
+      console.warn('onAddToCoursePrefill callback not provided');
+      alert('Funktionen är inte tillgänglig. Kontakta utvecklaren.');
     }
+    
+    setEntryToAdd(null);
   };
 
   if (loading) {

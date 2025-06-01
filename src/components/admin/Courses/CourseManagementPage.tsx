@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Container, Box, Paper, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, FormControl, InputLabel, Select, MenuItem, SelectChangeEvent } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
 import CourseForm from '@/app/admin/dashboard/courses/CourseForm';
 import BookingsTable from './BookingsTable';
+import WaitlistComponent from './WaitlistComponent';
 import { Course } from '@/types/course';
 import type { ExtendedBooking } from '@/types/booking';
 
@@ -46,6 +47,10 @@ export default function CourseManagementPage({
     invoice_reference: ''
   });
   const [addUserLoading, setAddUserLoading] = useState(false);
+  
+  // Waitlist prefill state and function
+  const [waitlistEntryToProcess, setWaitlistEntryToProcess] = useState<any>(null);
+  const [removeWaitlistFunction, setRemoveWaitlistFunction] = useState<((entryId: string) => Promise<void>) | null>(null);
   
   // Primary color from globals.css
   const primaryColor = '#547264';
@@ -150,15 +155,51 @@ export default function CourseManagementPage({
     setAddUserDialogOpen(true);
   };
 
+  // Function to handle waitlist prefill
+  const handleWaitlistPrefill = useCallback((waitlistEntry: any) => {
+    console.log('=== COURSE MANAGEMENT: Received waitlist entry for prefill ===');
+    console.log('Waitlist entry:', waitlistEntry);
+    
+    // Store the waitlist entry for processing after successful booking
+    setWaitlistEntryToProcess(waitlistEntry);
+    
+    // Prefill the form with waitlist data
+    setAddUserFormData({
+      customer_name: waitlistEntry.customer_name || '',
+      customer_email: waitlistEntry.customer_email || '',
+      customer_phone: waitlistEntry.customer_phone || '',
+      number_of_participants: waitlistEntry.number_of_participants || 1,
+      payment_method: 'invoice', // Default to invoice for admin-added users
+      payment_status: 'CREATED', // Default to not paid yet
+      status: 'confirmed', // Admin-added users should be confirmed
+      message: waitlistEntry.message || '',
+      // Clear billing info - admin will need to fill this
+      invoice_address: '',
+      invoice_postal_code: '',
+      invoice_city: '',
+      invoice_reference: ''
+    });
+    
+    // Open the add user dialog
+    setAddUserDialogOpen(true);
+  }, []);
+
+  // Function to register the waitlist remove function
+  const handleRegisterWaitlistRemove = useCallback((removeFunction: (entryId: string) => Promise<void>) => {
+    setRemoveWaitlistFunction(() => removeFunction);
+  }, []);
+
   const handleCloseAddUserModal = () => {
     setAddUserDialogOpen(false);
+    // Clear waitlist prefill state
+    setWaitlistEntryToProcess(null);
     // Reset form data
     setAddUserFormData({
       customer_name: '',
       customer_email: '',
       customer_phone: '',
       number_of_participants: 1,
-      payment_method: 'invoice',
+      payment_method: 'invoice', // Default to invoice for manually added users
       payment_status: 'PAID', // Admin-added users are typically already paid
       status: 'confirmed', // Admin-added users should be confirmed
       message: '',
@@ -306,14 +347,30 @@ export default function CourseManagementPage({
       const result = await response.json();
       console.log("Booking created successfully:", result);
 
+      // If this booking was created from a waitlist entry, remove it from waitlist
+      if (waitlistEntryToProcess && removeWaitlistFunction) {
+        try {
+          console.log('=== COURSE MANAGEMENT: Removing from waitlist after successful booking ===');
+          console.log('Removing waitlist entry ID:', waitlistEntryToProcess.id);
+          await removeWaitlistFunction(waitlistEntryToProcess.id);
+          console.log('✅ Waitlist entry removed successfully');
+        } catch (waitlistError) {
+          console.error('❌ Failed to remove from waitlist:', waitlistError);
+          // Don't fail the whole operation, just warn the user
+          alert('OBS: Deltagaren lades till i kursen men kunde inte tas bort från väntelistan. Du kan behöva ta bort manuellt.');
+        }
+      }
+
       // Close dialog and refresh data
       handleCloseAddUserModal();
       handleDataUpdate();
       
       // Show success message with booking details
-      const successMessage = addUserFormData.payment_method === 'invoice' 
-        ? `Deltagare har lagts till framgångsrikt! Fakturanummer: ${bookingData.invoice_number}`
-        : 'Deltagare har lagts till framgångsrikt!';
+      const successMessage = waitlistEntryToProcess
+        ? `${waitlistEntryToProcess.customer_name} har lagts till i kursen från väntelistan!`
+        : addUserFormData.payment_method === 'invoice' 
+          ? `Deltagare har lagts till framgångsrikt! Fakturanummer: ${bookingData.invoice_number}`
+          : 'Deltagare har lagts till framgångsrikt!';
       alert(successMessage);
       
     } catch (err) {
@@ -422,16 +479,11 @@ export default function CourseManagementPage({
               participantInfo={`${currentParticipants} av ${course?.max_participants || 0}`}
             />
             
-            <BookingsTable
-              title="Väntelista"
-              bookings={bookings}
-              loading={loading}
-              error={error}
-              status="pending"
-              onBookingUpdate={handleDataUpdate}
-              participantInfo={`${bookings
-                .filter(b => b.status === 'pending')
-                .reduce((sum, b) => sum + b.number_of_participants, 0)} personer`}
+            <WaitlistComponent
+              courseId={courseId}
+              onWaitlistUpdate={handleDataUpdate}
+              onAddToCoursePrefill={handleWaitlistPrefill}
+              onRegisterRemoveFunction={handleRegisterWaitlistRemove}
             />
             
             <BookingsTable
@@ -453,8 +505,21 @@ export default function CourseManagementPage({
               fullWidth
               maxWidth="md"
             >
-              <DialogTitle>Lägg till ny deltagare</DialogTitle>
+              <DialogTitle>
+                {waitlistEntryToProcess 
+                  ? `Lägg till ${waitlistEntryToProcess.customer_name} från väntelistan` 
+                  : 'Lägg till ny deltagare'
+                }
+              </DialogTitle>
               <DialogContent>
+                {waitlistEntryToProcess && (
+                  <Box sx={{ mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+                    <Typography variant="body2" color="info.contrastText">
+                      📋 Formuläret är förifyllt med information från väntelistan. 
+                      Kontrollera och komplettera med faktureringsuppgifter innan du sparar.
+                    </Typography>
+                  </Box>
+                )}
                 <Grid container spacing={2} sx={{ mt: 1 }}>
                   <Grid item xs={12} md={6}>
                     <TextField

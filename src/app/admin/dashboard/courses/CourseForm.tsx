@@ -173,13 +173,13 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   
   // Helper functions for date formatting
   const formatDateForInput = (date: Date): string => {
-    // Use a safer approach with explicit formatting
+    // HTML date inputs expect YYYY-MM-DD format
     return date.toLocaleDateString('sv-SE', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       timeZone: 'Europe/Stockholm'
-    }).split('-').reverse().join('-');
+    });
   };
   
   const formatTimeForInput = (date: Date): string => {

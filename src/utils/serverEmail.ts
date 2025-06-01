@@ -803,3 +803,154 @@ export async function sendServerProductOrderConfirmationEmail(params: {
     };
   }
 }
+
+/**
+ * Send a simple admin notification email when a customer makes a purchase
+ */
+export async function sendAdminPurchaseNotification(params: {
+  productType: 'course' | 'gift_card' | 'art_product';
+  productTitle: string;
+  customerName: string;
+  customerEmail: string;
+  amount: number;
+  paymentMethod: 'swish' | 'invoice';
+  paymentReference: string;
+  invoiceNumber?: string;
+  additionalInfo?: string;
+}): Promise<{ success: boolean; message: string }> {
+  
+  // Check if admin notifications are enabled
+  if (process.env.DISABLE_ADMIN_NOTIFICATIONS === 'true') {
+    console.log('📧 Admin notifications are disabled (DISABLE_ADMIN_NOTIFICATIONS=true)');
+    return { success: true, message: 'Admin notifications disabled' };
+  }
+  
+  const startTime = Date.now();
+  console.log('📧 =========== ADMIN NOTIFICATION EMAIL ===========');
+  console.log(`📧 Time: ${new Date().toISOString()}`);
+  console.log(`📧 Product Type: ${params.productType}`);
+  console.log(`📧 Customer: ${params.customerName} (${params.customerEmail})`);
+  console.log(`📧 Amount: ${params.amount} SEK`);
+  
+  try {
+    const transporter = createTransporter();
+    if (!transporter) {
+      console.error('📧 Failed to create email transporter for admin notification');
+      return { success: false, message: 'Failed to create email transporter' };
+    }
+    
+    // Get admin email from environment
+    const adminEmail = process.env.STUDIO_CLAY_EMAIL || 'eva@studioclay.se';
+    const authenticatedEmail = emailSettings.from;
+    
+    // Determine product type in Swedish
+    let productTypeSwedish = '';
+    switch (params.productType) {
+      case 'course':
+        productTypeSwedish = 'Kurs';
+        break;
+      case 'gift_card':
+        productTypeSwedish = 'Presentkort';
+        break;
+      case 'art_product':
+        productTypeSwedish = 'Konstprodukt';
+        break;
+      default:
+        productTypeSwedish = 'Produkt';
+    }
+    
+    // Determine payment method in Swedish
+    const paymentMethodSwedish = params.paymentMethod === 'swish' ? 'Swish' : 'Faktura';
+    
+    // Create simple HTML content
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #547264; border-bottom: 2px solid #547264; padding-bottom: 10px;">
+          🛒 Nytt köp på Studio Clay
+        </h2>
+        
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #333;">Produktinformation</h3>
+          <p><strong>Typ:</strong> ${productTypeSwedish}</p>
+          <p><strong>Produkt:</strong> ${params.productTitle}</p>
+          <p><strong>Belopp:</strong> ${params.amount.toLocaleString('sv-SE')} SEK</p>
+          <p><strong>Betalningsmetod:</strong> ${paymentMethodSwedish}</p>
+        </div>
+        
+        <div style="background-color: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #333;">Kundinformation</h3>
+          <p><strong>Namn:</strong> ${params.customerName}</p>
+          <p><strong>E-post:</strong> ${params.customerEmail}</p>
+        </div>
+        
+        <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #333;">Referensinformation</h3>
+          <p><strong>Betalningsreferens:</strong> ${params.paymentReference}</p>
+          ${params.invoiceNumber ? `<p><strong>Fakturanummer:</strong> ${params.invoiceNumber}</p>` : ''}
+          ${params.additionalInfo ? `<p><strong>Ytterligare info:</strong> ${params.additionalInfo}</p>` : ''}
+        </div>
+        
+        <div style="border-top: 1px solid #ddd; padding-top: 20px; margin-top: 30px; font-size: 14px; color: #666;">
+          <p>Detta är en automatisk notifiering från Studio Clay's webbshop.</p>
+          <p>För att se fullständiga detaljer, logga in på admin-panelen.</p>
+          <p><em>Skickat: ${new Date().toLocaleString('sv-SE')}</em></p>
+        </div>
+      </div>
+    `;
+    
+    // Create email options
+    const mailOptions = {
+      from: authenticatedEmail,
+      to: adminEmail,
+      subject: `🛒 Nytt köp: ${productTypeSwedish} - ${params.amount.toLocaleString('sv-SE')} SEK`,
+      html: htmlContent
+    };
+    
+    // Send email
+    console.log(`📧 Sending admin notification to: ${adminEmail}`);
+    console.log(`📧 Subject: ${mailOptions.subject}`);
+    
+    // Create a keep-alive timer
+    const keepAlivePromise = createKeepAlivePromise();
+    
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      
+      console.log(`📧 ✅ Admin notification sent successfully!`);
+      console.log(`📧 Message ID: ${info.messageId}`);
+      console.log(`📧 Response: ${info.response || 'No response'}`);
+      
+      console.log(`📧 Total admin notification processing time: ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
+      // Wait for keep-alive timer
+      await keepAlivePromise;
+      
+      return {
+        success: true,
+        message: 'Admin notification sent successfully'
+      };
+    } catch (sendError: any) {
+      console.error(`📧 ❌ ERROR SENDING ADMIN NOTIFICATION:`);
+      console.error(`📧 Error type: ${sendError.name}`);
+      console.error(`📧 Error message: ${sendError.message}`);
+      logSMTPError(sendError);
+      
+      console.log(`📧 Total admin notification processing time (failed): ${Date.now() - startTime}ms`);
+      console.log('📧 ===========================================');
+      
+      throw sendError;
+    }
+  } catch (error) {
+    console.error('📧 Unhandled error in sendAdminPurchaseNotification:', error);
+    logSMTPError(error);
+    
+    console.log(`📧 Total admin notification processing time (error): ${Date.now() - startTime}ms`);
+    console.log('📧 ===========================================');
+    
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error sending admin notification'
+    };
+  }
+}

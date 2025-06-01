@@ -54,6 +54,7 @@ export class PaymentService {
     setPaymentInfo({
       status: status,
       method: method,
+      payment_method: method,
       reference: reference,
       amount: amount,
       created_at: new Date().toISOString(),

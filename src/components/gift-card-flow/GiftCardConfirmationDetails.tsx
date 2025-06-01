@@ -359,7 +359,6 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
             <Grid item xs={12} sm={6}>
               <Typography variant="body2" color="text.secondary">Mottagare</Typography>
               <Typography variant="body1">{currentGiftCardDetails.recipient_name || currentGiftCardDetails.recipientName || 'Ej angiven'}</Typography>
-              <Typography variant="body1">{currentGiftCardDetails.recipient_email || currentGiftCardDetails.recipientEmail || 'Ej angiven'}</Typography>
             </Grid>
             
             {messageFromDetails && (

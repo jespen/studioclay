@@ -162,7 +162,8 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
             lastName: userInfo.lastName,
             email: userInfo.email,
             phoneNumber: userInfo.phone,
-            numberOfParticipants: userInfo.numberOfParticipants
+            numberOfParticipants: userInfo.numberOfParticipants,
+            specialRequirements: userInfo.specialRequirements
           },
           invoiceDetails: {
             address: address.trim(),

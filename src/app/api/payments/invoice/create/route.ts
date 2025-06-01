@@ -41,8 +41,8 @@ interface ExtendedUserInfo {
   firstName: string;
   lastName: string;
   email: string;
-  phone?: string;
-  phoneNumber?: string;
+  phone: string;
+  phoneNumber: string;
   address?: string;
   postalCode?: string;
   city?: string;
@@ -349,6 +349,14 @@ async function generateInvoiceAndSendEmail(
     // 2. Generera faktura-PDF
     try {
       // Generera och lagra faktura-PDF
+      logDebug(`[DEBUG PHONE] About to call generateAndStoreInvoicePdf`, {
+        requestId,
+        userInfoPhone: userInfo.phone,
+        userInfoPhoneNumber: userInfo.phoneNumber,
+        userInfoFirstName: userInfo.firstName,
+        userInfoEmail: userInfo.email
+      });
+      
       const invoicePdfResult = await generateAndStoreInvoicePdf({
         requestId,
         paymentReference,
@@ -605,6 +613,9 @@ interface ValidatedInvoicePaymentData {
   amount: number;
   paymentMethod: string;
   quantity?: number;
+  // Lägg till för flexibel statushantering  
+  payment_status?: string;
+  status?: string;
   // Tillåt både camelCase och snake_case versioner
   [key: string]: any;
 }
@@ -646,6 +657,9 @@ interface NormalizedInvoicePaymentData {
   amount: number;
   paymentMethod: string;
   quantity?: number;
+  // Lägg till dessa fält för flexibel hantering
+  payment_status?: string;
+  status?: string;
 }
 
 // Funktion för att få rätt redirect-URL baserat på produkttyp
@@ -770,6 +784,8 @@ export const POST = async (req: Request) => {
           lastName: getFieldWithFallback(userInfoRaw, ['lastName', 'last_name'], ''),
           email: getFieldWithFallback(userInfoRaw, ['email'], ''),
           phoneNumber: getFieldWithFallback(userInfoRaw, ['phoneNumber', 'phone_number', 'phone'], ''),
+          // Sätt även phone för kompatibilitet med PDF-generering och emailer
+          phone: getFieldWithFallback(userInfoRaw, ['phoneNumber', 'phone_number', 'phone'], ''),
           specialRequirements: getFieldWithFallback(userInfoRaw, ['specialRequirements', 'special_requirements'], ''),
           // Leta efter numberOfParticipants på flera ställen:
           // 1. Först i det normaliserade userInfo-objektet
@@ -800,6 +816,18 @@ export const POST = async (req: Request) => {
         
         // Convert to string to ensure consistent handling in later steps
         userInfoObj.numberOfParticipants = String(userInfoObj.numberOfParticipants);
+        
+        // Debug telefonnummer-mappning
+        logDebug(`[DEBUG PHONE] User info mapping completed`, {
+          requestId,
+          phoneNumber: userInfoObj.phoneNumber,
+          phone: userInfoObj.phone,
+          originalPhoneFields: {
+            phoneNumber: (userInfoRaw as any).phoneNumber,
+            phone_number: (userInfoRaw as any).phone_number,
+            phone: (userInfoRaw as any).phone
+          }
+        });
         
         // Skapa ett objekt med konsistent struktur för faktureringsuppgifter
         const invoiceDetails = {
@@ -1189,8 +1217,10 @@ export const POST = async (req: Request) => {
                     total_price: (courseData.price || requestData.amount) * participantsToAdd,
                     currency: 'SEK',
                     payment_method: 'invoice',
-                    payment_status: 'PAID',
-                    status: 'confirmed',
+                    // Använd payment_status från förfrågan om det finns, annars defaulta till 'CREATED' för fakturabetalningar
+                    payment_status: invoicePaymentData.payment_status || 'CREATED',
+                    // Använd status från förfrågan om det finns, annars defaulta till 'confirmed'
+                    status: invoicePaymentData.status || 'confirmed',
                     booking_date: new Date().toISOString(),
                     message: userInfoObj.specialRequirements || ''
                   })

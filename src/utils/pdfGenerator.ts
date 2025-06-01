@@ -65,11 +65,28 @@ export async function generateAndStoreInvoicePdf(options: InvoicePdfOptions): Pr
       requestId,
       invoiceNumber,
       userEmail: userInfo?.email,
+      userPhone: userInfo?.phone || userInfo?.phoneNumber,
+      userFirstName: userInfo?.firstName,
       hasProductDetails: !!productDetails
     });
     
+    // Säkerställ att userInfo har telefonnummer i rätt format för PDF
+    const customerInfoForPdf = {
+      ...userInfo,
+      phone: userInfo?.phone || userInfo?.phoneNumber || '',
+      phoneNumber: userInfo?.phoneNumber || userInfo?.phone || ''
+    };
+    
+    logDebug(`Customer info prepared for PDF`, {
+      requestId,
+      customerName: `${customerInfoForPdf.firstName} ${customerInfoForPdf.lastName}`,
+      email: customerInfoForPdf.email,
+      phone: customerInfoForPdf.phone,
+      phoneNumber: customerInfoForPdf.phoneNumber
+    });
+    
     let pdfData: any = {
-      customerInfo: userInfo,
+      customerInfo: customerInfoForPdf,
       invoiceDetails: invoiceDetails,
       invoiceNumber: invoiceNumber,
       dueDate: dueDate

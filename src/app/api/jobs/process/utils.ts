@@ -739,6 +739,26 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
       
       let emailResult;
       
+      // Retrieve gift card code if this is a gift card purchase (needed for both email and admin notification)
+      let giftCardCode = null;
+      if (productType === PRODUCT_TYPES.GIFT_CARD) {
+        const { data: giftCard } = await supabase
+          .from('gift_cards')
+          .select('code')
+          .eq('payment_reference', paymentReference)
+          .single();
+          
+        if (giftCard) {
+          giftCardCode = giftCard.code;
+          logInfo(`Retrieved gift card code for email: ${giftCardCode}`, { requestId });
+        } else {
+          logWarning(`Could not retrieve gift card code for email`, { 
+            requestId,
+            paymentReference
+          });
+        }
+      }
+      
       // In development, we can bypass email sending to test the job processor
       if (process.env.NODE_ENV === 'development' && process.env.BYPASS_EMAIL_IN_JOBS === 'true') {
         logInfo(`Development mode: Bypassing actual email sending`, { requestId });
@@ -763,26 +783,6 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
           isProduct: productType === PRODUCT_TYPES.ART_PRODUCT,
           hasGiftCardPdf: !!giftCardPdfBuffer
         });
-          
-        // Retrieve gift card code if this is a gift card purchase
-        let giftCardCode = null;
-        if (productType === PRODUCT_TYPES.GIFT_CARD) {
-          const { data: giftCard } = await supabase
-            .from('gift_cards')
-            .select('code')
-            .eq('payment_reference', paymentReference)
-            .single();
-            
-          if (giftCard) {
-            giftCardCode = giftCard.code;
-            logInfo(`Retrieved gift card code for email: ${giftCardCode}`, { requestId });
-          } else {
-            logWarning(`Could not retrieve gift card code for email`, { 
-              requestId,
-              paymentReference
-            });
-          }
-        }
         
         // Real email sending
         emailResult = await sendServerInvoiceEmail({
@@ -818,6 +818,50 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
         invoiceNumber,
         withGiftCardPdf: !!giftCardPdfBuffer
       });
+      
+      // Send admin notification about the purchase
+      try {
+        logInfo(`Sending admin notification about purchase`, {
+          requestId,
+          productType,
+          customerEmail: userInfo.email,
+          amount
+        });
+        
+        const { sendAdminPurchaseNotification } = await import('@/utils/serverEmail');
+        
+        const adminNotificationResult = await sendAdminPurchaseNotification({
+          productType: productType as 'course' | 'gift_card' | 'art_product',
+          productTitle: productDetails.title || productDetails.name || 'Okänd produkt',
+          customerName: `${userInfo.firstName} ${userInfo.lastName}`,
+          customerEmail: userInfo.email,
+          amount: amount,
+          paymentMethod: 'invoice',
+          paymentReference: paymentReference,
+          invoiceNumber: invoiceNumber,
+          additionalInfo: productType === PRODUCT_TYPES.GIFT_CARD && giftCardCode 
+            ? `Presentkortskod: ${giftCardCode}` 
+            : undefined
+        });
+        
+        if (adminNotificationResult.success) {
+          logInfo(`Successfully sent admin notification`, {
+            requestId,
+            paymentReference
+          });
+        } else {
+          logWarning(`Failed to send admin notification, but continuing`, {
+            requestId,
+            error: adminNotificationResult.message
+          });
+        }
+      } catch (adminNotificationError) {
+        logWarning(`Exception while sending admin notification, but continuing`, {
+          requestId,
+          error: adminNotificationError instanceof Error ? adminNotificationError.message : 'Unknown error'
+        });
+        // Don't throw - admin notification failure shouldn't fail the whole job
+      }
       
       // Update payment record to mark email as sent
       logDebug(`Updating payment record to mark email as sent`, {

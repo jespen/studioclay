@@ -29,23 +29,34 @@ export async function POST(request: NextRequest) {
     
     const { subscriberEmail, recipientEmail } = validationResult.data;
     
-    // Create email transporter
+    // Create email transporter with consistent environment variable names
     const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || 'smtp.office365.com',
-      port: parseInt(process.env.EMAIL_PORT || '587'),
-      secure: process.env.EMAIL_SECURE === 'true',
+      host: process.env.EMAIL_SMTP_HOST || 'smtp.office365.com',
+      port: parseInt(process.env.EMAIL_SMTP_PORT || '587'),
+      secure: process.env.EMAIL_SMTP_SECURE === 'true', // false for port 587 (TLS), true for port 465 (SSL)
       auth: {
         user: process.env.EMAIL_USER || 'eva@studioclay.se',
-        pass: process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS
+        pass: process.env.EMAIL_PASS // Use consistent variable name
       },
       tls: {
+        // Microsoft Office 365 specific settings
+        minVersion: 'TLSv1.2',
         rejectUnauthorized: process.env.EMAIL_REJECT_UNAUTHORIZED !== 'false'
       }
+    });
+
+    // Log configuration for debugging (without sensitive data)
+    console.log('📧 Newsletter email configuration:', {
+      host: process.env.EMAIL_SMTP_HOST || 'smtp.office365.com',
+      port: process.env.EMAIL_SMTP_PORT || '587',
+      secure: process.env.EMAIL_SMTP_SECURE === 'true',
+      user: process.env.EMAIL_USER || 'eva@studioclay.se',
+      hasPassword: !!(process.env.EMAIL_PASS)
     });
     
     // Send email
     await transporter.sendMail({
-      from: process.env.EMAIL_FROM || 'eva@studioclay.se',
+      from: process.env.EMAIL_USER || 'eva@studioclay.se',
       to: recipientEmail,
       subject: 'Ny prenumerant på nyhetsbrev - Studio Clay',
       html: `
@@ -58,6 +69,8 @@ export async function POST(request: NextRequest) {
         </div>
       `,
     });
+
+    console.log('📧 Newsletter subscription email sent successfully to:', recipientEmail);
     
     // Return success response
     return NextResponse.json(
@@ -75,4 +88,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
