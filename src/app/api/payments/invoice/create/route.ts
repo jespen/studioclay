@@ -605,6 +605,7 @@ interface ValidatedInvoicePaymentData {
     email: string;
     phoneNumber: string;
     numberOfParticipants?: string | number;
+    specialRequirements?: string;
     [key: string]: any; // Tillåt ytterligare properties
   };
   invoiceDetails: InvoiceDetails;
@@ -645,6 +646,7 @@ interface NormalizedInvoicePaymentData {
     email: string;
     phoneNumber: string;
     numberOfParticipants?: string | number;
+    specialRequirements?: string;
   };
   invoiceDetails: {
     address: string;
@@ -688,15 +690,6 @@ export const POST = async (req: Request) => {
   try {
     // Parse the request body
     const rawData = await req.json();
-    
-    // DEBUG: Log specialRequirements specifically
-    console.log(`[Invoice API] DEBUGGING specialRequirements:`, {
-      requestId,
-      rawDataUserInfo: rawData.userInfo,
-      hasSpecialRequirements: !!(rawData.userInfo && rawData.userInfo.specialRequirements),
-      specialRequirementsValue: rawData.userInfo ? rawData.userInfo.specialRequirements : 'NO_USER_INFO',
-      rawDataKeys: Object.keys(rawData)
-    });
     
     // Add detailed logging for userInfo and participants at the beginning
     console.log(`[Invoice API] Beginning of request - userInfo:`, {
@@ -804,15 +797,6 @@ export const POST = async (req: Request) => {
                                getFieldWithFallback(normalizedData.userInfo || {}, ['numberOfParticipants', 'number_of_participants']) ||
                                getFieldWithFallback(invoicePaymentData.userInfo || {}, ['numberOfParticipants', 'number_of_participants'])
         };
-        
-        // DEBUG: Log userInfoObj creation specifically for specialRequirements
-        console.log(`[Invoice API] DEBUGGING userInfoObj creation:`, {
-          requestId,
-          userInfoRawKeys: userInfoRaw ? Object.keys(userInfoRaw) : [],
-          userInfoRawSpecialRequirements: userInfoRaw ? (userInfoRaw as any).specialRequirements : 'NO_USER_INFO_RAW',
-          userInfoObjSpecialRequirements: userInfoObj.specialRequirements,
-          getFieldWithFallbackResult: getFieldWithFallback(userInfoRaw, ['specialRequirements', 'special_requirements'], '')
-        });
         
         // Use type assertion for Object.keys
         // VIKTIGT: numberOfParticipants ska bara krävas för kursbokningar, inte för konstprodukter eller presentkort
@@ -1218,7 +1202,6 @@ export const POST = async (req: Request) => {
                 });
               } else {
                 // Create booking record
-                // Add detailed logging for booking creation with participant count
                 console.log(`[Invoice API] Creating booking record with participant count:`, {
                   requestId,
                   numberOfParticipantsFromUserInfo: userInfoObj.numberOfParticipants,
@@ -1226,15 +1209,6 @@ export const POST = async (req: Request) => {
                   parsedValue: participantsToAdd,
                   effectiveValue: participantsToAdd,
                   typeOfNumberOfParticipants: typeof userInfoObj.numberOfParticipants
-                });
-                
-                // DEBUG: Log message field specifically before booking creation
-                console.log(`[Invoice API] DEBUGGING message field before booking creation:`, {
-                  requestId,
-                  userInfoObjSpecialRequirements: userInfoObj.specialRequirements,
-                  messageToSave: userInfoObj.specialRequirements || '',
-                  messageIsEmpty: !userInfoObj.specialRequirements,
-                  messageType: typeof userInfoObj.specialRequirements
                 });
 
                 const { data: booking, error: bookingError } = await supabase
