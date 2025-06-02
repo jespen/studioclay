@@ -1,16 +1,23 @@
 /**
- * DEPRECATED - DENNA FIL ANVÄNDS INTE LÄNGRE
+ * AKTIV ADMIN ENDPOINT - /api/invoice/[id]
  * 
- * API-rutten har ersatts av nyare implementationer i enlighet med 
- * betalningsrefaktoriseringen.
+ * Denna endpoint används aktivt av admin-gränssnittet för att visa faktura PDF:er:
+ * - BookingsList.tsx (kursbokningar admin) 
+ * - OrderForm.tsx (shop beställningar admin)
+ * - GiftCardManager.tsx (presentkort admin - via invoice_number)
  * 
- * Behåller tills vidare för referens, men kan tas bort.
+ * FUNKTIONALITET:
+ * - Hämtar faktura PDF:er från Supabase Storage 'invoices' bucket
+ * - Söker efter fakturor baserat på booking ID, art_order ID, invoice_number, eller gift card ID
+ * - Returnerar PDF som base64-kodad data för visning i admin-gränssnittet
  * 
- * Om du ser detta och applikationen fortfarande fungerar korrekt, 
- * är det säkert att ta bort denna fil samt övriga filer under /api/invoice/.
+ * VIKTIGT: Denna endpoint är INTE deprecated - den är en central del av admin-funktionaliteten
+ * för fakturahantering och PDF-visning. Uppdatera inte utan att först säkerställa att alla
+ * admin-komponenter har alternativa lösningar.
+ * 
+ * STATUS: Aktiv och används dagligen av admin-gränssnittet
  */
 
-/*
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -172,5 +179,4 @@ export async function GET(
       { status: 500 }
     );
   }
-}
-*/ 
+} 

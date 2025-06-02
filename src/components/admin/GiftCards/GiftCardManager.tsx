@@ -23,6 +23,7 @@ interface GiftCard {
   created_at: string;
   expires_at: string;
   invoice_number?: string;
+  payment_reference?: string;
 }
 
 const GiftCardManager: React.FC = () => {
@@ -163,7 +164,106 @@ const GiftCardManager: React.FC = () => {
       
       console.log(`Handling PDF for gift card: ${card.id}`);
       
-      // Försök först att direkt hämta presentkorts-PDF:en baserat på presentkortskoden
+      // NYTT: Försök först använda den dedicerade gift card PDF endpointen
+      console.log(`Trying to fetch gift card PDF via dedicated endpoint`);
+      try {
+        // Försök med payment_reference först, sedan code, sedan ID
+        const identifiers = [
+          card.payment_reference,
+          card.code,
+          card.id
+        ].filter(Boolean); // Ta bort null/undefined värden
+        
+        let pdfData = null;
+        let usedIdentifier = null;
+        
+        for (const identifier of identifiers) {
+          console.log(`Trying gift card PDF endpoint with identifier: ${identifier}`);
+          const response = await fetch(`/api/gift-cards/pdf/${identifier}`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              pdfData = data;
+              usedIdentifier = identifier;
+              console.log(`Gift card PDF found via dedicated endpoint using: ${identifier}`);
+              break;
+            }
+          } else {
+            console.log(`Gift card PDF not found with identifier: ${identifier}`);
+          }
+        }
+        
+        if (pdfData && pdfData.success) {
+          // Öppna presentkorts-PDF:en direkt i ny flik
+          const pdfWindow = window.open('', '_blank');
+          if (pdfWindow) {
+            pdfWindow.document.write(`
+              <html>
+                <head>
+                  <title>Presentkort ${card.code}</title>
+                </head>
+                <body style="margin:0;padding:0;">
+                  <iframe 
+                    src="data:application/pdf;base64,${pdfData.pdf}" 
+                    width="100%" 
+                    height="100%" 
+                    style="border:none;position:absolute;top:0;left:0;right:0;bottom:0;"
+                  ></iframe>
+                </body>
+              </html>
+            `);
+          }
+          return; // Avsluta funktionen här om presentkorts-PDF:en hittades
+        } else {
+          console.log('Gift card PDF not found via dedicated endpoint, trying invoice method');
+        }
+      } catch (giftCardError) {
+        console.error('Error fetching gift card PDF via dedicated endpoint:', giftCardError);
+        console.log('Falling back to invoice endpoint');
+      }
+      
+      // FALLBACK: Om presentkorts-PDF inte hittas, försök med faktura-PDF som backup
+      if (card.invoice_number) {
+        console.log(`Trying to fetch gift card invoice via /api/invoice/${card.invoice_number}`);
+        try {
+          const response = await fetch(`/api/invoice/${card.invoice_number}`);
+          const data = await response.json();
+          
+          if (response.ok && data.success) {
+            console.log('Gift card invoice PDF found via invoice endpoint!');
+            // Öppna faktura-PDF:en direkt i ny flik (backup-metod)
+            const pdfWindow = window.open('', '_blank');
+            if (pdfWindow) {
+              pdfWindow.document.write(`
+                <html>
+                  <head>
+                    <title>Faktura ${card.invoice_number} - Presentkort ${card.code}</title>
+                  </head>
+                  <body style="margin:0;padding:0;">
+                    <iframe 
+                      src="data:application/pdf;base64,${data.pdf}" 
+                      width="100%" 
+                      height="100%" 
+                      style="border:none;position:absolute;top:0;left:0;right:0;bottom:0;"
+                    ></iframe>
+                  </body>
+                </html>
+              `);
+            }
+            return; // Avsluta funktionen här om faktura PDF:en hittades
+          } else {
+            console.log('Gift card invoice not found via invoice endpoint, trying other methods');
+          }
+        } catch (invoiceError) {
+          console.error('Error fetching gift card invoice via invoice endpoint:', invoiceError);
+          console.log('Falling back to direct gift card PDF access');
+        }
+      } else {
+        console.log('Gift card has no invoice_number, trying direct PDF access');
+      }
+      
+      // BEFINTLIG KOD: Försök direkt hämta presentkorts-PDF:en baserat på presentkortskoden
       if (card.code) {
         const bucketName = 'giftcards';
         const fileName = `gift-card-${card.code}.pdf`;
@@ -189,7 +289,7 @@ const GiftCardManager: React.FC = () => {
         }
       }
       
-      // Generera presentkorts-PDF via API
+      // BEFINTLIG KOD: Generera presentkorts-PDF via API (sista utvägen)
       try {
         console.log(`Generating gift card PDF for card: ${card.id}`);
         const response = await fetch('/api/gift-card/generate-pdf', {
