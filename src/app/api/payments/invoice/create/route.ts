@@ -797,9 +797,11 @@ export const POST = async (req: Request) => {
         };
         
         // Use type assertion for Object.keys
-        if (userInfoObj.numberOfParticipants === undefined) {
-          logError('Missing required field: numberOfParticipants', { 
+        // VIKTIGT: numberOfParticipants ska bara krävas för kursbokningar, inte för konstprodukter eller presentkort
+        if (productType === PRODUCT_TYPES.COURSE && userInfoObj.numberOfParticipants === undefined) {
+          logError('Missing required field: numberOfParticipants for course booking', { 
             requestId,
+            productType,
             userInfoKeys: userInfoRaw ? Object.keys(userInfoRaw as Record<string, unknown>) : [],
             normalizedUserInfoKeys: normalizedData.userInfo ? Object.keys(normalizedData.userInfo as Record<string, unknown>) : [],
             rawRequestKeys: Object.keys(invoicePaymentData)
@@ -814,8 +816,18 @@ export const POST = async (req: Request) => {
           );
         }
         
+        // För produkttyper som inte behöver numberOfParticipants, sätt ett default-värde
+        if (productType !== PRODUCT_TYPES.COURSE && !userInfoObj.numberOfParticipants) {
+          userInfoObj.numberOfParticipants = '1'; // Default för konstprodukter och presentkort
+          logDebug(`Set default numberOfParticipants for non-course product`, {
+            requestId,
+            productType,
+            numberOfParticipants: userInfoObj.numberOfParticipants
+          });
+        }
+        
         // Convert to string to ensure consistent handling in later steps
-        userInfoObj.numberOfParticipants = String(userInfoObj.numberOfParticipants);
+        userInfoObj.numberOfParticipants = String(userInfoObj.numberOfParticipants || '1');
         
         // Debug telefonnummer-mappning
         logDebug(`[DEBUG PHONE] User info mapping completed`, {

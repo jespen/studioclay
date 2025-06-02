@@ -114,7 +114,13 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
           amount: amount,
           product_id: courseId,
           product_type: validProductType,
-          userInfo: userInfo,
+          userInfo: {
+            ...userInfo,
+            // Bara inkludera numberOfParticipants för kursbokningar
+            ...(validProductType === PRODUCT_TYPES.COURSE && userInfo.numberOfParticipants && {
+              numberOfParticipants: userInfo.numberOfParticipants
+            })
+          },
           invoiceDetails: {
             address: address.trim(),
             postalCode: postalCode.trim(),

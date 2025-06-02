@@ -162,7 +162,10 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
             lastName: userInfo.lastName,
             email: userInfo.email,
             phoneNumber: userInfo.phone,
-            numberOfParticipants: userInfo.numberOfParticipants,
+            // Bara inkludera numberOfParticipants för kursbokningar
+            ...(validProductType === PRODUCT_TYPES.COURSE && {
+              numberOfParticipants: userInfo.numberOfParticipants
+            }),
             specialRequirements: userInfo.specialRequirements
           },
           invoiceDetails: {
