@@ -152,6 +152,28 @@ export async function DELETE(
     
     console.log('Deleting art order with ID:', id);
     
+    // First, fetch the order to get product information before deleting
+    const { data: orderToDelete, error: fetchError } = await supabase
+      .from('art_orders')
+      .select('product_id, status, payment_status')
+      .eq('id', id)
+      .single();
+    
+    if (fetchError) {
+      console.error('Error fetching art order for deletion:', fetchError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Failed to fetch order for deletion' 
+      }, { status: 500 });
+    }
+    
+    if (!orderToDelete) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Order not found' 
+      }, { status: 404 });
+    }
+    
     // Delete the art order
     const { error: deleteError } = await supabase
       .from('art_orders')
@@ -164,6 +186,53 @@ export async function DELETE(
         success: false, 
         error: 'Failed to delete order' 
       }, { status: 500 });
+    }
+    
+    // If the order was paid/confirmed, restore the product stock
+    if (orderToDelete.payment_status === 'PAID' || orderToDelete.status === 'confirmed') {
+      try {
+        console.log('Restoring stock for product:', orderToDelete.product_id);
+        
+        // Fetch current product data
+        const { data: productData, error: productFetchError } = await supabase
+          .from('products')
+          .select('stock_quantity, in_stock')
+          .eq('id', orderToDelete.product_id)
+          .single();
+        
+        if (productFetchError) {
+          console.warn('Failed to fetch product data for stock restoration:', productFetchError);
+        } else if (productData) {
+          // Increase stock by 1 and update in_stock status
+          const newStockQuantity = (productData.stock_quantity || 0) + 1;
+          const newInStock = true; // If we're adding stock, the product should be in stock
+          
+          const { error: stockUpdateError } = await supabase
+            .from('products')
+            .update({
+              stock_quantity: newStockQuantity,
+              in_stock: newInStock,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', orderToDelete.product_id);
+          
+          if (stockUpdateError) {
+            console.warn('Failed to restore product stock:', stockUpdateError);
+            // Don't fail the deletion just because stock update failed
+          } else {
+            console.log('Successfully restored product stock:', {
+              productId: orderToDelete.product_id,
+              oldStock: productData.stock_quantity,
+              newStock: newStockQuantity
+            });
+          }
+        }
+      } catch (stockError) {
+        console.warn('Error restoring product stock:', stockError);
+        // Don't fail the deletion just because stock restoration failed
+      }
+    } else {
+      console.log('Order was not paid/confirmed, no stock restoration needed');
     }
     
     console.log('Successfully deleted art order');
