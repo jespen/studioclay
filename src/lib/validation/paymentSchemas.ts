@@ -25,7 +25,9 @@ export const UserInfoSchema = z.object({
   email: z.string().email(),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  phoneNumber: z.string().min(1, "Phone number is required")
+  phoneNumber: z.string().min(1, "Phone number is required"),
+  numberOfParticipants: z.union([z.string(), z.number()]).optional(), // Optional för shop/presentkort
+  specialRequirements: z.string().optional()
 });
 
 export type UserInfo = z.infer<typeof UserInfoSchema>;
