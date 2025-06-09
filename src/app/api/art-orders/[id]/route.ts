@@ -99,6 +99,33 @@ export async function PUT(
     const updatedOrder = await request.json();
     console.log('Updating art order with ID:', id, updatedOrder);
     
+    // First, fetch the current order to check for status changes
+    const { data: currentOrder, error: fetchError } = await supabase
+      .from('art_orders')
+      .select('product_id, status, payment_status')
+      .eq('id', id)
+      .single();
+    
+    if (fetchError) {
+      console.error('Error fetching current art order:', fetchError);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Failed to fetch current order' 
+      }, { status: 500 });
+    }
+    
+    if (!currentOrder) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Order not found' 
+      }, { status: 404 });
+    }
+    
+    // Check if this is a status change that affects stock
+    const wasOrderPaid = currentOrder.payment_status === 'PAID' || currentOrder.status === 'confirmed';
+    const willOrderBePaid = updatedOrder.payment_status === 'PAID' || updatedOrder.status === 'confirmed';
+    const isOrderBeingCancelled = updatedOrder.status === 'cancelled' || updatedOrder.payment_status === 'CANCELLED';
+    
     // Update the art order
     const { error: updateError } = await supabase
       .from('art_orders')
@@ -118,6 +145,91 @@ export async function PUT(
         success: false, 
         error: 'Failed to update order' 
       }, { status: 500 });
+    }
+    
+    // Handle stock changes based on status transitions
+    if (wasOrderPaid && (isOrderBeingCancelled || !willOrderBePaid)) {
+      // Order was paid/confirmed but is now being cancelled or marked as unpaid
+      // Restore stock
+      try {
+        console.log('Restoring stock due to order status change:', currentOrder.product_id);
+        
+        const { data: productData, error: productFetchError } = await supabase
+          .from('products')
+          .select('stock_quantity, in_stock')
+          .eq('id', currentOrder.product_id)
+          .single();
+        
+        if (productFetchError) {
+          console.warn('Failed to fetch product data for stock restoration:', productFetchError);
+        } else if (productData) {
+          const newStockQuantity = (productData.stock_quantity || 0) + 1;
+          const newInStock = true;
+          
+          const { error: stockUpdateError } = await supabase
+            .from('products')
+            .update({
+              stock_quantity: newStockQuantity,
+              in_stock: newInStock,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', currentOrder.product_id);
+          
+          if (stockUpdateError) {
+            console.warn('Failed to restore product stock:', stockUpdateError);
+          } else {
+            console.log('Successfully restored product stock due to status change:', {
+              productId: currentOrder.product_id,
+              oldStock: productData.stock_quantity,
+              newStock: newStockQuantity,
+              reason: 'order_status_change'
+            });
+          }
+        }
+      } catch (stockError) {
+        console.warn('Error restoring product stock:', stockError);
+      }
+    } else if (!wasOrderPaid && willOrderBePaid && !isOrderBeingCancelled) {
+      // Order was not paid/confirmed but is now being marked as paid/confirmed
+      // Decrease stock
+      try {
+        console.log('Decreasing stock due to order status change:', currentOrder.product_id);
+        
+        const { data: productData, error: productFetchError } = await supabase
+          .from('products')
+          .select('stock_quantity, in_stock')
+          .eq('id', currentOrder.product_id)
+          .single();
+        
+        if (productFetchError) {
+          console.warn('Failed to fetch product data for stock decrease:', productFetchError);
+        } else if (productData) {
+          const newStockQuantity = Math.max(0, (productData.stock_quantity || 0) - 1);
+          const newInStock = newStockQuantity > 0;
+          
+          const { error: stockUpdateError } = await supabase
+            .from('products')
+            .update({
+              stock_quantity: newStockQuantity,
+              in_stock: newInStock,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', currentOrder.product_id);
+          
+          if (stockUpdateError) {
+            console.warn('Failed to decrease product stock:', stockUpdateError);
+          } else {
+            console.log('Successfully decreased product stock due to status change:', {
+              productId: currentOrder.product_id,
+              oldStock: productData.stock_quantity,
+              newStock: newStockQuantity,
+              reason: 'order_status_change'
+            });
+          }
+        }
+      } catch (stockError) {
+        console.warn('Error decreasing product stock:', stockError);
+      }
     }
     
     console.log('Successfully updated art order');
