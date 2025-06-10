@@ -1436,3 +1436,125 @@ Följande diagram illustrerar relationerna mellan huvudtabellerna i betalningssy
    - Använd referensen för att spåra betalningen i alla relaterade tabeller
 
 Genom att följa denna arkitektur och dessa riktlinjer kan betalningssystemet hantera olika produkttyper konsekvent och pålitligt, samtidigt som det förblir flexibelt för framtida utökningar.
+
+## Prestationsproblem och Optimeringar
+
+### Identifierade Ineffektiviteter (Januari 2025)
+
+Under analys av betalningsflödet har flera prestationsproblem identifierats som orsakar onödiga väntetider för användare:
+
+#### **Problem 1: Onödiga setTimeout-delays**
+Flera komponenter använder hårdkodade setTimeout-delays som förlänger processen:
+
+- `PaymentSelection.tsx`: 1500ms delay före redirect (rad 368)
+- `InvoicePaymentDialog.tsx`: 1500ms delay vid stängning (rad 40-43)  
+- `SwishPaymentSection.tsx`: 1500ms delay efter bekräftad betalning (rad 103-118)
+
+**Påverkan**: Totalt 3-4.5 sekunder onödig väntetid fast processerna är klara.
+
+#### **Problem 2: Ineffektiv Polling**
+Swish-betalningar använder 3-sekunders polling även efter bekräftad betalning:
+
+```typescript
+// SwishPaymentSection.tsx rad 89
+statusPollInterval = setInterval(async () => {
+  // Fortsätter polla fast betalning är PAID
+}, 3000);
+```
+
+#### **Problem 3: Synkron Backend Men Asynkron Frontend**
+Bakgrundsjobb körs direkt och mailet skickas snabbt, men UI väntar ändå på timers:
+
+- `createBackgroundJob()` → `processNextJob()` → E-post skickat på ~5-10 sekunder
+- Frontend väntar ändå 30-60 sekunder på timers
+
+### **Föreslagna Lösningar**
+
+1. **Event-Driven Redirects**
+   ```typescript
+   // Ersätt setTimeout med callback från backend
+   const handlePaymentComplete = async (paymentData) => {
+     // Vänta på backend-bekräftelse istället för timer
+     const status = await waitForJobCompletion(paymentData.reference);
+     if (status.completed) {
+       router.push(redirectPath); // Omedelbar redirect
+     }
+   };
+   ```
+
+2. **Optimerad Polling**
+   ```typescript
+   // Minska intervall för aktiva betalningar
+   const pollInterval = paymentStatus === 'CREATED' ? 1000 : 5000;
+   ```
+
+3. **Bakgrundsjobb med Callbacks**
+   ```typescript
+   // Lägg till WebSocket eller Server-Sent Events för realtidsuppdateringar
+   const jobCompleted = await monitorJobProgress(jobId);
+   ```
+
+4. **Progressiv UI-feedback**
+   - Visa exakt processteg utan artificiella timers
+   - Använd verkliga statusar från backend istället för hårdkodade tider
+
+### **Förväntad Förbättring**
+Med dessa optimeringar kan totaltiden för en betalning minska från 60+ sekunder till 15-20 sekunder för de allra flesta fall.
+
+## Utvecklingslogg
+
+### Januari 2025
+
+#### **2025-01-15: Flödesharmonisering och Prestationsanalys**
+- ✅ **Harmoniserat alla tre betalningsflöden** (Swish, kursbokningar, presentkort)
+- ✅ **Enhetliga URL-mönster** via `flowNavigation.ts` för konsekvent routing
+- ✅ **Delad PaymentSelection-komponent** för alla produkttyper
+- ✅ **Gemensam GenericConfirmation** med produktspecifika detaljer
+- ✅ **Identifierat prestationsproblem**: Onödiga setTimeout-delays på 3-4.5 sekunder
+- ✅ **Analyserat backend-prestanda**: Bakgrundsjobb körs snabbt (~10s) men UI väntar länge
+
+**Tekniska förbättringar:**
+- Uppdaterat `PaymentService.ts`, `InvoiceService.ts` för konsekvent URL-hantering
+- Alla flows använder nu samma `FlowStepWrapper` med enhetlig arkitektur
+- Förbättrat redirect-logik för att matcha `flowNavigation.ts`-struktur
+
+**Prestandaproblem identifierade:**
+- Frontend använder hårdkodade timers istället för backend-status
+- Polling fortsätter fast betalningar är bekräftade
+- UI väntar på artificiella delays trots snabb backend-process
+
+#### **2025-01-10: Dokumentkonsolidering** 
+- ✅ **Arkiverat gamla README-filer** till `archived-docs/`
+- ✅ **Gjort README-PAYMENT-REFACTOR.md till huvuddokumentation**
+- ✅ **Förenklad README.md** med länkar till rätt dokumentation
+- ✅ **Skapat arkivdokumentation** med tydliga timestamps
+
+#### **2025-01-05: Betalningsflödesförbättringar**
+- ✅ **Stock-hantering för art_orders** - produktlager uppdateras korrekt vid beställningar/avbokningar
+- ✅ **Förbättrad presentkorts-PDF-generering** för fakturabetalningar
+- ✅ **Bakgrundsjobb för e-postutskick** med robust återförsökslogik
+- ✅ **Centraliserad PDF-hantering** via `pdfGenerator.ts`
+
+### December 2024
+
+#### **2024-12-20: Grundläggande Systemstabilisering**
+- ✅ **Enhetlig datavalidering** med Zod-scheman
+- ✅ **Standardiserade API-endpoints** för alla betalningstyper  
+- ✅ **Robustnare felhantering** i hela betalningskedjan
+- ✅ **Förbättrad checkout-datahantering** via `flowStorage`
+
+### **Planerade Förbättringar**
+
+#### **Nästa Sprint (Januari 2025)**
+- 🔄 **Optimera setTimeout-delays** - Ersätt artificiella timers med event-baserade
+- 🔄 **Implementera realtidsuppdateringar** för betalningsstatus
+- 🔄 **Förbättra polling-effektivitet** för Swish-betalningar
+- 📅 **A/B-testa prestationsmätningar** för användarupplevelse
+
+#### **Q1 2025**
+- 📅 **WebSocket-integration** för realtidsstatusuppdateringar
+- 📅 **Avancerad felåterställning** med automatiska återförsök
+- 📅 **Prestandamonitorering** med detaljerad användaranalys
+- 📅 **Mobil-optimering** av betalningsflöden
+
+```typescript
