@@ -73,7 +73,7 @@ import {
   setPaymentReference, 
   getGiftCardDetails 
 } from '@/utils/flowStorage';
-import { getPreviousStepUrl, getNextStepUrl } from '@/utils/flowNavigation';
+import { getPreviousStepUrl, getNextStepUrl, getStepUrl } from '@/utils/flowNavigation';
 import { 
   PAYMENT_STATUSES, 
   PAYMENT_METHODS, 
@@ -332,49 +332,39 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   };
 
   const handlePaymentComplete = (paymentData: any) => {
-    console.log('[PaymentSelection] Payment completed:', paymentData);
+    // Determine redirect path based on payment reference if available
+    let redirectPath = '/';
     
-    // Set success state
-    setPaymentSuccess(true);
-    
-    // Update dialog states based on payment method
-    if (selectedPaymentMethod === 'swish') {
-      setSwishPaymentStatus(PAYMENT_STATUSES.PAID);
-    } else if (selectedPaymentMethod === 'invoice') {
-      setInvoiceStatus('success');
-      if (paymentData.invoiceNumber) {
-        setInvoiceNumber(paymentData.invoiceNumber);
+    // Use flow navigation system for consistent URLs
+    if (flowType === FlowType.COURSE_BOOKING) {
+      redirectPath = getStepUrl(FlowType.COURSE_BOOKING, GenericStep.CONFIRMATION, courseId);
+      // Add reference as query parameter for additional context
+      if (paymentData?.paymentReference) {
+        redirectPath += `?reference=${paymentData.paymentReference}`;
       }
-      if (paymentData.paymentReference || paymentData.bookingReference) {
-        setBookingReference(paymentData.paymentReference || paymentData.bookingReference);
+    } else if (flowType === FlowType.GIFT_CARD) {
+      redirectPath = getStepUrl(FlowType.GIFT_CARD, GenericStep.CONFIRMATION);
+      // Add reference as query parameter for additional context
+      if (paymentData?.paymentReference) {
+        redirectPath += `?reference=${paymentData.paymentReference}`;
       }
+    } else if (flowType === FlowType.ART_PURCHASE) {
+      // For shop, we need the product ID from flowData or courseId (which serves as itemId)
+      const productId = flowData?.itemDetails?.id || courseId;
+      redirectPath = getStepUrl(FlowType.ART_PURCHASE, GenericStep.CONFIRMATION, productId);
+      // Add reference as query parameter for additional context
+      if (paymentData?.paymentReference) {
+        redirectPath += `?reference=${paymentData.paymentReference}`;
+      }
+    } else if (paymentData?.paymentReference) {
+      // Fallback to generic payment confirmation
+      redirectPath = `/payment/confirmation/${paymentData.paymentReference}`;
     }
     
-    // Delay redirect to allow user to see the success state
+    console.log('[PaymentSelection] Redirecting to:', redirectPath);
+    
+    // Add delay to let the payment processing complete
     setTimeout(() => {
-      // Prioritize redirect-URL from API-svar om den finns
-      if (paymentData?.redirectUrl) {
-        console.log('[PaymentSelection] Redirecting to URL from API:', paymentData.redirectUrl);
-        router.push(paymentData.redirectUrl);
-        return;
-      }
-      
-      // Fallback till standardrutter baserat på flowType
-      let redirectPath = '/payment/confirmation';
-      
-      if (paymentData?.paymentReference) {
-        redirectPath = `/payment/confirmation/${paymentData.paymentReference}`;
-      }
-      
-      if (flowType === FlowType.COURSE_BOOKING) {
-        redirectPath = `/booking/confirmation?reference=${paymentData?.paymentReference || ''}`;
-      } else if (flowType === FlowType.GIFT_CARD) {
-        redirectPath = `/gift-card-flow/confirmation?reference=${paymentData?.paymentReference || ''}`;
-      } else if (flowType === FlowType.ART_PURCHASE) {
-        redirectPath = `/art/confirmation?reference=${paymentData?.paymentReference || ''}`;
-      }
-      
-      console.log('[PaymentSelection] Redirecting to:', redirectPath);
       router.push(redirectPath);
     }, 1500);
     

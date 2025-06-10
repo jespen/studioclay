@@ -23,6 +23,8 @@ import {
   ProductType
 } from '@/constants/statusCodes';
 import { UserInfo } from '@/types/booking';
+import { getStepUrl } from '@/utils/flowNavigation';
+import { FlowType, GenericStep } from '@/components/common/BookingStepper';
 
 // Typer specifika för fakturabetalningar
 export interface InvoiceDetails {
@@ -277,16 +279,32 @@ export class InvoiceService {
     // Använd validerad produkttyp
     const validProductType = getValidProductType(productType);
     
+    // Convert to FlowType for consistency  
+    let baseUrl: string;
+    
     switch (validProductType) {
       case PRODUCT_TYPES.COURSE:
-        return `/booking/confirmation?reference=${reference}`;
+        // For courses, we need the course ID to build the correct URL
+        // Since we don't have it here, we'll fall back to a generic path
+        baseUrl = '/book-course';
+        break;
       case PRODUCT_TYPES.GIFT_CARD:
-        return `/gift-card-flow/confirmation?reference=${reference}`;
+        baseUrl = getStepUrl(FlowType.GIFT_CARD, GenericStep.CONFIRMATION);
+        break;
       case PRODUCT_TYPES.ART_PRODUCT:
-        return `/shop/confirmation?reference=${reference}`;
+        // For products, we need the product ID to build the correct URL
+        // Since we don't have it here, we'll fall back to a generic path
+        baseUrl = '/shop';
+        break;
       default:
-        return `/payment/confirmation?reference=${reference}`;
+        baseUrl = '/payment/confirmation';
+        break;
     }
+    
+    // Add reference as query parameter for additional context
+    const hasQuery = baseUrl.includes('?');
+    const separator = hasQuery ? '&' : '?';
+    return `${baseUrl}${separator}reference=${reference}`;
   }
 
   /**

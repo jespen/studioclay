@@ -10,6 +10,8 @@ import { z } from 'zod';
 import { createLogContext, logError, logInfo, LogContext, logWarning } from './logging';
 import { SwishConfig } from '@/lib/swish/SwishConfig';
 import { SwishErrorCode } from '@/lib/swish/SwishErrorCode';
+import { getStepUrl } from '@/utils/flowNavigation';
+import { FlowType, GenericStep } from '@/components/common/BookingStepper';
 
 // Produkt- och betalningstyper
 export enum ProductType {
@@ -347,15 +349,35 @@ export class PaymentService {
    * Hämta rätt omdirigerings-URL baserat på produkttyp
    */
   private getRedirectUrl(productType: ProductType, reference: string): string {
+    // Convert ProductType to FlowType for consistency
+    let flowType: FlowType;
+    let baseUrl: string;
+    
     switch (productType) {
       case ProductType.COURSE:
-        return `/booking/confirmation?reference=${reference}`;
+        flowType = FlowType.COURSE_BOOKING;
+        // For courses, we need the course ID to build the correct URL
+        // Since we don't have it here, we'll fall back to a generic path
+        baseUrl = '/book-course';
+        break;
       case ProductType.GIFT_CARD:
-        return `/gift-card-flow/confirmation?reference=${reference}`;
+        flowType = FlowType.GIFT_CARD;
+        baseUrl = getStepUrl(FlowType.GIFT_CARD, GenericStep.CONFIRMATION);
+        break;
       case ProductType.ART_PRODUCT:
-        return `/shop/confirmation?reference=${reference}`;
+        flowType = FlowType.ART_PURCHASE;
+        // For products, we need the product ID to build the correct URL
+        // Since we don't have it here, we'll fall back to a generic path
+        baseUrl = '/shop';
+        break;
       default:
-        return `/payment/confirmation?reference=${reference}`;
+        baseUrl = '/payment/confirmation';
+        break;
     }
+    
+    // Add reference as query parameter for additional context
+    const hasQuery = baseUrl.includes('?');
+    const separator = hasQuery ? '&' : '?';
+    return `${baseUrl}${separator}reference=${reference}`;
   }
 } 

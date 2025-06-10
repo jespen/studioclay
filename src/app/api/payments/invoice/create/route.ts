@@ -669,16 +669,32 @@ function getRedirectUrl(productType: string, reference: string): string {
   // Använd validerad produkttyp
   const validProductType = mapProductType(productType);
   
+  // Use consistent base URLs that align with flowNavigation.ts
+  let baseUrl: string;
+  
   switch (validProductType) {
     case PRODUCT_TYPES.COURSE:
-      return `/booking/confirmation?reference=${reference}`;
+      // For courses, we need the course ID to build the correct URL
+      // Since we don't have it here, we'll fall back to a generic path
+      baseUrl = '/book-course';
+      break;
     case PRODUCT_TYPES.GIFT_CARD:
-      return `/gift-card-flow/confirmation?reference=${reference}`;
+      baseUrl = '/gift-card-flow/confirmation';
+      break;
     case PRODUCT_TYPES.ART_PRODUCT:
-      return `/art/confirmation?reference=${reference}`;
+      // For products, we need the product ID to build the correct URL
+      // Since we don't have it here, we'll fall back to a generic path
+      baseUrl = '/shop';
+      break;
     default:
-      return `/payment/confirmation/${reference}`;
+      baseUrl = '/payment/confirmation';
+      break;
   }
+  
+  // Add reference as query parameter for additional context
+  const hasQuery = baseUrl.includes('?');
+  const separator = hasQuery ? '&' : '?';
+  return `${baseUrl}${separator}reference=${reference}`;
 }
 
 export const POST = async (req: Request) => {

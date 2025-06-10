@@ -51,13 +51,13 @@ export default function PaymentConfirmation({ params }: { params: { reference: s
         // Om produkttypen är definierad och har en egen bekräftelsesida, omdirigera dit
         if (data.data.productType) {
           if (data.data.productType === PRODUCT_TYPES.COURSE && data.data.productId) {
-            router.push(`/booking/confirmation?reference=${params.reference}`);
+            router.push(`/book-course?reference=${params.reference}`);
             return;
           } else if (data.data.productType === PRODUCT_TYPES.GIFT_CARD) {
             router.push(`/gift-card-flow/confirmation?reference=${params.reference}`);
             return;
           } else if (data.data.productType === PRODUCT_TYPES.ART_PRODUCT) {
-            router.push(`/art/confirmation?reference=${params.reference}`);
+            router.push(`/shop?reference=${params.reference}`);
             return;
           }
         }
