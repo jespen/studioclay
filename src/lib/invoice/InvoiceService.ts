@@ -281,7 +281,7 @@ export class InvoiceService {
       case PRODUCT_TYPES.COURSE:
         return `/booking/confirmation?reference=${reference}`;
       case PRODUCT_TYPES.GIFT_CARD:
-        return `/giftcard/confirmation?reference=${reference}`;
+        return `/gift-card-flow/confirmation?reference=${reference}`;
       case PRODUCT_TYPES.ART_PRODUCT:
         return `/shop/confirmation?reference=${reference}`;
       default:
