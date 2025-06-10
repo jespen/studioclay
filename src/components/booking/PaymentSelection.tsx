@@ -369,7 +369,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       if (flowType === FlowType.COURSE_BOOKING) {
         redirectPath = `/booking/confirmation?reference=${paymentData?.paymentReference || ''}`;
       } else if (flowType === FlowType.GIFT_CARD) {
-        redirectPath = `/gift-card/confirmation?reference=${paymentData?.paymentReference || ''}`;
+        redirectPath = `/gift-card-flow/confirmation?reference=${paymentData?.paymentReference || ''}`;
       } else if (flowType === FlowType.ART_PURCHASE) {
         redirectPath = `/art/confirmation?reference=${paymentData?.paymentReference || ''}`;
       }

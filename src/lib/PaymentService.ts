@@ -351,7 +351,7 @@ export class PaymentService {
       case ProductType.COURSE:
         return `/booking/confirmation?reference=${reference}`;
       case ProductType.GIFT_CARD:
-        return `/giftcard/confirmation?reference=${reference}`;
+        return `/gift-card-flow/confirmation?reference=${reference}`;
       case ProductType.ART_PRODUCT:
         return `/shop/confirmation?reference=${reference}`;
       default:

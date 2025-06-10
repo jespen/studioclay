@@ -673,7 +673,7 @@ function getRedirectUrl(productType: string, reference: string): string {
     case PRODUCT_TYPES.COURSE:
       return `/booking/confirmation?reference=${reference}`;
     case PRODUCT_TYPES.GIFT_CARD:
-      return `/gift-card/confirmation?reference=${reference}`;
+      return `/gift-card-flow/confirmation?reference=${reference}`;
     case PRODUCT_TYPES.ART_PRODUCT:
       return `/art/confirmation?reference=${reference}`;
     default:

@@ -54,7 +54,7 @@ export default function PaymentConfirmation({ params }: { params: { reference: s
             router.push(`/booking/confirmation?reference=${params.reference}`);
             return;
           } else if (data.data.productType === PRODUCT_TYPES.GIFT_CARD) {
-            router.push(`/gift-card/confirmation?reference=${params.reference}`);
+            router.push(`/gift-card-flow/confirmation?reference=${params.reference}`);
             return;
           } else if (data.data.productType === PRODUCT_TYPES.ART_PRODUCT) {
             router.push(`/art/confirmation?reference=${params.reference}`);
