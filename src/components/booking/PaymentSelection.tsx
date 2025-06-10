@@ -366,7 +366,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     // Add delay to let the payment processing complete
     setTimeout(() => {
       router.push(redirectPath);
-    }, 1500);
+    }, 500); // Reducerat från 1500ms för snabbare redirect
     
     // Call onNext if a callback exists
     if (onNext) {
@@ -424,7 +424,16 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     // Determine actual payment status from paymentData
     const paymentStatus = paymentData.status || PAYMENT_STATUSES.CREATED;
     
-    console.log(`Payment success handler with status: ${paymentStatus}`, paymentData);
+    console.log(`✅ Payment fully completed (including all background processing): ${paymentStatus}`, paymentData);
+    
+    // VIKTIGT: Uppdatera dialog-status omedelbart när API:et returnerar framgång
+    if (selectedPaymentMethod === 'invoice') {
+      setInvoiceStatus('success');
+      setInvoiceNumber(paymentData.invoiceNumber || paymentData.invoice_number || '');
+      setBookingReference(paymentData.bookingReference || paymentData.payment_reference || '');
+    } else if (selectedPaymentMethod === 'swish') {
+      setSwishPaymentStatus(PAYMENT_STATUSES.PAID);
+    }
     
     // Store payment info using PaymentService instead of direct call
     PaymentService.completePayment({
@@ -437,7 +446,10 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       additionalData: paymentData
     });
 
-    // Proceed to next step
+    // Nu när API garanterar att ALLT är klart (inkl PDF och e-post), 
+    // redirecta omedelbart utan delay
+    console.log(`🚀 All processing complete (PDF generated, email sent), proceeding immediately`);
+    
     if (onNext) {
       onNext({
         paymentStatus: paymentStatus,

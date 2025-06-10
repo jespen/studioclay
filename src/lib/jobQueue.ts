@@ -25,6 +25,7 @@ export async function createBackgroundJob(
   options: { 
     requestId?: string;
     delay?: number; // fördröjning i millisekunder innan jobbet körs
+    waitForCompletion?: boolean; // ny parameter - vänta på att jobbet är klart
   } = {}
 ): Promise<string | null> {
   const requestId = options.requestId || uuidv4();
@@ -34,7 +35,8 @@ export async function createBackgroundJob(
     logDebug(`Starting background job creation process`, {
       requestId,
       jobType,
-      jobDataKeys: Object.keys(jobData || {})
+      jobDataKeys: Object.keys(jobData || {}),
+      waitForCompletion: options.waitForCompletion || false
     });
 
     // Validate job data
@@ -103,7 +105,8 @@ export async function createBackgroundJob(
     // Process jobs regardless of environment
     logInfo(`Processing job immediately`, {
       requestId,
-      jobId: data.id
+      jobId: data.id,
+      waitForCompletion: options.waitForCompletion || false
     });
     
     // Vänta på eventuell fördröjning om det är angett
@@ -128,19 +131,41 @@ export async function createBackgroundJob(
         jobType
       });
       
+      const startTime = Date.now();
       const result = await processNextJob(requestId);
+      const processingTime = Date.now() - startTime;
       
       if (result.success) {
-        logInfo(`Successfully processed job ${result.jobId || 'unknown'} directly`, {
+        logInfo(`Successfully processed job ${result.jobId || 'unknown'} directly in ${processingTime}ms`, {
           requestId,
           jobId: data.id,
-          processedJobId: result.jobId
+          processedJobId: result.jobId,
+          processingTimeMs: processingTime
         });
+        
+        // NYTT: Om vi ska vänta på completion, returnera bara om jobbet faktiskt lyckades
+        if (options.waitForCompletion) {
+          logInfo(`Job completed successfully and waitForCompletion=true, returning job ID`, {
+            requestId,
+            jobId: data.id
+          });
+          return data.id;
+        }
       } else {
         logWarning(`Direct job processing failed: ${result.error || 'Unknown error'}`, {
           requestId,
           jobId: data.id
         });
+        
+        // Om waitForCompletion=true och jobbet misslyckades, returnera null
+        if (options.waitForCompletion) {
+          logError(`Job failed and waitForCompletion=true, returning null`, {
+            requestId,
+            jobId: data.id,
+            error: result.error
+          });
+          return null;
+        }
         
         // Fallback till HTTP om direkt bearbetning misslyckades
         const httpResult = await processJobs(requestId);
@@ -148,6 +173,11 @@ export async function createBackgroundJob(
           requestId, 
           jobId: data.id
         });
+        
+        // Om waitForCompletion=true, returnera baserat på HTTP-resultat
+        if (options.waitForCompletion) {
+          return httpResult ? data.id : null;
+        }
       }
     } catch (importError) {
       logWarning(`Could not directly process job, trying HTTP fallback: ${importError instanceof Error ? importError.message : 'Unknown error'}`, {
@@ -161,6 +191,11 @@ export async function createBackgroundJob(
         requestId,
         jobId: data.id
       });
+      
+      // Om waitForCompletion=true, returnera baserat på HTTP-resultat
+      if (options.waitForCompletion) {
+        return processed ? data.id : null;
+      }
     }
     
     return data.id;

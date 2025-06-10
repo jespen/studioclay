@@ -42,7 +42,7 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
       // Add a small delay to allow the user to see the success state
       const timer = setTimeout(() => {
         onClose();
-      }, 1500);
+      }, 500); // Reducerat från 1500ms för snabbare redirect
       return () => clearTimeout(timer);
     }
   }, [status, open, onClose]);
@@ -98,8 +98,8 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
             <CircularProgress size={60} sx={{ mb: 2 }} />
             <Typography variant="body1" align="center" gutterBottom>
-              Vi skapar din faktura och skickar den till din e-postadress.
-              Detta kan ta upp till 1 minut.
+              Vi bearbetar din beställning, genererar dokument och skickar bekräftelse.
+              Processen pågår i bakgrunden.
             </Typography>
             
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
@@ -109,7 +109,7 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
             <Box sx={{ width: '100%', mt: 3 }}>
               <LinearProgress 
                 variant="determinate" 
-                value={Math.min(100, (processingTime / 45) * 100)} 
+                value={Math.min(100, (processingTime / 10) * 100)} 
                 sx={{ height: 8, borderRadius: 4 }}
               />
             </Box>
@@ -119,14 +119,14 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
               width: '100%', 
               mt: 4, 
               p: 2, 
-              bgcolor: processingTime > 0 && processingTime <= 10 ? 'rgba(66, 133, 119, 0.1)' : 'transparent',
+              bgcolor: processingTime > 0 && processingTime <= 2 ? 'rgba(66, 133, 119, 0.1)' : 'transparent',
               borderRadius: 2,
               transition: 'background-color 0.3s ease',
-              border: processingTime > 0 && processingTime <= 10 ? '1px solid rgba(66, 133, 119, 0.3)' : '1px solid transparent'
+              border: processingTime > 0 && processingTime <= 2 ? '1px solid rgba(66, 133, 119, 0.3)' : '1px solid transparent'
             }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {processingTime > 0 ? <DoneIcon color="success" /> : <CircularProgress size={16} />}
-                <Typography variant="body2" fontWeight={processingTime > 0 && processingTime <= 10 ? 'bold' : 'normal'}>
+                {processingTime > 1 ? <DoneIcon color="success" /> : <CircularProgress size={16} />}
+                <Typography variant="body2" fontWeight={processingTime > 0 && processingTime <= 2 ? 'bold' : 'normal'}>
                   Registrerar fakturainformation
                 </Typography>
               </Box>
@@ -137,14 +137,14 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
               width: '100%', 
               mt: 2, 
               p: 2, 
-              bgcolor: processingTime > 10 && processingTime <= 20 ? 'rgba(66, 133, 119, 0.1)' : 'transparent',
+              bgcolor: processingTime > 1 && processingTime <= 4 ? 'rgba(66, 133, 119, 0.1)' : 'transparent',
               borderRadius: 2,
               transition: 'background-color 0.3s ease',
-              border: processingTime > 10 && processingTime <= 20 ? '1px solid rgba(66, 133, 119, 0.3)' : '1px solid transparent'
+              border: processingTime > 1 && processingTime <= 4 ? '1px solid rgba(66, 133, 119, 0.3)' : '1px solid transparent'
             }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {processingTime > 10 ? <DoneIcon color="success" /> : <CircularProgress size={16} />}
-                <Typography variant="body2" fontWeight={processingTime > 10 && processingTime <= 20 ? 'bold' : 'normal'}>
+                {processingTime > 2 ? <DoneIcon color="success" /> : <CircularProgress size={16} />}
+                <Typography variant="body2" fontWeight={processingTime > 1 && processingTime <= 4 ? 'bold' : 'normal'}>
                   Genererar fakturadokument <PictureAsPdfIcon fontSize="small" sx={{ ml: 0.5, fontSize: 16 }} />
                 </Typography>
               </Box>
@@ -155,14 +155,14 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
               width: '100%', 
               mt: 2, 
               p: 2, 
-              bgcolor: processingTime > 20 && processingTime <= 30 ? 'rgba(66, 133, 119, 0.1)' : 'transparent',
+              bgcolor: processingTime > 2 && processingTime <= 6 ? 'rgba(66, 133, 119, 0.1)' : 'transparent',
               borderRadius: 2,
               transition: 'background-color 0.3s ease',
-              border: processingTime > 20 && processingTime <= 30 ? '1px solid rgba(66, 133, 119, 0.3)' : '1px solid transparent'
+              border: processingTime > 2 && processingTime <= 6 ? '1px solid rgba(66, 133, 119, 0.3)' : '1px solid transparent'
             }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {processingTime > 20 ? <DoneIcon color="success" /> : <CircularProgress size={16} />}
-                <Typography variant="body2" fontWeight={processingTime > 20 && processingTime <= 30 ? 'bold' : 'normal'}>
+                {processingTime > 3 ? <DoneIcon color="success" /> : <CircularProgress size={16} />}
+                <Typography variant="body2" fontWeight={processingTime > 2 && processingTime <= 6 ? 'bold' : 'normal'}>
                   Förbereder och bearbetar orderinformation
                 </Typography>
               </Box>
@@ -173,20 +173,20 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
               width: '100%', 
               mt: 2, 
               p: 2, 
-              bgcolor: processingTime > 30 ? 'rgba(66, 133, 119, 0.1)' : 'transparent',
+              bgcolor: processingTime > 3 ? 'rgba(66, 133, 119, 0.1)' : 'transparent',
               borderRadius: 2,
               transition: 'background-color 0.3s ease',
-              border: processingTime > 30 ? '1px solid rgba(66, 133, 119, 0.3)' : '1px solid transparent'
+              border: processingTime > 3 ? '1px solid rgba(66, 133, 119, 0.3)' : '1px solid transparent'
             }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {processingTime > 30 ? <DoneIcon color="success" /> : <CircularProgress size={16} />}
-                <Typography variant="body2" fontWeight={processingTime > 30 ? 'bold' : 'normal'}>
+                {processingTime > 4 ? <DoneIcon color="success" /> : <CircularProgress size={16} />}
+                <Typography variant="body2" fontWeight={processingTime > 3 ? 'bold' : 'normal'}>
                   Skickar bekräftelsemail <EmailIcon fontSize="small" sx={{ ml: 0.5, fontSize: 16 }} />
                 </Typography>
               </Box>
             </Box>
             
-            {processingTime > 40 && (
+            {processingTime > 5 && (
               <Typography variant="body2" color="primary" sx={{ mt: 3, fontWeight: 'bold' }}>
                 Nästan klart! Förbereder din bekräftelsesida...
               </Typography>
@@ -198,7 +198,7 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
             <CheckCircleIcon color="success" sx={{ fontSize: 48, mb: 2 }} />
             <Typography variant="body1" paragraph align="center">
-              Din faktura har skapats framgångsrikt!
+              Allt är klart! Din beställning är slutförd.
             </Typography>
             {invoiceNumber && (
               <Typography variant="body2" color="text.secondary">
@@ -211,9 +211,11 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
               </Typography>
             )}
             <Typography variant="body2" sx={{ mt: 2 }} align="center">
-              En bekräftelse har skickats till din e-postadress.
+              ✅ Faktura genererad och skickad till din e-post
               <br />
-              Du kommer att omdirigeras till bekräftelsesidan...
+              📧 Bekräftelsemail har levererats
+              <br />
+              🚀 Omdirigerar till bekräftelsesidan...
             </Typography>
           </Box>
         )}

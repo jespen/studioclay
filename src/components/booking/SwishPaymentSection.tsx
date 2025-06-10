@@ -108,7 +108,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
                 // Allow some time for the dialog to show success before proceeding
                 setTimeout(() => {
                   handlePaymentSuccess(data.data);
-                }, 1500);
+                }, 500); // Reducerat från 1500ms för snabbare redirect
               } 
               
               // Handle declined payment
@@ -118,7 +118,7 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
                 
                 setTimeout(() => {
                   handlePaymentCancellation();
-                }, 1500);
+                }, 500); // Reducerat från 1500ms för snabbare redirect
               }
               
               // Handle error
@@ -128,14 +128,14 @@ const SwishPaymentSection = forwardRef<SwishPaymentSectionRef, SwishPaymentSecti
                 
                 setTimeout(() => {
                   handlePaymentError(new Error('Payment failed with status ERROR'));
-                }, 1500);
+                }, 500); // Reducerat från 1500ms för snabbare redirect
               }
             }
           }
         } catch (error) {
           console.error('[SwishPaymentSection] Error polling payment status:', error);
         }
-      }, 3000);
+      }, 2000); // Reducerat från 3000ms för snabbare polling
     }
     
     return () => {

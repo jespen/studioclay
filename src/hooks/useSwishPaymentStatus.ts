@@ -139,9 +139,10 @@ export const useSwishPaymentStatus = ({
       return;
     }
     
-    console.log('▶️ Starting payment polling');
+    console.log('▶️ Starting optimized payment polling (max 15 attempts)');
     let attempts = 0;
-    const MAX_ATTEMPTS = 60;
+    const MAX_ATTEMPTS = 15; // Reducerat från 60 för snabbare redirect (15×2sek = 30sek max)
+    const startTime = Date.now();
     
     // Funktion för att polla status
     const pollStatus = async () => {
@@ -166,7 +167,8 @@ export const useSwishPaymentStatus = ({
       
       // MYCKET VIKTIG ÄNDRING: ALLTID uppdatera om vi får PAID
       if (status === PAYMENT_STATUSES.PAID) {
-        console.log('💰 PAYMENT IS PAID! Updating status and preparing redirect');
+        const totalTime = Math.round((Date.now() - startTime) / 1000);
+        console.log(`💰 PAYMENT IS PAID! Total time: ${totalTime}s (attempts: ${attempts})`);
         setPaymentStatus(PAYMENT_STATUSES.PAID);
         
         // NYTT: Uppdatera betalningsstatus i localStorage
@@ -195,7 +197,7 @@ export const useSwishPaymentStatus = ({
             console.log(`🔀 Redirecting to ${redirectUrl}`);
             router.push(redirectUrl);
           }
-        }, 1500);
+        }, 500); // Reducerat från 1500ms för snabbare redirect
         
         console.log('✅ Payment confirmed as PAID - stopping all polling');
         return; // Avsluta polling
@@ -215,7 +217,14 @@ export const useSwishPaymentStatus = ({
       
       // Fortsätt polla om vi inte har avbrutit
       if (showPaymentDialog && !isCancelledRef.current) {
-        setTimeout(pollStatus, 2000);
+        // Smart polling: börja snabbt, sakta ner över tid
+        const getPollingInterval = (attempt: number) => {
+          if (attempt < 5) return 1000;    // Första 5 sekunderna: 1s intervall
+          if (attempt < 15) return 2000;   // Nästa 20 sekunder: 2s intervall  
+          return 5000;                     // Därefter: 5s intervall
+        };
+        
+        setTimeout(pollStatus, getPollingInterval(attempts));
       }
     };
     

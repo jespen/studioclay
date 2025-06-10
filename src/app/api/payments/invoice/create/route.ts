@@ -1357,7 +1357,8 @@ export const POST = async (req: Request) => {
             },
             { 
               requestId,
-              delay: 100      // Liten fördröjning för att säkerställa att databasoperationer har slutförts
+              delay: 100,     // Liten fördröjning för att säkerställa att databasoperationer har slutförts
+              waitForCompletion: true  // NYTT: Vänta på att jobbet verkligen är klart
             }
           );
           

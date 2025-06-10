@@ -30,8 +30,8 @@ const emailConfig = {
   }
 };
 
-// Longer keep-alive timer for email sending (30 seconds instead of 15)
-const EMAIL_KEEP_ALIVE_MS = 30000;
+// Reduced keep-alive timer for faster processing (2 seconds instead of 30)
+const EMAIL_KEEP_ALIVE_MS = 2000;
 
 // Simple format price helper function to avoid import dependency
 function formatPrice(price: number): string {
