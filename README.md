@@ -13,10 +13,11 @@ En modern webbplats för Studio Clay, en kreativ designstudio som specialiserar 
 
 ## Dokumentation
 
-- [README-CHECKOUT-FLOW.md](./README-CHECKOUT-FLOW.md) - Detaljerad dokumentation om checkout-flödet
-- [README-PAYMENT-FLOW.md](./README-PAYMENT-FLOW.md) - Dokumentation om betalningssystemet
+- [README-PAYMENT-REFACTOR.md](./README-PAYMENT-REFACTOR.md) - Komplett betalnings- och checkout-dokumentation
+- [README-ADMIN.md](./README-ADMIN.md) - Admin-komponenter och API-caching
 - [src/docs/GIFT-CARD-SYSTEM.md](./src/docs/GIFT-CARD-SYSTEM.md) - Dokumentation om presentkortssystemet
 - [BOOKING-SYSTEM.md](./BOOKING-SYSTEM.md) - Dokumentation om bokningssystemet
+- [archived-docs/](./archived-docs/) - Arkiverade dokumentationsfiler
 
 ## Tech Stack
 
@@ -206,47 +207,16 @@ The payment status can now be updated through:
 
 Both components now use the `/api/admin/payments/update-status` endpoint for updates.
 
-## Testing Swish Payments
+## Betalningssystem
 
-Swish payments follow an E-Commerce flow as documented at [Swish Developer Portal](https://developer.swish.nu/documentation/guides/create-a-payment-request):
+Studio Clay använder ett avancerat betalningssystem som stödjer både Swish och fakturabetalningar för kursbokningar, presentkort och konstprodukter. 
 
-1. Our backend creates a payment request with callback URL
-2. The user enters their phone number in our UI
-3. Swish processes the payment in their app
-4. Swish sends a callback to our server with the result
-5. Our callback handler:
-   - Updates the payment status
-   - Creates a booking (if PAID)
-   - Updates course participants
+För detaljerad dokumentation om betalningssystemet, se [README-PAYMENT-REFACTOR.md](./README-PAYMENT-REFACTOR.md).
 
-### Testing with Swish Test Environment
-
-In the test environment, Swish provides special test phone numbers that automatically generate specific responses:
-
-- **071234567**: Always generates a PAID response
-- **071234568**: Always generates a DECLINED response
-- **071234569**: Always generates an ERROR response
-
-To test the payment flow:
-
-1. Start the application in test mode (`NEXT_PUBLIC_SWISH_TEST_MODE=true`)
-2. Create a payment with one of the test phone numbers
-3. Our status polling should reflect the expected status
-4. Swish test environment should send a callback to our endpoint
-5. After the callback is processed, verify that:
-   - The payment status has been updated
-   - For successful payments (071234567), a booking has been created
-   - The course participants count has been updated
-
-### Important Note on Development Testing
-
-The Swish test environment expects to be able to reach your callback URL. If testing locally, you may need to expose your local server using a tool like ngrok:
-
-```bash
-ngrok http 3000
-```
-
-Then update the `NEXT_PUBLIC_BASE_URL` environment variable with the generated ngrok URL.
+### Snabbguide för testning
+- **Swish-testning**: Använd testläge med `NEXT_PUBLIC_SWISH_TEST_MODE=true`
+- **Testnummer**: 071234567 (PAID), 071234568 (DECLINED), 071234569 (ERROR)
+- **Fakturabetalningar**: Genererar automatiskt PDF-fakturor och skickar via e-post
 
 ## Booking System Documentation
 

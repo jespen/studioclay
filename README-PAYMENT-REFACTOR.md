@@ -178,13 +178,54 @@ async function queueBackgroundJob(jobType, jobData, options = {}) {
 }
 ```
 
+## Checkout Flow Refaktorisering
+
+Som en del av betalningsrefaktoriseringen har vi genomfört omfattande förbättringar av checkout-flödet för att skapa en mer konsekvent, underhållbar och robust användarupplevelse.
+
+### Nyckelförbättringar i Checkout-flödet
+
+1. **Centraliserad Datahantering**
+   - Skapade `/src/utils/dataFetcher.ts` som ett enhetligt API för dataoperationer
+   - Standardiserade interfaces för `CourseDetail`, `UserInfo`, och `PaymentInfo`
+   - Lade till verktyg för alla dataoperationer
+
+2. **Förenklad Komponentstruktur**
+   - Minskade kodduplikation mellan komponenter
+   - Tog bort redundanta localStorage-anrop
+   - Förbättrade felhantering och laddningsstatus
+   - Bättre hantering av komponent mounting/unmounting
+
+3. **Förbättrat Flöde**
+   - Flödet mellan steg är nu mer konsekvent
+   - Renare integration med FlowStepWrapper-systemet
+   - Delade valideringsmönster mellan olika flödessteg
+
+### Migrationsväg för Komponenter
+
+Komponenter prioriterar nu användning av flowStorage API samtidigt som bakåtkompatibilitet bibehålls:
+
+1. Försök först att hämta data från flowData props (skickas av FlowStepWrapper)
+2. Försök sedan att hämta från flowStorage API
+3. Falla slutligen tillbaka på legacy localStorage
+
+Detta säkerställer en smidig övergång och bibehåller kompatibilitet med både gamla och nya system.
+
+### Fördelar med den nya Checkout-arkitekturen
+
+- **Underhållbarhet**: Koden är nu mer DRY och följer tydliga mönster
+- **TypeScript-stöd**: Bättre typdefinitioner för datastrukturer
+- **Prestanda**: Minskad dubbelhämtning av samma data
+- **Tillförlitlighet**: Bättre felhantering och tillståndshantering
+- **Skalbarhet**: Enkelt att utöka med nya funktioner eller flödestyper
+
 ## Implementationsplan
 
-### Fas 1: Datamodellerning och Validering (Pågående)
+### Fas 1: Datamodellerning och Validering (Slutförd)
 - ✅ Definiera Zod-scheman för alla datamodeller
 - ✅ Implementera normaliseringsfunktioner
 - ✅ Centralisera valideringslogik
-- 🔄 Integrera valideringslagret i alla API-endpoints
+- ✅ Integrera valideringslagret i alla API-endpoints
+- ✅ Implementera centraliserad checkout-datahantering
 
 ### Fas 2: Transaktionshantering (Nästa steg)
 - 🔄 Skapa stored procedures för transaktionshantering
