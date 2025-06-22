@@ -538,6 +538,108 @@ const GiftCardManager: React.FC = () => {
     }
   }
 
+  async function handleDeleteGiftCard(id: string) {
+    const card = giftCards.find(card => card.id === id);
+    if (!card) {
+      alert('Presentkortet kunde inte hittas');
+      return;
+    }
+
+    // Confirm deletion
+    if (!confirm(`Är du säker på att du vill ta bort presentkort ${card.code}? Detta kan inte ångras.`)) {
+      return;
+    }
+
+    setUpdatingCards(prev => ({ ...prev, [id]: true }));
+
+    try {
+      console.log(`Deleting gift card ${id}`);
+
+      const response = await fetch(`/api/gift-cards/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete gift card');
+      }
+
+      // Remove from local state
+      setGiftCards(giftCards.filter(card => card.id !== id));
+      
+      console.log(`Successfully deleted gift card ${id}`);
+      alert(`Presentkort ${card.code} har tagits bort`);
+
+    } catch (err) {
+      console.error('Error deleting gift card:', err);
+      alert('Ett fel inträffade när presentkortet skulle tas bort: ' + 
+        (err instanceof Error ? err.message : 'Okänt fel'));
+    } finally {
+      setUpdatingCards(prev => ({ ...prev, [id]: false }));
+    }
+  }
+
+  async function generateInvoicePDF(card: GiftCard) {
+    try {
+      // Show loading state
+      setUpdatingCards(prev => ({ ...prev, [card.id]: true }));
+      
+      console.log(`Generating invoice PDF for gift card: ${card.id}`);
+      
+      if (!card.invoice_number) {
+        alert('Det finns inget fakturanummer för detta presentkort');
+        return;
+      }
+
+      try {
+        console.log(`Trying to fetch invoice PDF via /api/invoice/${card.invoice_number}`);
+        const response = await fetch(`/api/invoice/${card.invoice_number}`);
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          console.log('Invoice PDF found!');
+          // Open invoice PDF in new tab
+          const pdfWindow = window.open('', '_blank');
+          if (pdfWindow) {
+            pdfWindow.document.write(`
+              <html>
+                <head>
+                  <title>Faktura ${card.invoice_number}</title>
+                </head>
+                <body style="margin:0;padding:0;">
+                  <iframe 
+                    src="data:application/pdf;base64,${data.pdf}" 
+                    width="100%" 
+                    height="100%" 
+                    style="border:none;position:absolute;top:0;left:0;right:0;bottom:0;"
+                  ></iframe>
+                </body>
+              </html>
+            `);
+          }
+          return;
+        } else {
+          console.log('Invoice PDF not found via API endpoint');
+          alert('Faktura-PDF kunde inte hittas för detta presentkort');
+        }
+      } catch (invoiceError) {
+        console.error('Error fetching invoice PDF:', invoiceError);
+        alert('Ett fel inträffade när fakturan skulle hämtas: ' + 
+          (invoiceError instanceof Error ? invoiceError.message : 'Okänt fel'));
+      }
+      
+    } catch (error) {
+      console.error('Error handling invoice PDF:', error);
+      alert('Det gick inte att hantera faktura-PDF: ' + (error instanceof Error ? error.message : 'Okänt fel'));
+    } finally {
+      // Hide loading state
+      setUpdatingCards(prev => ({ ...prev, [card.id]: false }));
+    }
+  }
+
   const handleCreateCard = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -788,6 +890,8 @@ const GiftCardManager: React.FC = () => {
                 onStatusChange={handleChangeStatus}
                 onTogglePayment={handleTogglePaymentStatus}
                 onGeneratePDF={generateGiftCardPDF}
+                onGenerateInvoicePDF={generateInvoicePDF}
+                onDeleteGiftCard={handleDeleteGiftCard}
                 onSendEmail={sendGiftCardEmail}
                 onMarkAsEmailed={handleMarkAsEmailed}
                 onUpdateBalance={handleUpdateRemainingBalance}

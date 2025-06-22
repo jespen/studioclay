@@ -312,7 +312,7 @@ const InvoicePaymentSection = forwardRef<InvoicePaymentSectionRef, InvoicePaymen
         </Grid>
         
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Fakturan kommer att skickas till {userInfo?.email}. Betalningsvillkor är 14 dagar.
+          Fakturan kommer att skickas till {userInfo?.email}. Betalningsvillkor är 10 dagar.
         </Typography>
       </Box>
     );

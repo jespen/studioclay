@@ -3,6 +3,7 @@ import { Box } from '@mui/material';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import StandardTable from '../common/StandardTable';
 import ActionButton from '../common/ActionButton';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
@@ -34,6 +35,8 @@ interface GiftCardTableProps {
   onStatusChange: (id: string, status: GiftCard['status']) => void;
   onTogglePayment: (id: string, isPaid: boolean) => void;
   onGeneratePDF: (card: GiftCard) => void;
+  onGenerateInvoicePDF: (card: GiftCard) => void;
+  onDeleteGiftCard: (id: string) => void;
   onSendEmail: (card: GiftCard) => void;
   onMarkAsEmailed: (id: string) => void;
   onUpdateBalance: (id: string, newBalance: number) => void;
@@ -45,6 +48,8 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
   onStatusChange,
   onTogglePayment,
   onGeneratePDF,
+  onGenerateInvoicePDF,
+  onDeleteGiftCard,
   onSendEmail,
   onMarkAsEmailed,
   onUpdateBalance
@@ -228,7 +233,7 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
               {card.invoice_number && (
                 <ActionButton
                   variant="pdf"
-                  onClick={() => onGeneratePDF(card)}
+                  onClick={() => onGenerateInvoicePDF(card)}
                   disabled={updatingCards[card.id]}
                   icon={<ReceiptIcon />}
                   label="Visa faktura"
@@ -241,6 +246,14 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
                 disabled={updatingCards[card.id]}
                 icon={<EditIcon />}
                 label="Redigera saldo"
+              />
+              
+              <ActionButton
+                variant="delete"
+                onClick={() => onDeleteGiftCard(card.id)}
+                disabled={updatingCards[card.id]}
+                icon={<DeleteIcon />}
+                label="Ta bort presentkort"
               />
             </div>
           </td>
