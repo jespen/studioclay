@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       if (filter === 'active') {
         query = query.eq('status', 'active');
       } else if (filter === 'redeemed') {
-        query = query.eq('status', 'redeemed');
+        query = query.eq('status', 'used');
       } else if (filter === 'expired') {
         query = query.eq('status', 'expired');
       } else if (filter === 'cancelled') {
@@ -48,16 +48,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Process the data to ensure all cards have a code
+    // Process the data to ensure all cards have a code and map database status to frontend status
     const processedData = (data || []).map(card => {
+      // Handle missing code
+      let processedCard = card;
       if (!card.code) {
         console.warn(`API: Card ${card.id} missing code field, generating fallback`);
-        return {
+        processedCard = {
           ...card,
           code: `GC-${card.id.substring(0, 8)}`
         };
       }
-      return card;
+      
+      // Map database status back to frontend status
+      return {
+        ...processedCard,
+        status: processedCard.status === 'used' ? 'redeemed' : processedCard.status
+      };
     });
 
     console.log('API: Successfully fetched gift cards count:', processedData.length);
@@ -74,4 +81,80 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const url = new URL(request.url);
+    const id = url.searchParams.get('id');
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Gift card ID is required' },
+        { status: 400 }
+      );
+    }
+
+    console.log(`API: Deleting gift card with ID: ${id}`);
+
+    // First, check if the gift card exists
+    const { data: existingCard, error: fetchError } = await supabaseAdmin
+      .from('gift_cards')
+      .select('id, code, status, is_paid')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      console.error('API: Error fetching gift card for deletion:', fetchError);
+      return NextResponse.json(
+        { error: 'Gift card not found' },
+        { status: 404 }
+      );
+    }
+
+    if (!existingCard) {
+      return NextResponse.json(
+        { error: 'Gift card not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if the gift card has been used/redeemed - we might want to prevent deletion in some cases
+    if (existingCard.status === 'used' || existingCard.status === 'redeemed') {
+      console.warn(`API: Attempting to delete a redeemed gift card: ${id}`);
+      // Note: We could add additional validation here if needed
+    }
+
+    // Delete the gift card from the database
+    const { error: deleteError } = await supabaseAdmin
+      .from('gift_cards')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error('API: Error deleting gift card:', deleteError);
+      return NextResponse.json(
+        { error: 'Failed to delete gift card' },
+        { status: 500 }
+      );
+    }
+
+    console.log(`API: Successfully deleted gift card ${id} (code: ${existingCard.code})`);
+
+    return NextResponse.json({
+      success: true,
+      message: `Gift card ${existingCard.code} has been deleted`,
+      deletedCard: {
+        id: existingCard.id,
+        code: existingCard.code
+      }
+    });
+
+  } catch (error) {
+    console.error('API: Unexpected error deleting gift card:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unknown error occurred' },
+      { status: 500 }
+    );
+  }
+}
