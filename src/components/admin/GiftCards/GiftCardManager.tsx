@@ -555,7 +555,7 @@ const GiftCardManager: React.FC = () => {
     try {
       console.log(`Deleting gift card ${id}`);
 
-      const response = await fetch(`/api/gift-cards/${id}`, {
+      const response = await fetch(`/api/gift-cards?id=${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
