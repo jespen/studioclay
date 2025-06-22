@@ -65,18 +65,18 @@ export async function POST(request: NextRequest) {
     
     console.log('Gift card remaining balance updated successfully:', id, remaining_balance);
     
-    // If the remaining balance is 0, also update the status to 'redeemed'
+    // If the remaining balance is 0, also update the status to 'used'
     if (Number(remaining_balance) === 0) {
       const { error: statusError } = await supabaseAdmin
         .from('gift_cards')
-        .update({ status: 'redeemed' })
+        .update({ status: 'used' })
         .eq('id', id);
         
       if (statusError) {
-        console.error('Error updating status to redeemed:', statusError);
+        console.error('Error updating status to used:', statusError);
         // Continue anyway since the balance update succeeded
       } else {
-        console.log('Gift card status automatically updated to redeemed');
+        console.log('Gift card status automatically updated to used');
       }
     }
     

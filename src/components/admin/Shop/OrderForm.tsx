@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { getBrowserSupabaseInstance } from '@/utils/supabase';
+import StatusToggle from '../common/StatusToggle';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 
 // Typdefinitioner för beställningar
@@ -58,37 +59,53 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onUpdate }) => {
     }));
   };
 
+  const handleStatusChange = (newStatus: string) => {
+    setCurrentOrder(prev => ({
+      ...prev,
+      status: newStatus
+    }));
+  };
+
+  const handlePaymentStatusChange = (newPaymentStatus: string) => {
+    setCurrentOrder(prev => ({
+      ...prev,
+      payment_status: newPaymentStatus
+    }));
+  };
+
   const handleSave = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const { data, error } = await getBrowserSupabaseInstance()
-        .from('art_orders')
-        .update({
+      // Use API endpoints instead of direct Supabase calls for consistency
+      const response = await fetch(`/api/art-orders/${currentOrder.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           customer_name: currentOrder.customer_name,
           customer_email: currentOrder.customer_email,
           customer_phone: currentOrder.customer_phone,
           status: currentOrder.status,
           payment_status: currentOrder.payment_status,
-        })
-        .eq('id', currentOrder.id)
-        .select(`
-          *,
-          product:product_id (
-            title,
-            image
-          )
-        `)
-        .single();
-      
-      if (error) {
-        throw new Error(`Failed to update order: ${error.message}`);
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to update order: ${response.status}`);
       }
+
+      const data = await response.json();
       
-      if (data) {
+      if (data.success) {
         setIsEditing(false);
-        onUpdate(data as ArtOrder);
+        // Refresh the order data
+        onUpdate({ ...currentOrder, ...data.data });
+      } else {
+        throw new Error(data.error || 'Failed to update order');
       }
     } catch (err: any) {
       console.error('Error updating order:', err);
@@ -190,28 +207,28 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onUpdate }) => {
                     </th>
                     <td className="px-4 py-2 text-sm">
                       {isEditing ? (
-                        <select
-                          name="status"
-                          value={currentOrder.status}
-                          onChange={handleChange}
-                          className="w-full p-2 border border-gray-300 rounded"
-                        >
-                          <option value="confirmed">Bekräftad</option>
-                          <option value="processing">Behandlas</option>
-                          <option value="completed">Genomförd</option>
-                          <option value="cancelled">Avbruten</option>
-                        </select>
+                        <StatusToggle
+                          currentValue={currentOrder.status}
+                          option1={{
+                            value: 'confirmed',
+                            label: 'Bekräftad',
+                            color: 'blue'
+                          }}
+                          option2={{
+                            value: 'completed',
+                            label: 'Genomförd',
+                            color: 'green'
+                          }}
+                          onChange={handleStatusChange}
+                          loading={loading}
+                        />
                       ) : (
                         <span className={`inline-block px-2 py-1 rounded ${
                           currentOrder.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          currentOrder.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                          currentOrder.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
+                          'bg-blue-100 text-blue-800'
                         }`}>
                           {currentOrder.status === 'confirmed' ? 'Bekräftad' :
-                           currentOrder.status === 'processing' ? 'Behandlas' :
                            currentOrder.status === 'completed' ? 'Genomförd' :
-                           currentOrder.status === 'cancelled' ? 'Avbruten' :
                            currentOrder.status}
                         </span>
                       )}
@@ -223,27 +240,27 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onUpdate }) => {
                     </th>
                     <td className="px-4 py-2 text-sm">
                       {isEditing ? (
-                        <select
-                          name="payment_status"
-                          value={currentOrder.payment_status}
-                          onChange={handleChange}
-                          className="w-full p-2 border border-gray-300 rounded"
-                        >
-                          <option value="CREATED">Skapad</option>
-                          <option value="PENDING">Väntar</option>
-                          <option value="PAID">Betald</option>
-                          <option value="ERROR">Fel</option>
-                          <option value="CANCELLED">Avbruten</option>
-                        </select>
+                        <StatusToggle
+                          currentValue={currentOrder.payment_status}
+                          option1={{
+                            value: 'CREATED',
+                            label: 'Ej betald',
+                            color: 'yellow'
+                          }}
+                          option2={{
+                            value: 'PAID',
+                            label: 'Betald',
+                            color: 'green'
+                          }}
+                          onChange={handlePaymentStatusChange}
+                          loading={loading}
+                        />
                       ) : (
                         <span className={`inline-block px-2 py-1 rounded ${
                           currentOrder.payment_status === 'PAID' ? 'bg-green-100 text-green-800' :
-                          currentOrder.payment_status === 'PENDING' ? 'bg-blue-100 text-blue-800' :
-                          currentOrder.payment_status === 'ERROR' ? 'bg-red-100 text-red-800' :
-                          currentOrder.payment_status === 'CANCELLED' ? 'bg-gray-100 text-gray-800' :
                           'bg-yellow-100 text-yellow-800'
                         }`}>
-                          {currentOrder.payment_status}
+                          {currentOrder.payment_status === 'PAID' ? 'Betald' : 'Ej betald'}
                         </span>
                       )}
                     </td>

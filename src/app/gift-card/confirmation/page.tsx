@@ -161,7 +161,7 @@ function ConfirmationContent() {
   const formatDueDate = () => {
     if (!paymentDetails.createdAt) return '';
     const dueDate = new Date(paymentDetails.createdAt);
-    dueDate.setDate(dueDate.getDate() + 14); // 14 dagars betalningsvillkor
+    dueDate.setDate(dueDate.getDate() + 10); // 14 dagars betalningsvillkor
     return dueDate.toLocaleDateString('sv-SE');
   };
   

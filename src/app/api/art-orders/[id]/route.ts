@@ -121,11 +121,20 @@ export async function PUT(
       }, { status: 404 });
     }
     
-    // Check if this is a status change that affects stock
+    // Normalize status values to handle constraints
+    const normalizedStatus = updatedOrder.status === 'processing' || updatedOrder.status === 'cancelled' 
+      ? 'confirmed' 
+      : updatedOrder.status;
+      
+    const normalizedPaymentStatus = ['PENDING', 'ERROR', 'CANCELLED'].includes(updatedOrder.payment_status)
+      ? 'CREATED'
+      : updatedOrder.payment_status;
+
+    // Check if this is a status change that affects stock (using normalized values)
     const wasOrderPaid = currentOrder.payment_status === 'PAID' || currentOrder.status === 'confirmed';
-    const willOrderBePaid = updatedOrder.payment_status === 'PAID' || updatedOrder.status === 'confirmed';
+    const willOrderBePaid = normalizedPaymentStatus === 'PAID' || normalizedStatus === 'confirmed';
     const isOrderBeingCancelled = updatedOrder.status === 'cancelled' || updatedOrder.payment_status === 'CANCELLED';
-    
+
     // Update the art order
     const { error: updateError } = await supabase
       .from('art_orders')
@@ -133,14 +142,24 @@ export async function PUT(
         customer_name: updatedOrder.customer_name,
         customer_email: updatedOrder.customer_email,
         customer_phone: updatedOrder.customer_phone,
-        status: updatedOrder.status,
-        payment_status: updatedOrder.payment_status,
+        status: normalizedStatus,
+        payment_status: normalizedPaymentStatus,
         updated_at: new Date().toISOString()
       })
       .eq('id', id);
     
     if (updateError) {
       console.error('Error updating art order:', updateError);
+      
+      // If it's a constraint error, provide helpful message
+      if (updateError.code === '23514') {
+        return NextResponse.json({ 
+          success: false, 
+          error: `Invalid status value. Only 'confirmed' and 'completed' are allowed for status, and 'CREATED' and 'PAID' for payment status.`,
+          details: updateError.message
+        }, { status: 400 });
+      }
+      
       return NextResponse.json({ 
         success: false, 
         error: 'Failed to update order' 

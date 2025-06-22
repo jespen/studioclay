@@ -19,8 +19,14 @@ export async function POST(request: NextRequest) {
     
     console.log(`API: Updating gift card ${id} status to ${status}`);
     
+    // Map frontend status to database status
+    let dbStatus = status;
+    if (status === 'redeemed') {
+      dbStatus = 'used';
+    }
+    
     // Validate status value
-    if (!['active', 'redeemed', 'expired', 'cancelled'].includes(status)) {
+    if (!['active', 'used', 'expired', 'cancelled'].includes(dbStatus)) {
       return NextResponse.json(
         { error: 'Invalid status value' },
         { status: 400 }
@@ -29,7 +35,7 @@ export async function POST(request: NextRequest) {
     
     const { data, error } = await supabaseAdmin
       .from('gift_cards')
-      .update({ status })
+      .update({ status: dbStatus })
       .eq('id', id)
       .select();
       
@@ -43,9 +49,15 @@ export async function POST(request: NextRequest) {
     
     console.log('Gift card status updated successfully:', id, status);
     
+    // Map database status back to frontend status in response
+    const responseData = data[0];
+    if (responseData && responseData.status === 'used') {
+      responseData.status = 'redeemed';
+    }
+    
     return NextResponse.json({
       message: 'Gift card status updated successfully',
-      data: data[0],
+      data: responseData,
       status: 'success'
     });
   } catch (error) {

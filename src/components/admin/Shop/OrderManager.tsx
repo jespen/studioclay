@@ -3,6 +3,7 @@ import AdminHeader from '../Dashboard/AdminHeader';
 import SectionContainer from '../Dashboard/SectionContainer';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 import OrderForm from './OrderForm';
+import StatusToggle from '../common/StatusToggle';
 import { ShopOrder } from '@/types/shop';
 import { formatDate } from '@/utils/dateUtils';
 import { fetchOrdersWithCache, invalidateCache } from '@/utils/apiCache';
@@ -19,6 +20,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
   const [loading, setLoading] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ShopOrder | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [updatingOrders, setUpdatingOrders] = useState<{ [key: string]: boolean }>({});
 
   // Memoized fetch function to prevent unnecessary renders
   const fetchOrders = useCallback(async () => {
@@ -82,6 +84,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
   };
 
   const handleUpdateOrderStatus = async (orderId: string, status: string) => {
+    setUpdatingOrders(prev => ({ ...prev, [orderId]: true }));
+    
     try {
       const response = await fetch(`/api/art-orders/${orderId}/status`, {
         method: 'PATCH',
@@ -95,15 +99,59 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
         throw new Error('Failed to update order status');
       }
 
+      // Update local state optimistically
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === orderId ? { ...order, status } : order
+        )
+      );
+
       // Invalidate the orders cache
       invalidateCache('shop-orders');
       
-      // Refresh the orders list
-      await fetchOrders();
-      alert('Order status updated successfully');
     } catch (error) {
       console.error('Error updating order status:', error);
       alert('Failed to update order status');
+      // Refresh to get the correct state
+      await fetchOrders();
+    } finally {
+      setUpdatingOrders(prev => ({ ...prev, [orderId]: false }));
+    }
+  };
+
+  const handleUpdatePaymentStatus = async (orderId: string, paymentStatus: string) => {
+    setUpdatingOrders(prev => ({ ...prev, [`${orderId}-payment`]: true }));
+    
+    try {
+      const response = await fetch(`/api/art-orders/${orderId}/payment-status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ payment_status: paymentStatus }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update payment status');
+      }
+
+      // Update local state optimistically
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === orderId ? { ...order, payment_status: paymentStatus } : order
+        )
+      );
+
+      // Invalidate the orders cache
+      invalidateCache('shop-orders');
+      
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      alert('Failed to update payment status');
+      // Refresh to get the correct state
+      await fetchOrders();
+    } finally {
+      setUpdatingOrders(prev => ({ ...prev, [`${orderId}-payment`]: false }));
     }
   };
 
@@ -191,33 +239,38 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.product?.title || 'Unknown'}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.total_price} {order.currency}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          order.status === 'completed' ? 'bg-green-100 text-green-800' : 
-                          order.status === 'processing' ? 'bg-yellow-100 text-yellow-800' : 
-                          order.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {order.status === 'confirmed' ? 'Bekräftad' : order.status}
-                        </span>
+                        <StatusToggle
+                          currentValue={order.status}
+                          option1={{
+                            value: 'confirmed',
+                            label: 'Bekräftad',
+                            color: 'blue'
+                          }}
+                          option2={{
+                            value: 'completed',
+                            label: 'Genomförd',
+                            color: 'green'
+                          }}
+                          onChange={(newStatus) => handleUpdateOrderStatus(order.id, newStatus)}
+                          loading={updatingOrders[order.id]}
+                        />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          order.payment_status.toUpperCase() === 'PAID' ? 'bg-green-100 text-green-800' : 
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {(() => {
-                            // Use the same approach as in GenericConfirmation.tsx
-                            const status = String(order.payment_status || '').toUpperCase();
-                            
-                            if (status === 'PAID') {
-                              return 'Betald';
-                            } else if (status === 'CREATED' || status === 'PENDING') {
-                              return 'Ej betald';
-                            } else {
-                              return status;
-                            }
-                          })()}
-                        </span>
+                        <StatusToggle
+                          currentValue={order.payment_status.toUpperCase()}
+                          option1={{
+                            value: 'CREATED',
+                            label: 'Ej betald',
+                            color: 'yellow'
+                          }}
+                          option2={{
+                            value: 'PAID',
+                            label: 'Betald',
+                            color: 'green'
+                          }}
+                          onChange={(newPaymentStatus) => handleUpdatePaymentStatus(order.id, newPaymentStatus)}
+                          loading={updatingOrders[`${order.id}-payment`]}
+                        />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <button

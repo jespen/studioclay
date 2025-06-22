@@ -137,7 +137,7 @@ export default function PaymentConfirmation({ params }: { params: { reference: s
   }
   
   // Hur många dagar betalningsvillkor
-  const paymentDays = 14;
+  const paymentDays = 10;
   
   // Formatera datum för betalningsvillkor
   const formatDueDate = () => {
