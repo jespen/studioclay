@@ -6,14 +6,8 @@ import { TextField, Button, Box, Paper, Typography, FormControlLabel, Switch, Gr
 import RichTextEditor from '../../../../components/common/RichTextEditor';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import ClearIcon from '@mui/icons-material/Clear';
-import { createClient } from '@supabase/supabase-js';
 import Image from 'next/image';
 import { fetchWithCache, fetchTemplatesWithCache } from '@/utils/apiCache';
-
-// Initialize Supabase client with public key for storage operations
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 type CourseFormProps = {
   course: Course | null;
@@ -57,12 +51,12 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     try {
       setLoadingImages(true);
       const data = await fetchWithCache<{images: string[]}>(
-        '/api/images',
+        '/api/storage/pictures',
         {},
         {
           useCache: true,
           expiry: 10 * 60 * 1000, // Cache images for 10 minutes
-          cacheKey: 'gallery-images'
+          cacheKey: 'gallery-images-courses'
         }
       );
       
@@ -227,33 +221,26 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     try {
       setUploading(true);
       
-      // Generate a unique filename
-      const fileExt = selectedImage.name.split('.').pop();
-      const fileName = `course-images/${Date.now()}.${fileExt}`;
+      // Create form data for the file (matching shop pattern)
+      const formData = new FormData();
+      formData.append('file', selectedImage);
       
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('course-assets')
-        .upload(fileName, selectedImage, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      // Upload image to Supabase through our API (same endpoint as shop)
+      const response = await fetch('/api/storage/pictures', {
+        method: 'POST',
+        body: formData,
+      });
       
-      if (error) {
-        console.error('Error uploading image:', error);
-        alert(`Kunde inte ladda upp bilden: ${error.message}`);
-        return null;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to upload image');
       }
       
-      // Get the public URL for the uploaded image
-      const { data: { publicUrl } } = supabase.storage
-        .from('course-assets')
-        .getPublicUrl(fileName);
-      
-      return publicUrl;
+      const data = await response.json();
+      return data.url;
     } catch (err) {
-      console.error('Unexpected error during upload:', err);
-      alert('Ett fel uppstod vid uppladdning av bilden');
+      console.error('Error uploading image:', err);
+      alert(err instanceof Error ? `Kunde inte ladda upp bilden: ${err.message}` : 'Ett fel uppstod vid uppladdning av bilden');
       return null;
     } finally {
       setUploading(false);
