@@ -146,25 +146,6 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     }
   }, [course]);
   
-  // Update selected image when galleryImages loads
-  useEffect(() => {
-    // If we already have a selected image URL but it wasn't in the gallery before
-    if (selectedGalleryImage && galleryImages.length > 0) {
-      // Check if the selected image exists in the gallery now
-      const imageExists = galleryImages.includes(selectedGalleryImage);
-      if (!imageExists) {
-        // If the image exists in the file system but wasn't in our hardcoded list before
-        const imageFromSamePath = galleryImages.find(img => 
-          img.startsWith(selectedGalleryImage.split('/').slice(0, -1).join('/'))
-        );
-        if (imageFromSamePath) {
-          setSelectedGalleryImage(imageFromSamePath);
-          setImagePreview(imageFromSamePath);
-        }
-      }
-    }
-  }, [galleryImages, selectedGalleryImage]);
-  
   // Helper functions for date formatting
   const formatDateForInput = (date: Date): string => {
     // HTML date inputs expect YYYY-MM-DD format
