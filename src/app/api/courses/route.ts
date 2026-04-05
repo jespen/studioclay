@@ -102,7 +102,16 @@ const getCourses = async (published: string | null) => {
         image_url: processedCourses[0].image_url
       })}`);
     }
-    
+
+    // Publik lista: visa bara kommande tillfällen (samma regel som /api/courses/public)
+    if (published === 'true') {
+      const now = new Date();
+      return processedCourses.filter((course) => {
+        const startDate = course.start_date ? new Date(course.start_date) : null;
+        return Boolean(startDate && startDate >= now);
+      });
+    }
+
     return processedCourses;
   } catch (error) {
     console.error('Error getting courses:', error);
