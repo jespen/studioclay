@@ -1,4 +1,16 @@
+import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+
+const portfolioDb = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+    },
+  }
+);
 
 export const PICTURES_BUCKET = 'pictures';
 
@@ -45,7 +57,7 @@ function toPortfolioImage(row: PortfolioRow): PortfolioImage {
 }
 
 export async function listPortfolioImages() {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await portfolioDb
     .from('portfolio_images')
     .select('id, storage_path, caption, sort_order')
     .order('sort_order', { ascending: true })

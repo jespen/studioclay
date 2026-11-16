@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import {
   PICTURES_BUCKET,
@@ -38,7 +41,6 @@ async function addExistingImage(storagePath: string) {
   const sortOrder = await nextSortOrder();
   const { error } = await supabaseAdmin.from('portfolio_images').insert({
     storage_path: storagePath,
-    caption: 'Studio Clay',
     sort_order: sortOrder,
   });
 
@@ -117,7 +119,6 @@ export async function POST(request: NextRequest) {
     const sortOrder = await nextSortOrder();
     const { error: insertError } = await supabaseAdmin.from('portfolio_images').insert({
       storage_path: storagePath,
-      caption: 'Studio Clay',
       sort_order: sortOrder,
     });
 
@@ -136,30 +137,34 @@ export async function POST(request: NextRequest) {
   }
 }
 
+const IMAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const id = String(body.id || '');
-    const caption = String(body.caption ?? '').trim().slice(0, 160);
+    const order = Array.isArray(body.order) ? body.order.map((id: unknown) => String(id)) : [];
 
-    if (!id) {
-      return NextResponse.json({ error: 'Bild-id saknas' }, { status: 400 });
+    if (order.length === 0 || order.some((id: string) => !IMAGE_ID.test(id))) {
+      return NextResponse.json({ error: 'Ogiltig bildordning' }, { status: 400 });
     }
 
-    const { error } = await supabaseAdmin
-      .from('portfolio_images')
-      .update({ caption: caption || 'Studio Clay' })
-      .eq('id', id);
-
-    if (error) {
-      throw error;
+    const updates = order.map((id: string, index: number) =>
+      supabaseAdmin
+        .from('portfolio_images')
+        .update({ sort_order: index + 1 })
+        .eq('id', id)
+    );
+    const results = await Promise.all(updates);
+    const failed = results.find((result) => result.error);
+    if (failed?.error) {
+      throw failed.error;
     }
 
     return NextResponse.json({ images: await listPortfolioImages() });
   } catch (error) {
-    console.error('Error updating portfolio caption:', error);
+    console.error('Error reordering portfolio images:', error);
     return NextResponse.json(
-      { error: 'Kunde inte spara bildtexten' },
+      { error: 'Kunde inte spara bildordningen' },
       { status: 500 }
     );
   }

@@ -103,19 +103,19 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
             >
               Webshop
             </Link>
-
-            <Link
-              href="/admin/dashboard/portfolio"
-              className={`${styles.navButton} ${isActiveRoute('/admin/dashboard/portfolio') ? styles.activeNavButton : ''}`}
-            >
-              Portfolio
-            </Link>
             
             <Link 
               href="/admin/dashboard/orders" 
               className={`${styles.navButton} ${isActiveRoute('/admin/dashboard/orders') ? styles.activeNavButton : ''}`}
             >
               Shop beställningar
+            </Link>
+
+            <Link
+              href="/admin/dashboard/portfolio"
+              className={`${styles.navButton} ${isActiveRoute('/admin/dashboard/portfolio') ? styles.activeNavButton : ''}`}
+            >
+              Portfolio
             </Link>
             
             <Link 

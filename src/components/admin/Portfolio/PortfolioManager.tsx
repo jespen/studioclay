@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SectionContainer from '../Dashboard/SectionContainer';
 import ConfirmDialog from '../common/ConfirmDialog';
 import courseStyles from '../../../app/admin/dashboard/courses/courses.module.css';
@@ -29,6 +31,7 @@ export default function PortfolioManager() {
   const [search, setSearch] = useState('');
   const [imageToRemove, setImageToRemove] = useState<PortfolioImage | null>(null);
   const [removing, setRemoving] = useState(false);
+  const draggingIdRef = useRef<string | null>(null);
 
   const loadPortfolio = useCallback(async () => {
     setLoading(true);
@@ -114,23 +117,35 @@ export default function PortfolioManager() {
     }
   }
 
-  async function saveCaption(image: PortfolioImage, caption: string) {
-    if (caption.trim() === image.caption) return;
+  async function moveImage(sourceId: string, targetId: string) {
+    if (!sourceId || sourceId === targetId) return;
+
+    const next = [...images];
+    const fromIndex = next.findIndex((image) => image.id === sourceId);
+    const toIndex = next.findIndex((image) => image.id === targetId);
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setImages(next);
+    setError(null);
+
     try {
       const response = await fetch('/api/admin/portfolio', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: image.id, caption }),
+        body: JSON.stringify({ order: next.map((image) => image.id) }),
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || 'Kunde inte spara bildtexten');
+        throw new Error(data.error || 'Kunde inte spara bildordningen');
       }
       if (Array.isArray(data.images)) {
         setImages(data.images);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kunde inte spara bildtexten');
+      setError(err instanceof Error ? err.message : 'Kunde inte spara bildordningen');
+      await loadPortfolio();
     }
   }
 
@@ -226,28 +241,72 @@ export default function PortfolioManager() {
         ) : images.length === 0 ? (
           <p className={styles.status}>Inga bilder i portfolion ännu.</p>
         ) : (
-          <div className={styles.grid}>
-            {images.map((image) => (
-              <article key={image.id} className={styles.card}>
-                <img className={styles.thumb} src={image.url} alt={image.caption} />
-                <div className={styles.meta}>
-                  <input
-                    className={styles.captionInput}
-                    defaultValue={image.caption}
-                    aria-label="Bildtext"
-                    onBlur={(event) => saveCaption(image, event.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className={styles.removeButton}
-                    onClick={() => setImageToRemove(image)}
-                  >
-                    Ta bort
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
+          <>
+            <p className={styles.orderHint}>Dra i handtaget för att ändra ordningen på sajten.</p>
+            <div className={styles.grid}>
+              {images.map((image) => (
+                <article
+                  key={image.id}
+                  className={styles.card}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    const sourceId = draggingIdRef.current;
+                    if (!sourceId || sourceId === image.id) return;
+                    event.currentTarget.parentElement
+                      ?.querySelectorAll(`.${styles.dragOver}`)
+                      .forEach((node) => node.classList.remove(styles.dragOver));
+                    event.currentTarget.classList.add(styles.dragOver);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const sourceId = draggingIdRef.current;
+                    event.currentTarget.parentElement
+                      ?.querySelectorAll(`.${styles.dragging}, .${styles.dragOver}`)
+                      .forEach((node) => node.classList.remove(styles.dragging, styles.dragOver));
+                    draggingIdRef.current = null;
+                    if (sourceId && sourceId !== image.id) {
+                      moveImage(sourceId, image.id);
+                    }
+                  }}
+                >
+                  <img className={styles.thumb} src={image.url} alt="" draggable={false} />
+                  <div className={styles.actions}>
+                    <div
+                      className={`${styles.iconButton} ${styles.dragHandle}`}
+                      draggable
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Flytta bild"
+                      title="Dra för att flytta"
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/plain', image.id);
+                        draggingIdRef.current = image.id;
+                        event.currentTarget.closest('article')?.classList.add(styles.dragging);
+                      }}
+                      onDragEnd={(event) => {
+                        draggingIdRef.current = null;
+                        event.currentTarget.closest(`.${styles.grid}`)
+                          ?.querySelectorAll(`.${styles.dragging}, .${styles.dragOver}`)
+                          .forEach((node) => node.classList.remove(styles.dragging, styles.dragOver));
+                      }}
+                    >
+                      <DragIndicatorIcon fontSize="small" />
+                    </div>
+                    <button
+                      type="button"
+                      className={`${styles.iconButton} ${styles.deleteButton}`}
+                      aria-label="Ta bort"
+                      title="Ta bort"
+                      onClick={() => setImageToRemove(image)}
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
         )}
       </SectionContainer>
 
