@@ -81,7 +81,7 @@ const Hero = ({
                 </defs>
                 <text>
                   <textPath href="#hero-badge-circle" textLength="232" lengthAdjust="spacing">
-                    DREJKURSER • WORKSHOPS • STUDIOTID •
+                    DREJKURSER • WORKSHOPS • WEBBSHOP •
                   </textPath>
                 </text>
               </svg>
