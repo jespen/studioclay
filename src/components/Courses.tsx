@@ -290,7 +290,7 @@ const Courses = () => {
     setError(null);
     try {
       // Use cached data when possible
-      const data = await fetchCoursesWithCache(true);
+      const data = await fetchCoursesWithCache(true, { useCache: false });
       
       // Ensure we have the expected data structure
       const apiCourses = Array.isArray(data.courses) ? data.courses : [];
@@ -329,7 +329,7 @@ const Courses = () => {
   return (
     <section id="courses" className={styles.section}>
       <div className={styles.container}>
-        <div className={styles.titleSection}>
+        <div className={styles.titleSection} data-reveal>
           <h2 className={styles.title}>Kurser</h2>
           <p className={styles.description}>
             Välj den kurs som passar dig bäst, från provakurser till helgkurser och regelbundna kurstillfällen.
@@ -348,8 +348,8 @@ const Courses = () => {
           <>
             {tryCourses.length > 0 && (
               <div className={styles.categorySection}>
-                <h3 className={styles.categoryTitle}>Prova på</h3>
-                <div className={styles.courseGrid}>
+                <h3 className={styles.categoryTitle} data-reveal>Prova på</h3>
+                <div className={styles.courseGrid} data-reveal-stagger="zoom">
                   {tryCourses.map((course) => (
                     <div 
                       key={course.id} 
@@ -402,8 +402,8 @@ const Courses = () => {
 
             {longerCourses.length > 0 && (
               <div className={styles.categorySection}>
-                <h3 className={styles.categoryTitle}>Längre kurser</h3>
-                <div className={styles.courseGrid}>
+                <h3 className={styles.categoryTitle} data-reveal>Längre kurser</h3>
+                <div className={styles.courseGrid} data-reveal-stagger="zoom">
                   {longerCourses.map((course) => (
                     <div 
                       key={course.id} 

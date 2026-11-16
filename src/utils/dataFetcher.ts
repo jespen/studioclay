@@ -1,6 +1,5 @@
 import { 
   setItemDetails as setFlowItemDetails, 
-  getItemDetails as getFlowItemDetails,
   setUserInfo as setFlowUserInfo, 
   getUserInfo as getFlowUserInfo,
   setPaymentInfo as setFlowPaymentInfo, 
@@ -58,35 +57,7 @@ export async function fetchCourseDetail(
   courseId: string, 
   options: FetchCourseOptions = {}
 ): Promise<CourseDetail> {
-  // First check if we already have this in flowStorage
-  if (!options.skipFlowStorage && !options.forceRefresh) {
-    const storedItem = getFlowItemDetails<CourseDetail>();
-    if (storedItem && storedItem.id === courseId) {
-      return storedItem;
-    }
-  }
-  
-  // Try to get from localStorage (legacy support) for better performance
-  if (!options.forceRefresh) {
-    try {
-      const storedCourseDetail = localStorage.getItem('courseDetail');
-      if (storedCourseDetail) {
-        const parsedDetail = JSON.parse(storedCourseDetail);
-        if (parsedDetail && parsedDetail.id === courseId) {
-          // Store in flowStorage for future use
-          if (!options.skipFlowStorage) {
-            setFlowItemDetails(parsedDetail);
-          }
-          return parsedDetail;
-        }
-      }
-    } catch (err) {
-      console.error('Error parsing stored course detail:', err);
-      // Continue to fetch from API if parsing fails
-    }
-  }
-  
-  // Fetch from API
+  // Always read the course from the API so seat counts are not served from an old snapshot.
   const response = await fetch(`/api/courses/${courseId}`);
   
   if (!response.ok) {

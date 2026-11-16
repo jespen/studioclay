@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
     // Prepare data for PDF generation
     const giftCardData: GiftCardData = {
       code: giftCard.code,
+      payment_reference: giftCard.payment_reference || undefined,
       amount: giftCard.amount,
       recipientName: giftCard.recipient_name,
       recipientEmail: giftCard.recipient_email,

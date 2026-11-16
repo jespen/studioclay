@@ -19,7 +19,6 @@ export enum ProductType {
  * Payment methods supported by the system
  */
 export enum PaymentMethod {
-  SWISH = 'swish',
   INVOICE = 'invoice'
 }
 
@@ -108,14 +107,6 @@ export interface BasePaymentRequest {
 }
 
 /**
- * Swish-specific payment request
- */
-export interface SwishPaymentRequest extends BasePaymentRequest {
-  paymentMethod: PaymentMethod.SWISH;
-  phoneNumber: string;
-}
-
-/**
  * Invoice-specific payment request
  */
 export interface InvoicePaymentRequest extends BasePaymentRequest {
@@ -126,7 +117,7 @@ export interface InvoicePaymentRequest extends BasePaymentRequest {
 /**
  * Union type for all payment requests
  */
-export type PaymentRequest = SwishPaymentRequest | InvoicePaymentRequest;
+export type PaymentRequest = InvoicePaymentRequest;
 
 /**
  * Payment response structure
@@ -269,33 +260,19 @@ export function normalizeUserData(data: any): UserData {
 export function createPaymentRequest(data: any): PaymentRequest {
   const productData = normalizeProductData(data.productData || data.itemDetails || data);
   const userData = normalizeUserData(data.userData || data.userInfo || data.user || {});
-  const paymentMethod = data.paymentMethod === 'invoice' ? 
-    PaymentMethod.INVOICE : PaymentMethod.SWISH;
-    
-  const baseRequest: BasePaymentRequest = {
+  const invoiceData = data.invoiceData || data.invoiceDetails || {};
+  const amount = productData.price || (productData.type === ProductType.GIFT_CARD ? (productData as GiftCardProductData).amount : 0);
+
+  return {
     productData,
     userData,
-    paymentMethod,
-    amount: productData.price || (productData.type === ProductType.GIFT_CARD ? (productData as GiftCardProductData).amount : 0)
+    paymentMethod: PaymentMethod.INVOICE,
+    amount,
+    invoiceData: {
+      address: invoiceData.address || '',
+      postalCode: invoiceData.postalCode || '',
+      city: invoiceData.city || '',
+      reference: invoiceData.reference || ''
+    }
   };
-  
-  if (paymentMethod === PaymentMethod.INVOICE) {
-    const invoiceData = data.invoiceData || data.invoiceDetails || {};
-    return {
-      ...baseRequest,
-      paymentMethod: PaymentMethod.INVOICE,
-      invoiceData: {
-        address: invoiceData.address || '',
-        postalCode: invoiceData.postalCode || '',
-        city: invoiceData.city || '',
-        reference: invoiceData.reference || ''
-      }
-    };
-  } else {
-    return {
-      ...baseRequest,
-      paymentMethod: PaymentMethod.SWISH,
-      phoneNumber: data.phoneNumber || data.phone || userData.phone || ''
-    };
-  }
 } 

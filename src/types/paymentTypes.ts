@@ -22,17 +22,9 @@ export interface InvoicePaymentRequest extends BasePaymentRequest {
 }
 
 /**
- * Swish payment request
+ * Payment requests are invoice payments.
  */
-export interface SwishPaymentRequest extends BasePaymentRequest {
-  payment_method: 'swish';
-  phone_number: string;
-}
-
-/**
- * Union type for all payment requests
- */
-export type PaymentRequest = InvoicePaymentRequest | SwishPaymentRequest;
+export type PaymentRequest = InvoicePaymentRequest;
 
 /**
  * Base payment response
@@ -57,16 +49,6 @@ export interface InvoicePaymentResponse extends BasePaymentResponse {
   invoice_number?: string;
   payment_reference?: string;
   redirectUrl?: string;
-}
-
-/**
- * Swish-specific payment response
- */
-export interface SwishPaymentResponse extends BasePaymentResponse {
-  swishPaymentId?: string;
-  swishCallbackUrl?: string;
-  payment_request_token?: string;
-  qr_code?: string;
 }
 
 /**

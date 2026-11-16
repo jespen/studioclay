@@ -64,13 +64,13 @@
   flex-direction: column;
   height: 100%;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.45s var(--ease-out-soft), box-shadow 0.45s var(--ease-out-soft);
   position: relative;
 }
 
 .courseCard:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+  transform: translateY(-6px);
+  box-shadow: 0 22px 48px rgba(40, 45, 45, 0.14);
 }
 
 .dark .courseCard {

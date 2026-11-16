@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createClient } from '@supabase/supabase-js';
+import { isProductCategoryId } from '@/constants/productCategories';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -87,7 +88,8 @@ export async function GET(
       discount: data.discount || null,
       inStock: data.in_stock,
       stockQuantity: data.stock_quantity,
-      published: data.published
+      published: data.published,
+      category: data.category || 'other'
     };
     
     return NextResponse.json(product);
@@ -128,6 +130,9 @@ export async function PATCH(
     if (updates.inStock !== undefined) dbUpdates.in_stock = updates.inStock;
     if (updates.stockQuantity !== undefined) dbUpdates.stock_quantity = updates.stockQuantity;
     if (updates.published !== undefined) dbUpdates.published = updates.published;
+    if (updates.category !== undefined) {
+      dbUpdates.category = isProductCategoryId(updates.category) ? updates.category : 'other';
+    }
     
     // Update the product in Supabase
     const { data, error } = await supabaseAdmin
@@ -157,7 +162,8 @@ export async function PATCH(
       discount: data.discount,
       inStock: data.in_stock,
       stockQuantity: data.stock_quantity,
-      published: data.published
+      published: data.published,
+      category: data.category || 'other'
     };
     
     return NextResponse.json({ product });

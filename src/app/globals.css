@@ -246,3 +246,82 @@ a:hover {
 .hide-navigation main {
   padding-top: 0 !important;
 }
+
+/* Motion */
+:root {
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Keyframes only define the start state so elements settle on their own styles */
+@keyframes reveal-up {
+  from { opacity: 0; translate: 0 2rem; }
+}
+
+@keyframes reveal-fade {
+  from { opacity: 0; }
+}
+
+@keyframes reveal-zoom {
+  from { opacity: 0; scale: 0.94; translate: 0 1.25rem; }
+}
+
+@keyframes reveal-left {
+  from { opacity: 0; translate: -2.5rem 0; }
+}
+
+@keyframes reveal-right {
+  from { opacity: 0; translate: 2.5rem 0; }
+}
+
+@keyframes soft-float {
+  50% { translate: 0 -10px; }
+}
+
+@keyframes soft-breathe {
+  50% { scale: 1.25; opacity: 0.6; }
+}
+
+@keyframes drop-in {
+  from { opacity: 0; translate: 0 -0.5rem; }
+}
+
+/* Hidden only once JS has confirmed it can reveal them again */
+.reveal-ready [data-reveal]:not(.is-visible),
+.reveal-ready [data-reveal-stagger]:not(.is-visible) > * {
+  opacity: 0;
+}
+
+[data-reveal].is-visible {
+  animation: reveal-up 0.9s var(--ease-out-soft) var(--reveal-delay, 0s) both;
+}
+
+[data-reveal='fade'].is-visible { animation-name: reveal-fade; }
+[data-reveal='zoom'].is-visible { animation-name: reveal-zoom; }
+[data-reveal='left'].is-visible { animation-name: reveal-left; }
+[data-reveal='right'].is-visible { animation-name: reveal-right; }
+
+[data-reveal-stagger].is-visible > * {
+  animation: reveal-up 0.8s var(--ease-out-soft) calc(var(--stagger-i, 0) * 90ms) both;
+}
+
+[data-reveal-stagger='zoom'].is-visible > * { animation-name: reveal-zoom; }
+
+[data-reveal-stagger] > *:nth-child(2) { --stagger-i: 1; }
+[data-reveal-stagger] > *:nth-child(3) { --stagger-i: 2; }
+[data-reveal-stagger] > *:nth-child(4) { --stagger-i: 3; }
+[data-reveal-stagger] > *:nth-child(5) { --stagger-i: 4; }
+[data-reveal-stagger] > *:nth-child(6) { --stagger-i: 5; }
+[data-reveal-stagger] > *:nth-child(7) { --stagger-i: 6; }
+[data-reveal-stagger] > *:nth-child(n + 8) { --stagger-i: 7; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
+}

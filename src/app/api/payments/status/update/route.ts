@@ -64,32 +64,6 @@ export async function POST(request: Request) {
     
     console.log('Payment status updated successfully');
     
-    // If status is PAID, also trigger the callback endpoint
-    if (status === 'PAID') {
-      try {
-        console.log('Triggering callback for PAID payment');
-        
-        const callbackResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/payments/callback`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            payeePaymentReference: reference,
-            status: 'PAID',
-            amount: paymentData.amount.toString(),
-            currency: 'SEK'
-          })
-        });
-        
-        if (!callbackResponse.ok) {
-          console.error('Error triggering callback:', await callbackResponse.text());
-        } else {
-          console.log('Callback triggered successfully');
-        }
-      } catch (callbackError) {
-        console.error('Error triggering callback:', callbackError);
-      }
-    }
-    
     return NextResponse.json({ 
       success: true, 
       message: 'Payment status updated' 

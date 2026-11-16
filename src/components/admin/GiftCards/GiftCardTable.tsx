@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Box } from '@mui/material';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import EditIcon from '@mui/icons-material/Edit';
@@ -7,11 +6,11 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import StandardTable from '../common/StandardTable';
 import ActionButton from '../common/ActionButton';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
-import { EditAttributesOutlined } from '@mui/icons-material';
 
 interface GiftCard {
   id: string;
   code: string;
+  payment_reference?: string | null;
   amount: number;
   type: 'digital' | 'physical';
   status: 'active' | 'redeemed' | 'expired' | 'cancelled';
@@ -40,6 +39,22 @@ interface GiftCardTableProps {
   onSendEmail: (card: GiftCard) => void;
   onMarkAsEmailed: (id: string) => void;
   onUpdateBalance: (id: string, newBalance: number) => void;
+  onUpdateExpiry: (id: string, expiresAt: string) => void;
+}
+
+function codeOnCard(card: GiftCard): string {
+  return card.payment_reference || card.code;
+}
+
+function formatDate(dateString: string) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('sv-SE');
+}
+
+function isPastDate(dateString: string) {
+  const today = new Date().toLocaleDateString('sv-SE');
+  return formatDate(dateString) < today;
 }
 
 export const GiftCardTable: React.FC<GiftCardTableProps> = ({
@@ -50,27 +65,21 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
   onGeneratePDF,
   onGenerateInvoicePDF,
   onDeleteGiftCard,
-  onSendEmail,
-  onMarkAsEmailed,
-  onUpdateBalance
+  onUpdateBalance,
+  onUpdateExpiry
 }) => {
   const [editingBalance, setEditingBalance] = useState<{[key: string]: string | undefined}>({});
   const [balanceErrors, setBalanceErrors] = useState<{[key: string]: string | undefined}>({});
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('sv-SE');
-  };
+  const [editingExpiry, setEditingExpiry] = useState<{[key: string]: string | undefined}>({});
+  const [expiryErrors, setExpiryErrors] = useState<{[key: string]: string | undefined}>({});
 
   const handleBalanceChange = (id: string, value: string) => {
     setEditingBalance({...editingBalance, [id]: value});
     
-    // Clear any previous error
     if (balanceErrors[id]) {
       setBalanceErrors({...balanceErrors, [id]: undefined});
     }
     
-    // Validate input
     const card = giftCards.find(card => card.id === id);
     if (!card) return;
     
@@ -85,14 +94,12 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
   };
 
   const handleBalanceSubmit = (id: string) => {
-    // Ensure there's a valid number
     const numBalance = Number(editingBalance[id]);
     if (isNaN(numBalance)) {
       setBalanceErrors({...balanceErrors, [id]: "Måste vara ett giltigt nummer"});
       return;
     }
     
-    // Validate range
     const card = giftCards.find(card => card.id === id);
     if (!card) return;
     
@@ -106,7 +113,6 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
       return;
     }
     
-    // No errors, update the balance
     onUpdateBalance(id, numBalance);
     setEditingBalance({...editingBalance, [id]: undefined});
     setBalanceErrors({...balanceErrors, [id]: undefined});
@@ -114,7 +120,6 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
 
   const startEditing = (id: string, currentBalance: number) => {
     setEditingBalance({...editingBalance, [id]: currentBalance.toString()});
-    // Clear any previous errors
     setBalanceErrors({...balanceErrors, [id]: undefined});
   };
 
@@ -123,144 +128,306 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
     setBalanceErrors({...balanceErrors, [id]: undefined});
   };
 
-  return (
-    <StandardTable 
-      headers={['Kod', 'Belopp', 'Saldo', 'Typ', 'Status', 'Betald', 'Mottagare', 'Skapat', 'Utgår', 'Åtgärder']}
-      emptyMessage="Inga presentkort att visa"
-    >
-      {giftCards.map((card) => (
-        <tr key={card.id} className={`${styles.tableRow} ${updatingCards[card.id] ? styles.loading : ''}`}>
-          <td className={`${styles.tableCell} ${styles.codeCell}`}>
-            <div>
-              <h3 className={styles.courseTitle}>{card.code}</h3>
-            </div>
-          </td>
-          <td className={styles.tableCell}>{card.amount} kr</td>
-          <td className={styles.tableCell}>
-            {editingBalance[card.id] !== undefined ? (
-              <div className={styles.balanceEditContainer}>
-                <input 
-                  type="number"
-                  min="0"
-                  max={card.amount}
-                  value={editingBalance[card.id]}
-                  onChange={(e) => handleBalanceChange(card.id, e.target.value)}
-                  className={`${styles.balanceInput} ${balanceErrors[card.id] ? styles.inputError : ''}`}
-                  disabled={updatingCards[card.id]}
-                />
-                {balanceErrors[card.id] && (
-                  <div className={styles.errorMessage}>{balanceErrors[card.id]}</div>
-                )}
-                <div className={styles.balanceEditActions}>
-                  <button 
-                    onClick={() => handleBalanceSubmit(card.id)}
-                    disabled={updatingCards[card.id] || !!balanceErrors[card.id]}
-                    className={styles.saveButton}
-                  >
-                    Spara
-                  </button>
-                  <button 
-                    onClick={() => cancelEditing(card.id)}
-                    disabled={updatingCards[card.id]}
-                    className={styles.cancelButton}
-                  >
-                    Avbryt
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div 
-                className={styles.balanceDisplay} 
-                onClick={() => startEditing(card.id, card.remaining_balance)}
-                title="Klicka för att redigera saldo"
-              >
-                {card.remaining_balance} kr
-                <span className={styles.editIcon}>✎</span>
-              </div>
-            )}
-          </td>
-          <td className={styles.tableCell}>
-            <span className={`${styles.statusBadge} ${card.type === 'digital' ? styles.publishedBadge : styles.draftBadge}`}>
-              {card.type === 'digital' ? 'Digitalt' : 'Fysiskt'}
-            </span>
-          </td>
-          <td className={styles.tableCell}>
-            <select
-              value={card.status}
-              onChange={(e) => onStatusChange(
-                card.id, 
-                e.target.value as GiftCard['status']
-              )}
-              className={styles.statusSelect}
-              disabled={updatingCards[card.id]}
-            >
-              <option value="active">Aktivt</option>
-              <option value="redeemed">Inlöst</option>
-              <option value="expired">Utgånget</option>
-              <option value="cancelled">Avbrutet</option>
-            </select>
-          </td>
-          <td className={styles.tableCell}>
+  const startEditingExpiry = (id: string, expiresAt: string) => {
+    setEditingExpiry({...editingExpiry, [id]: formatDate(expiresAt)});
+    setExpiryErrors({...expiryErrors, [id]: undefined});
+  };
+
+  const cancelEditingExpiry = (id: string) => {
+    setEditingExpiry({...editingExpiry, [id]: undefined});
+    setExpiryErrors({...expiryErrors, [id]: undefined});
+  };
+
+  const handleExpirySubmit = (id: string) => {
+    const value = editingExpiry[id];
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      setExpiryErrors({...expiryErrors, [id]: 'Välj ett datum'});
+      return;
+    }
+
+    onUpdateExpiry(id, value);
+    setEditingExpiry({...editingExpiry, [id]: undefined});
+    setExpiryErrors({...expiryErrors, [id]: undefined});
+  };
+
+  const renderCode = (card: GiftCard) => {
+    const printedCode = codeOnCard(card);
+    const showInternal = Boolean(card.payment_reference && card.payment_reference !== card.code);
+
+    return (
+      <div>
+        <h3 className={styles.courseTitle} title="Koden som står på presentkortet">
+          {printedCode}
+        </h3>
+        {showInternal && (
+          <p className={styles.courseDescription}>Intern kod: {card.code}</p>
+        )}
+      </div>
+    );
+  };
+
+  const renderBalance = (card: GiftCard) => {
+    if (editingBalance[card.id] !== undefined) {
+      return (
+        <div className={styles.balanceEditContainer}>
+          <input
+            type="number"
+            min="0"
+            max={card.amount}
+            value={editingBalance[card.id]}
+            onChange={(e) => handleBalanceChange(card.id, e.target.value)}
+            className={`${styles.balanceInput} ${balanceErrors[card.id] ? styles.inputError : ''}`}
+            disabled={updatingCards[card.id]}
+            aria-label={`Saldo för ${codeOnCard(card)}`}
+          />
+          {balanceErrors[card.id] && (
+            <div className={styles.errorMessage}>{balanceErrors[card.id]}</div>
+          )}
+          <div className={styles.balanceEditActions}>
             <button
-              onClick={() => onTogglePayment(card.id, card.is_paid)}
-              className={`${styles.actionButton} ${card.is_paid ? styles.paidButton : styles.unpaidButton}`}
-              title={card.is_paid ? "Markera som obetald" : "Markera som betald"}
-              disabled={updatingCards[card.id]}
+              onClick={() => handleBalanceSubmit(card.id)}
+              disabled={updatingCards[card.id] || !!balanceErrors[card.id]}
+              className={styles.saveButton}
             >
-              {card.is_paid ? 'Betald ✓' : 'Ej betald ✗'}
+              Spara
             </button>
-          </td>
-          <td className={styles.tableCell}>
+            <button
+              onClick={() => cancelEditing(card.id)}
+              disabled={updatingCards[card.id]}
+              className={styles.editorCancelButton}
+            >
+              Avbryt
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        className={styles.inlineEditable}
+        onClick={() => startEditing(card.id, card.remaining_balance)}
+        title="Klicka för att redigera saldo"
+      >
+        {card.remaining_balance} kr
+        <span className={styles.editHint} aria-hidden="true">✎</span>
+      </button>
+    );
+  };
+
+  const renderExpiry = (card: GiftCard) => {
+    if (editingExpiry[card.id] !== undefined) {
+      return (
+        <div className={styles.dateEditContainer}>
+          <input
+            type="date"
+            value={editingExpiry[card.id]}
+            onChange={(e) => {
+              setEditingExpiry({...editingExpiry, [card.id]: e.target.value});
+              if (expiryErrors[card.id]) {
+                setExpiryErrors({...expiryErrors, [card.id]: undefined});
+              }
+            }}
+            className={`${styles.dateInput} ${expiryErrors[card.id] ? styles.inputError : ''}`}
+            disabled={updatingCards[card.id]}
+            aria-label={`Giltighetsdatum för ${codeOnCard(card)}`}
+          />
+          {expiryErrors[card.id] && (
+            <div className={styles.errorMessage}>{expiryErrors[card.id]}</div>
+          )}
+          <div className={styles.balanceEditActions}>
+            <button
+              onClick={() => handleExpirySubmit(card.id)}
+              disabled={updatingCards[card.id] || !!expiryErrors[card.id]}
+              className={styles.saveButton}
+            >
+              Spara
+            </button>
+            <button
+              onClick={() => cancelEditingExpiry(card.id)}
+              disabled={updatingCards[card.id]}
+              className={styles.editorCancelButton}
+            >
+              Avbryt
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const past = isPastDate(card.expires_at);
+    return (
+      <button
+        type="button"
+        className={`${styles.inlineEditable} ${past ? styles.expiredDate : ''}`}
+        onClick={() => startEditingExpiry(card.id, card.expires_at)}
+        title="Klicka för att ändra giltighetsdatum"
+      >
+        {formatDate(card.expires_at)}
+        <span className={styles.editHint} aria-hidden="true">✎</span>
+      </button>
+    );
+  };
+
+  const renderStatus = (card: GiftCard) => (
+    <select
+      value={card.status}
+      onChange={(e) => onStatusChange(card.id, e.target.value as GiftCard['status'])}
+      className={styles.statusSelect}
+      disabled={updatingCards[card.id]}
+      aria-label={`Status för ${codeOnCard(card)}`}
+    >
+      <option value="active">Aktivt</option>
+      <option value="redeemed">Inlöst</option>
+      <option value="expired">Utgånget</option>
+      <option value="cancelled">Avbrutet</option>
+    </select>
+  );
+
+  const renderPayment = (card: GiftCard) => (
+    <button
+      onClick={() => onTogglePayment(card.id, card.is_paid)}
+      className={`${styles.actionButton} ${card.is_paid ? styles.paidButton : styles.unpaidButton}`}
+      title={card.is_paid ? "Markera som obetald" : "Markera som betald"}
+      disabled={updatingCards[card.id]}
+    >
+      {card.is_paid ? 'Betald ✓' : 'Ej betald ✗'}
+    </button>
+  );
+
+  const renderRecipient = (card: GiftCard) => (
+    <div>
+      <span className={styles.courseTitle}>{card.recipient_name}</span>
+      {card.recipient_email && (
+        <p className={styles.courseDescription}>{card.recipient_email}</p>
+      )}
+    </div>
+  );
+
+  const renderActions = (card: GiftCard, showLabels: boolean) => (
+    <div className={styles.actionButtonsContainer}>
+      <ActionButton
+        variant="pdf"
+        onClick={() => onGeneratePDF(card)}
+        disabled={updatingCards[card.id]}
+        icon={showLabels ? undefined : <CardGiftcardIcon />}
+        label="Visa presentkort"
+      />
+      {card.invoice_number && (
+        <ActionButton
+          variant="pdf"
+          onClick={() => onGenerateInvoicePDF(card)}
+          disabled={updatingCards[card.id]}
+          icon={showLabels ? undefined : <ReceiptIcon />}
+          label="Visa faktura"
+        />
+      )}
+      <ActionButton
+        variant="edit"
+        onClick={() => startEditing(card.id, card.remaining_balance)}
+        disabled={updatingCards[card.id]}
+        icon={showLabels ? undefined : <EditIcon />}
+        label="Redigera saldo"
+      />
+      <ActionButton
+        variant="delete"
+        onClick={() => onDeleteGiftCard(card.id)}
+        disabled={updatingCards[card.id]}
+        icon={showLabels ? undefined : <DeleteIcon />}
+        label="Ta bort"
+      />
+    </div>
+  );
+
+  return (
+    <>
+      <div className={styles.giftCardTableScroll}>
+        <StandardTable
+          headers={['Kod', 'Belopp', 'Saldo', 'Typ', 'Status', 'Betald', 'Mottagare', 'Skapat', 'Utgår', 'Åtgärder']}
+          emptyMessage="Inga presentkort att visa"
+        >
+          {giftCards.map((card) => (
+            <tr key={card.id} className={`${styles.tableRow} ${updatingCards[card.id] ? styles.loading : ''}`}>
+              <td className={`${styles.tableCell} ${styles.codeCell}`}>
+                {renderCode(card)}
+              </td>
+              <td className={styles.tableCell}>{card.amount} kr</td>
+              <td className={styles.tableCell}>{renderBalance(card)}</td>
+              <td className={styles.tableCell}>
+                <span className={`${styles.statusBadge} ${card.type === 'digital' ? styles.publishedBadge : styles.draftBadge}`}>
+                  {card.type === 'digital' ? 'Digitalt' : 'Fysiskt'}
+                </span>
+              </td>
+              <td className={styles.tableCell}>{renderStatus(card)}</td>
+              <td className={styles.tableCell}>{renderPayment(card)}</td>
+              <td className={styles.tableCell}>{renderRecipient(card)}</td>
+              <td className={styles.tableCell}>{formatDate(card.created_at)}</td>
+              <td className={styles.tableCell}>{renderExpiry(card)}</td>
+              <td className={`${styles.tableCell} ${styles.actionsCell}`}>
+                {renderActions(card, false)}
+              </td>
+            </tr>
+          ))}
+        </StandardTable>
+      </div>
+
+      <div className={styles.giftCardList}>
+        {giftCards.map((card) => (
+          <article
+            key={card.id}
+            className={`${styles.giftCardItem} ${updatingCards[card.id] ? styles.loading : ''}`}
+          >
             <div>
-              <span className={styles.courseTitle}>{card.recipient_name}</span>
-              {card.recipient_email && (
-                <p className={styles.courseDescription}>{card.recipient_email}</p>
-              )}
+              <span className={styles.giftCardLabel}>Kod på kortet</span>
+              {renderCode(card)}
             </div>
-          </td>
-          <td className={styles.tableCell}>{formatDate(card.created_at)}</td>
-          <td className={styles.tableCell}>{formatDate(card.expires_at)}</td>
-          <td className={`${styles.tableCell} ${styles.actionsCell}`}>
-            <div className={styles.actionButtonsContainer}>
-              <ActionButton
-                variant="pdf"
-                onClick={() => onGeneratePDF(card)}
-                disabled={updatingCards[card.id]}
-                icon={<CardGiftcardIcon />}
-                label="Visa presentkort"
-              />
-              
-              {card.invoice_number && (
-                <ActionButton
-                  variant="pdf"
-                  onClick={() => onGenerateInvoicePDF(card)}
-                  disabled={updatingCards[card.id]}
-                  icon={<ReceiptIcon />}
-                  label="Visa faktura"
-                />
-              )}
-              
-              <ActionButton
-                variant="edit"
-                onClick={() => startEditing(card.id, card.remaining_balance)}
-                disabled={updatingCards[card.id]}
-                icon={<EditIcon />}
-                label="Redigera saldo"
-              />
-              
-              <ActionButton
-                variant="delete"
-                onClick={() => onDeleteGiftCard(card.id)}
-                disabled={updatingCards[card.id]}
-                icon={<DeleteIcon />}
-                label="Ta bort presentkort"
-              />
+
+            <div className={styles.giftCardMeta}>
+              <div>
+                <span className={styles.giftCardLabel}>Belopp</span>
+                <span>{card.amount} kr</span>
+              </div>
+              <div>
+                <span className={styles.giftCardLabel}>Saldo</span>
+                {renderBalance(card)}
+              </div>
+              <div>
+                <span className={styles.giftCardLabel}>Typ</span>
+                <span className={`${styles.statusBadge} ${card.type === 'digital' ? styles.publishedBadge : styles.draftBadge}`}>
+                  {card.type === 'digital' ? 'Digitalt' : 'Fysiskt'}
+                </span>
+              </div>
+              <div>
+                <span className={styles.giftCardLabel}>Status</span>
+                {renderStatus(card)}
+              </div>
+              <div>
+                <span className={styles.giftCardLabel}>Betald</span>
+                {renderPayment(card)}
+              </div>
+              <div>
+                <span className={styles.giftCardLabel}>Mottagare</span>
+                {renderRecipient(card)}
+              </div>
+              <div>
+                <span className={styles.giftCardLabel}>Skapat</span>
+                <span>{formatDate(card.created_at)}</span>
+              </div>
+              <div>
+                <span className={styles.giftCardLabel}>Utgår</span>
+                {renderExpiry(card)}
+              </div>
             </div>
-          </td>
-        </tr>
-      ))}
-    </StandardTable>
+
+            <div className={styles.giftCardActions}>
+              {renderActions(card, true)}
+            </div>
+          </article>
+        ))}
+      </div>
+    </>
   );
 };
 
-export default GiftCardTable; 
+export default GiftCardTable;

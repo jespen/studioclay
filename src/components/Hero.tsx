@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Buildings, UsersThree } from '@phosphor-icons/react';
 import styles from '@/styles/Hero.module.css';
 
 interface HeroProps {
@@ -20,9 +21,14 @@ const Hero = ({
         <div className={styles.contentGrid}>
           <div className={styles.textContent}>
             <h1 className={styles.heading}>
-              <span className={styles.highlightText}>
-                <span>Studio </span>
-                <span>CLAY</span>
+              <span className={styles.brandMark}>
+                <span className={styles.highlightText}>
+                  <span>Studio </span>
+                  <span>CLAY</span>
+                </span>
+                <svg className={styles.brushStroke} viewBox="0 0 300 20" preserveAspectRatio="none" aria-hidden="true">
+                  <path d="M4 14 C 60 4, 120 4, 170 10 S 260 16, 296 6" pathLength={1} />
+                </svg>
               </span> {title}
             </h1>
             <p className={styles.description}>{description}</p>
@@ -36,25 +42,11 @@ const Hero = ({
             </div>
             <div className={styles.clientTypes}>
               <div className={styles.clientType}>
-                <svg className={styles.clientIcon} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <span>Privatpersoner</span>
-              </div>
-              <div className={styles.clientType}>
-                <svg className={styles.clientIcon} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                  <path d="M3 3h18v18H3zM8 12h8M12 8v8"></path>
-                </svg>
+                <Buildings className={styles.clientIcon} size={20} weight="duotone" />
                 <span>Företag</span>
               </div>
               <div className={styles.clientType}>
-                <svg className={styles.clientIcon} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="9" cy="7" r="4"></circle>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                </svg>
+                <UsersThree className={styles.clientIcon} size={20} weight="duotone" />
                 <span>Grupper</span>
               </div>
             </div>
@@ -63,15 +55,16 @@ const Hero = ({
             <div 
               className={styles.heroImage}
               style={{
-                backgroundImage: 'url(/gallery/2.jpg)',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
                 borderRadius: '1rem',
                 height: '100%',
                 width: '100%',
                 position: 'relative'
               }}
             >
+              <div
+                className={styles.heroImageLayer}
+                style={{ backgroundImage: 'url(/gallery/2.jpg)' }}
+              />
               {/* <div className={styles.logo}>
                 <div className={styles.logoCircle}>
                   <span className={styles.logoText}>
@@ -80,6 +73,22 @@ const Hero = ({
                   </span>
                 </div>
               </div> */}
+            </div>
+            <div className={styles.spinBadge} aria-hidden="true">
+              <svg className={styles.spinText} viewBox="0 0 100 100">
+                <defs>
+                  <path id="hero-badge-circle" d="M50,50 m-37,0 a37,37 0 1,1 74,0 a37,37 0 1,1 -74,0" />
+                </defs>
+                <text>
+                  <textPath href="#hero-badge-circle" textLength="232" lengthAdjust="spacing">
+                    DREJKURSER • WORKSHOPS • STUDIOTID •
+                  </textPath>
+                </text>
+              </svg>
+              <svg className={styles.spinIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 3h6M10 3v2.5c0 1-3 2.5-3 6.5 0 4.5 2.2 9 5 9s5-4.5 5-9c0-4-3-5.5-3-6.5V3" />
+                <path d="M7.6 13.5h8.8" />
+              </svg>
             </div>
           </div>
         </div>

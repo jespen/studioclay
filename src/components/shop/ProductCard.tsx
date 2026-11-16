@@ -35,7 +35,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   return (
     <div className="group">
       <div 
-        className="relative overflow-hidden bg-gray-100 cursor-pointer"
+        className="relative overflow-hidden rounded-xl bg-gray-100 cursor-pointer"
         onClick={handleOpenDialog}
       >
         {/* New tag */}
@@ -67,33 +67,37 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         </div>
-      </div>
-      
-      {/* Product info */}
-      <div className="mt-4 flex flex-col">
-        <h3 className="text-sm font-medium text-center">{product.title}</h3>
-        <div className="mt-1 text-center">
-          {product.originalPrice ? (
-            <div className="flex justify-center items-center gap-2">
-              <span className="text-gray-400 line-through">{product.originalPrice} kr</span>
-              <span className="font-medium">{product.price} kr</span>
+
+        <div className="absolute inset-x-0 bottom-0 z-10 bg-white/45 px-3 py-2.5 backdrop-blur-md">
+          <div className="flex items-end justify-between gap-3">
+            <h3 className="min-w-0 text-sm font-medium leading-snug text-gray-900 line-clamp-2">
+              {product.title}
+            </h3>
+            <div className="shrink-0 text-right text-sm font-medium text-gray-900">
+              {product.originalPrice ? (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xs font-normal text-gray-500 line-through">{product.originalPrice} kr</span>
+                  <span>{product.price} kr</span>
+                </div>
+              ) : (
+                <span>{product.price} kr</span>
+              )}
             </div>
-          ) : (
-            <span className="font-medium">{product.price} kr</span>
-          )}
+          </div>
         </div>
-        <button 
-          className={`mt-3 w-full py-2 ${
-            product.inStock === false 
-              ? 'bg-gray-400 cursor-not-allowed' 
-              : 'btn-primary text-white hover:bg-primary-dark transition-colors'
-          }`}
-          onClick={product.inStock === false ? undefined : handleBuyClick}
-          disabled={product.inStock === false}
-        >
-          {product.inStock === false ? 'SLUTSÅLD' : 'KÖP'}
-        </button>
       </div>
+
+      <button 
+        className={`mt-2 w-full py-2.5 px-4 text-sm font-medium rounded-md transition-colors ${
+          product.inStock === false 
+            ? 'bg-gray-400 text-white cursor-not-allowed' 
+            : 'bg-primary text-white hover:bg-primary-dark'
+        }`}
+        onClick={product.inStock === false ? undefined : handleBuyClick}
+        disabled={product.inStock === false}
+      >
+        {product.inStock === false ? 'Slutsåld' : 'Köp'}
+      </button>
 
       {/* Product dialog */}
       {isDialogOpen && (

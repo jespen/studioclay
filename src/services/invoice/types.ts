@@ -1,4 +1,4 @@
-import { PaymentStatus } from '@/services/swish/types';
+import { PaymentStatus } from '@/constants/statusCodes';
 
 export type InvoiceStatus = PaymentStatus;
 

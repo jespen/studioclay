@@ -4,6 +4,7 @@ import AdminHeader from '../Dashboard/AdminHeader';
 import SectionContainer from '../Dashboard/SectionContainer';
 import ProductForm from './ProductForm';
 import { Product } from '@/components/shop/types';
+import { categoryLabel } from '@/constants/productCategories';
 import { fetchProductsWithCache, invalidateCache } from '@/utils/apiCache';
 import Image from 'next/image';
 
@@ -88,7 +89,8 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
       discount: null,
       inStock: true,
       stockQuantity: 1,
-      published: true
+      published: true,
+      category: 'other'
     };
     
     setSelectedProduct(newProduct);
@@ -256,6 +258,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bild</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Titel</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pris</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rabatt</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ny</th>
@@ -280,6 +283,7 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">{product.title}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">{categoryLabel(product.category)}</td>
                       <td className="px-6 py-4 whitespace-nowrap">{product.price} kr</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {product.discount ? `-${product.discount}%` : '—'}

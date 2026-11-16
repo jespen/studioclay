@@ -8,8 +8,6 @@
 import { createServerSupabaseClient } from '@/utils/supabase';
 import { z } from 'zod';
 import { createLogContext, logError, logInfo, LogContext, logWarning } from './logging';
-import { SwishConfig } from '@/lib/swish/SwishConfig';
-import { SwishErrorCode } from '@/lib/swish/SwishErrorCode';
 import { getStepUrl } from '@/utils/flowNavigation';
 import { FlowType, GenericStep } from '@/components/common/BookingStepper';
 
@@ -21,7 +19,6 @@ export enum ProductType {
 }
 
 export enum PaymentMethod {
-  SWISH = 'swish',
   INVOICE = 'invoice'
 }
 
@@ -115,10 +112,7 @@ export class PaymentService {
         };
       }
       
-      // Skapa betalning baserat på metod
-      if (validatedData.paymentMethod === PaymentMethod.SWISH) {
-        return await this.createSwishPayment(validatedData, logContext);
-      } else if (validatedData.paymentMethod === PaymentMethod.INVOICE) {
+      if (validatedData.paymentMethod === PaymentMethod.INVOICE) {
         return await this.createInvoicePayment(validatedData, logContext);
       } else {
         const errorMessage = `Betalningsmetod ${validatedData.paymentMethod} stöds inte`;
@@ -169,78 +163,7 @@ export class PaymentService {
   }
 
   /**
-   * Skapa en Swish-betalning
-   */
-  private async createSwishPayment(paymentInfo: PaymentInfo, logContext: LogContext): Promise<PaymentResponse> {
-    try {
-      // Generera unik referens
-      const reference = this.generatePaymentReference();
-      logContext.reference = reference;
-      
-      logInfo('Skapar Swish-betalning', logContext, { 
-        productId: paymentInfo.productId,
-        amount: paymentInfo.amount
-      });
-      
-      // Skapa betalningsregistrering i databasen
-      await this.recordPaymentIntent({
-        reference,
-        productId: paymentInfo.productId,
-        productType: paymentInfo.productType,
-        paymentMethod: PaymentMethod.SWISH,
-        amount: paymentInfo.amount,
-        status: 'PENDING',
-        userInfo: paymentInfo.userInfo
-      });
-      
-      // Förbered API-anrop till Swish
-      const swishConfig = SwishConfig.getInstance();
-      const apiUrl = swishConfig.getPaymentRequestUrl();
-      
-      // Konstruera Swish-betalningsanrop enligt deras API-specifikation
-      const swishRequestData = {
-        payeePaymentReference: reference,
-        callbackUrl: swishConfig.getCallbackUrl(),
-        payeeAlias: swishConfig.getMerchantSwishNumber(),
-        amount: paymentInfo.amount.toString(),
-        currency: 'SEK',
-        message: this.getProductDescription(paymentInfo),
-        phoneNumber: paymentInfo.userInfo.phone
-      };
-      
-      // Här skulle API-anropet till Swish ske...
-      // Detta är en förenklad implementering för demonstration
-      
-      // Simulera ett lyckat svar
-      return {
-        success: true,
-        message: 'Swish-betalning skapad',
-        reference,
-        redirectUrl: `https://example.com/payment/swish/${reference}`
-      };
-    } catch (error) {
-      logError('Kunde inte skapa Swish-betalning', logContext, error);
-      
-      let errorCode = 'UNKNOWN_ERROR';
-      if (error instanceof Error) {
-        if (error.message.includes('certificate')) {
-          errorCode = SwishErrorCode.CERTIFICATE_ERROR;
-        } else if (error.message.includes('validation')) {
-          errorCode = SwishErrorCode.VALIDATION_ERROR;
-        }
-      }
-      
-      return {
-        success: false,
-        message: 'Kunde inte skapa Swish-betalning',
-        errorCode,
-        data: error instanceof Error ? error.message : String(error)
-      };
-    }
-  }
-
-  /**
-   * Skapa en fakturabelating
+   * Skapa en fakturabetalning
    */
   private async createInvoicePayment(paymentInfo: PaymentInfo, logContext: LogContext): Promise<PaymentResponse> {
     try {

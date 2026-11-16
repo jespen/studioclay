@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { logDebug, logError, logInfo } from "@/lib/logging";
-import { SwishService } from "@/services/swish/swishService";
-import { getValidPaymentStatus, PAYMENT_STATUSES } from "@/constants/statusCodes";
+import { logError, logInfo } from "@/lib/logging";
+import { PAYMENT_STATUSES } from "@/constants/statusCodes";
 import { v4 as uuidv4 } from 'uuid';
 
 // Initialize Supabase client
@@ -78,7 +77,6 @@ export async function GET(
       debug: { 
         payment_id: payment.id,
         payment_reference: payment.payment_reference,
-        swish_payment_id: payment.swish_payment_id,
         status: payment.status,
         found_method: "payment_reference",
         booking_found: !!booking
@@ -90,7 +88,6 @@ export async function GET(
         updated_at: payment.updated_at,
         callback_received: payment.status !== PAYMENT_STATUSES.CREATED,
         payment_reference: payment.payment_reference,
-        swish_payment_id: payment.swish_payment_id,
         booking_id: payment.booking_id || booking?.id,
         booking_reference: booking?.booking_reference,
         product_type: payment.product_type,

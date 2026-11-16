@@ -367,7 +367,7 @@ const GiftCardManager: React.FC = () => {
       const requestData = {
         giftCardData: {
           id: card.id,
-          code: card.code,
+          code: card.payment_reference || card.code,
           amount: card.amount,
           type: card.type,
           recipient_name: card.recipient_name,
@@ -532,6 +532,38 @@ const GiftCardManager: React.FC = () => {
       
     } catch (err) {
       console.error('Error updating remaining balance:', err);
+      alert('Ett fel inträffade: ' + (err instanceof Error ? err.message : 'Okänt fel'));
+    } finally {
+      setUpdatingCards(prev => ({ ...prev, [id]: false }));
+    }
+  }
+
+  async function handleUpdateExpiry(id: string, expiresAt: string) {
+    setUpdatingCards(prev => ({ ...prev, [id]: true }));
+
+    try {
+      const response = await fetch('/api/gift-cards/update-expiry', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id, expires_at: expiresAt }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Kunde inte uppdatera giltighetsdatum');
+      }
+
+      if (data.data) {
+        setGiftCards(prevCards =>
+          prevCards.map(card => (card.id === id ? { ...card, ...data.data } : card))
+        );
+      }
+
+      alert(data.message || `Giltighetsdatum uppdaterat till ${expiresAt}`);
+    } catch (err) {
+      console.error('Error updating expiry:', err);
       alert('Ett fel inträffade: ' + (err instanceof Error ? err.message : 'Okänt fel'));
     } finally {
       setUpdatingCards(prev => ({ ...prev, [id]: false }));
@@ -758,7 +790,7 @@ const GiftCardManager: React.FC = () => {
       doc.text('Presentkortskod:', margin + 10, 97);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
-      doc.text(card.code, margin + 70, 97);
+      doc.text(card.payment_reference || card.code, margin + 70, 97);
       
       // Add validity info
       doc.setFontSize(11);
@@ -895,6 +927,7 @@ const GiftCardManager: React.FC = () => {
                 onSendEmail={sendGiftCardEmail}
                 onMarkAsEmailed={handleMarkAsEmailed}
                 onUpdateBalance={handleUpdateRemainingBalance}
+                onUpdateExpiry={handleUpdateExpiry}
               />
             )}
           </SectionContainer>

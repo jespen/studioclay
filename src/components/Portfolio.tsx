@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { CaretLeft, CaretRight, Eye, X } from '@phosphor-icons/react';
 import styles from '@/styles/Portfolio.module.css';
 
 // Definition for a local gallery item
@@ -182,7 +183,7 @@ const Portfolio = () => {
   return (
     <section id="works" className={styles.section}>
       <div className={styles.container}>
-        <div className={styles.titleSection}>
+        <div className={styles.titleSection} data-reveal>
           <h2 className={styles.title}>Portfolio</h2>
           <p className={styles.description}>
             En samling av vackra skapelser från vår studio och verkstad.
@@ -204,7 +205,7 @@ const Portfolio = () => {
         </div> */}
 
         {/* Portfolio Masonry Grid */}
-        <div className={styles.masonryGrid}>
+        <div className={styles.masonryGrid} data-reveal-stagger="zoom">
           {loading ? (
             // Display loading skeletons
             Array(9).fill(0).map((_, index) => (
@@ -237,10 +238,7 @@ const Portfolio = () => {
                       </h3>
                       <span className={styles.viewButton}>
                         Visa större
-                        <svg className={styles.viewIcon} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
+                        <Eye className={styles.viewIcon} weight="duotone" />
                       </span>
                     </div>
                   </div>
@@ -268,9 +266,7 @@ const Portfolio = () => {
           <div className={styles.galleryModal} onClick={closeGallery}>
             <div className={styles.galleryContent} onClick={(e) => e.stopPropagation()}>
               <button className={styles.closeButton} onClick={closeGallery}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X weight="bold" />
               </button>
               
               <div className={styles.galleryImageContainer}>
@@ -291,15 +287,11 @@ const Portfolio = () => {
               </div>
               
               <button className={`${styles.navButton} ${styles.prevButton}`} onClick={(e) => { e.stopPropagation(); prevImage(); }}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
+                <CaretLeft weight="bold" />
               </button>
               
               <button className={`${styles.navButton} ${styles.nextButton}`} onClick={(e) => { e.stopPropagation(); nextImage(); }}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <CaretRight weight="bold" />
               </button>
             </div>
           </div>

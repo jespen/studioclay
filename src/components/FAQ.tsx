@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { CaretDown } from '@phosphor-icons/react';
 import styles from '@/styles/BookCourse.module.css';
 
 interface FAQItemProps {
@@ -18,24 +19,15 @@ const FAQItem: React.FC<FAQItemProps> = ({ question, answer }) => {
         onClick={() => setIsOpen(!isOpen)}
       >
         {question}
-        <svg 
-          xmlns="http://www.w3.org/2000/svg" 
-          width="16" 
-          height="16" 
-          viewBox="0 0 24 24" 
-          fill="none" 
-          stroke="currentColor" 
-          strokeWidth="2" 
-          strokeLinecap="round" 
-          strokeLinejoin="round" 
+        <CaretDown
+          size={16}
+          weight="bold"
           className={styles.faqIcon}
           style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
-        >
-          <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
+        />
       </div>
       {isOpen && (
-        <div className={styles.faqAnswer}>
+        <div className={styles.faqAnswer} style={{ animation: 'drop-in 0.35s var(--ease-out-soft) both' }}>
           {answer}
         </div>
       )}
@@ -70,8 +62,8 @@ const FAQ: React.FC = () => {
   return (
     <div style={{ backgroundColor: '#f9f9f9', padding: '3rem 0' }}>
       <div id="faq" className={styles.faqSection}>
-        <h2 className={styles.faqTitle}>Frågor och svar</h2>
-        <div className={styles.faqList}>
+        <h2 className={styles.faqTitle} data-reveal>Frågor och svar</h2>
+        <div className={styles.faqList} data-reveal-stagger>
           {faqItems.map((item, index) => (
             <FAQItem 
               key={index} 

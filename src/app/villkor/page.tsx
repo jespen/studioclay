@@ -26,11 +26,7 @@ export default function TermsPage() {
         </p>
 
         <h2 className="text-2xl font-semibold mt-8 mb-4">3. Betalning</h2>
-        <p>Vi erbjuder följande betalningsalternativ:</p>
-        <ul className="list-disc pl-8 my-4">
-          <li><strong>Swish:</strong> Betalning sker direkt efter att bokningen har bekräftats.</li>
-          <li><strong>Faktura:</strong> Faktura skickas till din e-postadress med 10 dagars betalningsvillkor.</li>
-        </ul>
+        <p>Betalning sker med faktura. Fakturan skickas till din e-postadress med 10 dagars betalningsvillkor.</p>
         <p>
           Alla priser är angivna i svenska kronor (SEK) och inkluderar moms. 
           Din plats är inte garanterad förrän full betalning har mottagits.

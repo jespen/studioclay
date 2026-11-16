@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { X } from '@phosphor-icons/react';
 import { Product } from './types';
 import { saveItemDetails } from '@/utils/dataFetcher';
 import { useRouter } from 'next/navigation';
@@ -57,77 +59,79 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ product, isOpen, onClose,
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div 
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px]">
+      <div
         ref={dialogRef}
-        className="bg-white max-w-4xl w-full max-h-[90vh] overflow-auto flex flex-col md:flex-row"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="product-dialog-title"
+        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
       >
-        {/* Product image */}
-        <div className="md:w-1/2 bg-gray-100">
+        <div className="relative min-h-0 bg-[#f3f4f2]">
           <img
             src={product.image}
             alt={product.title}
-            className="w-full h-full object-contain"
+            className="max-h-[calc(90vh-5.5rem)] w-full object-contain"
           />
-        </div>
-        
-        {/* Product details */}
-        <div className="md:w-1/2 p-6 md:p-8 flex flex-col">
-          <div className="flex justify-between items-start">
-            <h2 className="text-xl font-medium font-serif">{product.title}</h2>
-            <button 
-              onClick={onClose}
-              className="text-gray-400 hover:text-black"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-          
-          <div className="mt-4">
-            {product.originalPrice ? (
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400 line-through">{product.originalPrice} kr</span>
-                <span className="text-xl font-medium">{product.price} kr</span>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Stäng"
+            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-gray-700 backdrop-blur-sm transition-colors hover:bg-white"
+          >
+            <X size={18} weight="bold" />
+          </button>
+
+          <div className="absolute inset-x-0 bottom-0 bg-white/45 px-4 py-3 backdrop-blur-md">
+            <div className="flex items-end justify-between gap-4">
+              <div className="min-w-0">
+                <h2 id="product-dialog-title" className="truncate font-serif text-lg font-medium text-gray-900">
+                  {product.title}
+                </h2>
+                {product.description && (
+                  <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-gray-700">
+                    {product.description}
+                  </p>
+                )}
               </div>
-            ) : (
-              <span className="text-xl font-medium">{product.price} kr</span>
-            )}
-          </div>
-          
-          <div className="mt-6 text-gray-600">
-            <p>{product.description}</p>
-          </div>
-          
-          {product.stockQuantity !== undefined && (
-            <div className="mt-4 text-sm">
-              <span className={product.inStock === false ? 'text-red-500' : 'text-green-600'}>
-                {product.inStock === false 
-                  ? 'Slutsåld' 
-                  : `${product.stockQuantity} i lager`}
-              </span>
+              <div className="shrink-0 text-right">
+                {product.originalPrice ? (
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-sm text-gray-500 line-through">{product.originalPrice} kr</span>
+                    <span className="text-lg font-medium text-gray-900">{product.price} kr</span>
+                  </div>
+                ) : (
+                  <span className="text-lg font-medium text-gray-900">{product.price} kr</span>
+                )}
+                {product.stockQuantity !== undefined && (
+                  <p className={`mt-0.5 text-xs ${product.inStock === false ? 'text-red-600' : 'text-gray-600'}`}>
+                    {product.inStock === false ? 'Slutsåld' : `${product.stockQuantity} i lager`}
+                  </p>
+                )}
+              </div>
             </div>
-          )}
-          
-          <div className="mt-auto pt-8">
-            <button 
-              className={`w-full py-3 ${
-                product.inStock === false 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'btn-primary text-white hover:bg-primary-dark transition-colors'
-              }`}
-              onClick={product.inStock === false ? undefined : handleBuyClick}
-              disabled={product.inStock === false}
-            >
-              {product.inStock === false ? 'SLUTSÅLD' : 'KÖP'}
-            </button>
           </div>
+        </div>
+
+        <div className="p-3">
+          <button
+            type="button"
+            className={`w-full rounded-md px-4 py-3 text-sm font-medium transition-colors ${
+              product.inStock === false
+                ? 'cursor-not-allowed bg-gray-400 text-white'
+                : 'bg-primary text-white hover:bg-primary-dark'
+            }`}
+            onClick={product.inStock === false ? undefined : handleBuyClick}
+            disabled={product.inStock === false}
+          >
+            {product.inStock === false ? 'Slutsåld' : 'Köp'}
+          </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

@@ -2,24 +2,11 @@
  * PaymentSelection Component
  * 
  * This component handles the payment selection and processing flow in the booking process.
- * It coordinates between different payment methods (Swish and Invoice) and their respective components.
- * 
- * Component Structure:
- * - PaymentSelection (this file)
- *   ├── Swish Flow/
- *   │   ├── SwishPaymentSection.tsx # Swish coordinator
- *   │   ├── SwishPaymentForm.tsx    # Phone number input
- *   │   └── SwishPaymentDialog.tsx  # Payment status
- *   │
- *   └── Invoice Flow/
- *       ├── InvoicePaymentSection.tsx # Invoice coordinator
- *       ├── InvoicePaymentForm.tsx    # Address input
- *       └── InvoicePaymentDialog.tsx  # Payment status
+ * Invoice is the only payment method.
  */
 
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { 
   Box, 
   Typography, 
@@ -57,8 +44,6 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { GenericStep, FlowType } from '../common/BookingStepper';
 import GenericFlowContainer from '../common/GenericFlowContainer';
 import StyledButton from '../common/StyledButton';
-import { v4 as uuidv4 } from 'uuid';
-import SwishPaymentSection, { SwishPaymentSectionRef } from './SwishPaymentSection';
 import { PaymentMethod, PaymentDetails, BaseFormErrors, InvoiceDetails } from '@/types/payment';
 import { setPaymentInfo } from '@/utils/flowStorage';
 import { FlowStateData } from '../common/FlowStepWrapper';
@@ -85,7 +70,6 @@ import { validatePaymentRequest } from '@/lib/validation/paymentSchemas';
 import { type ProductType } from '@/constants/statusCodes';
 import InvoicePaymentSection, { InvoicePaymentSectionRef } from '../payment/InvoicePaymentSection';
 import { StandardPaymentResponse, PaymentReferenceData } from '@/types/paymentTypes';
-import SwishPaymentDialog from './SwishPaymentDialog';
 import InvoicePaymentDialog from './InvoicePaymentDialog';
 
 interface PaymentSelectionProps {
@@ -108,7 +92,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const router = useRouter();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
   
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
@@ -116,14 +99,12 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [submitError, setSubmitError] = useState<string | null>(null);
   
-  // const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('swish');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('invoice');
 
   const [error, setError] = useState<string | null>(null);
   const [paymentInfo, setPaymentInfo] = useState<any>(null);
   
   const [formErrors, setFormErrors] = useState<BaseFormErrors>({});
-  const swishPaymentRef = useRef<SwishPaymentSectionRef>(null);
   const invoicePaymentRef = useRef<InvoicePaymentSectionRef>(null);
 
   // Add invoice detail states
@@ -140,9 +121,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     { id: 'redirect', label: 'Förbereder bekräftelse...', completed: false }
   ]);
 
-  // Dialog state
-  const [swishDialogOpen, setSwishDialogOpen] = useState(false);
-  const [swishPaymentStatus, setSwishPaymentStatus] = useState<"CREATED" | "PAID" | "ERROR" | "DECLINED">(PAYMENT_STATUSES.CREATED);
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
   const [invoiceStatus, setInvoiceStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
@@ -153,9 +131,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     if (isSubmitting && selectedPaymentMethod === 'invoice') {
       setInvoiceDialogOpen(true);
       setInvoiceStatus('loading');
-    } else if (isSubmitting && selectedPaymentMethod === 'swish') {
-      setSwishDialogOpen(true);
-      setSwishPaymentStatus(PAYMENT_STATUSES.CREATED);
     }
   }, [isSubmitting, selectedPaymentMethod]);
 
@@ -208,13 +183,9 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     setFormErrors(prev => ({ ...prev, paymentMethod: undefined }));
     
     if (selectedPaymentMethod === 'invoice') {
-      // Validera fakturaformuläret via ref
       if (invoicePaymentRef.current) {
         return invoicePaymentRef.current.validateForm();
       }
-    } else if (selectedPaymentMethod === 'swish') {
-      // Validering av swish sker i SwishPaymentSection
-      return true;
     }
     
     return false;
@@ -231,9 +202,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     if (selectedPaymentMethod === 'invoice') {
       setInvoiceDialogOpen(true);
       setInvoiceStatus('loading');
-    } else if (selectedPaymentMethod === 'swish') {
-      setSwishDialogOpen(true);
-      setSwishPaymentStatus(PAYMENT_STATUSES.CREATED);
     }
     
     try {
@@ -244,25 +212,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       
       console.log('[PaymentSelection] Flow type:', flowType);
       
-      // Handle different payment methods
-      if (selectedPaymentMethod === 'swish') {
-        console.log('[PaymentSelection] Processing Swish payment');
-        if (swishPaymentRef.current) {
-          const success = await swishPaymentRef.current.submitSwishPayment();
-          console.log('[PaymentSelection] Swish payment submission result:', success);
-          
-          if (success) {
-            setIsSubmitting(false);
-            return;
-          } else {
-            setSwishPaymentStatus(PAYMENT_STATUSES.ERROR);
-            throw new Error('Betalningen kunde inte genomföras');
-          }
-        } else {
-          console.error('[PaymentSelection] Swish section ref not available');
-          throw new Error('Swish-betalningssektionen kunde inte initialiseras');
-        }
-      } else if (selectedPaymentMethod === 'invoice') {
+      if (selectedPaymentMethod === 'invoice') {
         console.log('[PaymentSelection] Processing Invoice payment');
         if (invoicePaymentRef.current) {
           const isValid = validateForm();
@@ -293,9 +243,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       setSubmitError(error instanceof Error ? error.message : 'Ett fel uppstod');
       
       // Update dialog states for errors
-      if (selectedPaymentMethod === 'swish') {
-        setSwishPaymentStatus(PAYMENT_STATUSES.ERROR);
-      } else if (selectedPaymentMethod === 'invoice') {
+      if (selectedPaymentMethod === 'invoice') {
         setInvoiceStatus('error');
       }
     } finally {
@@ -407,11 +355,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     return courseDetail.price * numParticipants;
   };
 
-  // Get the appropriate Swish logo based on theme
-  const swishLogoSrc = prefersDarkMode 
-    ? '/Swish Logo Secondary Dark-BG SVG.svg'
-    : '/Swish Logo Secondary Light-BG SVG.svg';
-
   // Clean up on component unmount
   useEffect(() => {
     return () => {
@@ -431,8 +374,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       setInvoiceStatus('success');
       setInvoiceNumber(paymentData.invoiceNumber || paymentData.invoice_number || '');
       setBookingReference(paymentData.bookingReference || paymentData.payment_reference || '');
-    } else if (selectedPaymentMethod === 'swish') {
-      setSwishPaymentStatus(PAYMENT_STATUSES.PAID);
     }
     
     // Store payment info using PaymentService instead of direct call
@@ -547,65 +488,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
               value={selectedPaymentMethod}
               onChange={handleRadioChange}
             >
-              {/* Swish Payment Option */}
-              <Card 
-                variant="outlined" 
-                sx={{ 
-                  mb: 2, 
-                  border: selectedPaymentMethod === 'swish' ? '2px solid' : '1px solid', 
-                  borderColor: selectedPaymentMethod === 'swish' ? 'var(--primary)' : 'divider',
-                  transition: 'all 0.2s ease-in-out'
-                }}
-              >
-                <CardContent>
-                  <FormControlLabel 
-                    value="swish" 
-                    control={
-                      <Radio 
-                        sx={{
-                          color: 'rgba(0, 0, 0, 0.6)',
-                          '&.Mui-checked': {
-                            color: 'var(--primary)',
-                          },
-                        }}
-                      />
-                    } 
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', height: 30, width: 100, position: 'relative' }}>
-                        <Image
-                          src={swishLogoSrc}
-                          alt="Betala med Swish"
-                          fill
-                          style={{ objectFit: 'contain' }}
-                        />
-                      </Box>
-                    } 
-                    sx={{ width: '100%' }}
-                  />      
-                  {selectedPaymentMethod === 'swish' && userInfo && (
-                    <SwishPaymentSection
-                      amount={calculatePrice()}
-                      productType={
-                        flowType === FlowType.GIFT_CARD ? 'gift_card' : 
-                        flowType === FlowType.ART_PURCHASE ? 'art_product' : 
-                        'course'
-                      }
-                      productId={courseId}
-                      userInfo={userInfo}
-                      onPaymentComplete={handlePaymentComplete}
-                      onPaymentError={(error) => {
-                        console.error('Swish payment error:', error);
-                        setSubmitError('Ett fel uppstod vid Swish-betalningen. Försök igen eller kontakta support.');
-                      }}
-                      onPaymentCancelled={() => {
-                        console.log('Swish payment cancelled');
-                        setSubmitError('Betalningen avbröts. Försök igen eller välj en annan betalningsmetod.');
-                      }}
-                    />
-                  )}
-                </CardContent>
-              </Card>
-              
               {/* Invoice Payment Option */}
               <Card 
                 variant="outlined" 
@@ -951,23 +833,10 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     </>
   );
 
-  // Handle closing dialogs
-  const handleSwishDialogClose = () => {
-    if (swishPaymentStatus !== PAYMENT_STATUSES.CREATED) {
-      setSwishDialogOpen(false);
-    }
-  };
-  
   const handleInvoiceDialogClose = () => {
     setInvoiceDialogOpen(false);
   };
   
-  // Handle Swish payment cancellation
-  const handleSwishCancel = () => {
-    setSwishDialogOpen(false);
-    setSubmitError('Betalningen avbröts');
-  };
-
   return (
     <>
       {/* 
@@ -996,14 +865,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             {renderButtons()}
           </Paper>
           
-          {/* Dialogs */}
-          <SwishPaymentDialog
-            open={swishDialogOpen}
-            onClose={handleSwishDialogClose}
-            onCancel={handleSwishCancel}
-            paymentStatus={swishPaymentStatus}
-          />
-          
           <InvoicePaymentDialog
             open={invoiceDialogOpen}
             onClose={handleInvoiceDialogClose}
@@ -1030,14 +891,6 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
             {renderProcessingStatus()}
             {renderButtons()}
           </Paper>
-          
-          {/* Dialogs - These were missing in this rendering path */}
-          <SwishPaymentDialog
-            open={swishDialogOpen}
-            onClose={handleSwishDialogClose}
-            onCancel={handleSwishCancel}
-            paymentStatus={swishPaymentStatus}
-          />
           
           <InvoicePaymentDialog
             open={invoiceDialogOpen}

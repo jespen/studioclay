@@ -19,6 +19,7 @@
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.15.10",
     "@mui/material": "^5.15.10",
+    "@phosphor-icons/react": "^2.1.10",
     "@supabase/auth-helpers-nextjs": "^0.9.0",
     "@supabase/ssr": "^0.1.0",
     "@supabase/supabase-js": "^2.39.3",
@@ -58,5 +59,9 @@
     "eslint": "^9",
     "style-loader": "^4.0.0",
     "typescript": "^5"
+  },
+  "allowScripts": {
+    "core-js@3.51.0": true,
+    "fsevents@2.3.3": true
   }
 }

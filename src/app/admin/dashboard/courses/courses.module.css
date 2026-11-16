@@ -813,4 +813,155 @@
 
 .cancelButton:hover {
   background-color: #16a34a;
+}
+
+.giftCardTableScroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.giftCardTableScroll .table {
+  min-width: 980px;
+}
+
+.giftCardList {
+  display: none;
+}
+
+.inlineEditable {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inlineEditable:hover {
+  color: #547264;
+}
+
+.editHint {
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
+
+.expiredDate {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.balanceEditContainer,
+.dateEditContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 8.5rem;
+}
+
+.balanceInput,
+.dateInput {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.inputError {
+  border-color: #ef4444;
+}
+
+.balanceEditActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.balanceEditActions .saveButton,
+.editorCancelButton {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.editorCancelButton {
+  background-color: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.giftCardItem h3,
+.giftCardItem p {
+  word-break: break-word;
+}
+
+.codeCell h3 {
+  word-break: break-all;
+}
+
+@media (max-width: 900px) {
+  .giftCardTableScroll {
+    display: none;
+  }
+
+  .giftCardList {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .giftCardItem {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0.875rem;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .giftCardLabel {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+
+  .giftCardMeta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .giftCardMeta > div {
+    min-width: 0;
+  }
+
+  .giftCardActions .actionButtonsContainer {
+    flex-wrap: wrap;
+  }
+
+  .giftCardActions .actionButton {
+    margin-bottom: 0.25rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .giftCardMeta {
+    grid-template-columns: 1fr;
+  }
 } 

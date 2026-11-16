@@ -63,7 +63,7 @@ export type GiftCardDetails = z.infer<typeof GiftCardDetailsSchema>;
  * Base payment request schema - common fields for all payment types
  */
 export const BasePaymentRequestSchema = z.object({
-  paymentMethod: z.enum([PAYMENT_METHODS.SWISH, PAYMENT_METHODS.INVOICE] as const),
+  paymentMethod: z.literal(PAYMENT_METHODS.INVOICE),
   productId: z.string().min(1, "Product ID is required"),
   productType: z.enum([PRODUCT_TYPES.COURSE, PRODUCT_TYPES.GIFT_CARD, PRODUCT_TYPES.ART_PRODUCT] as const),
   amount: z.number().min(1, "Amount must be greater than 0"),
@@ -82,37 +82,19 @@ export const InvoicePaymentRequestSchema = BasePaymentRequestSchema.extend({
 export type InvoicePaymentRequest = z.infer<typeof InvoicePaymentRequestSchema>;
 
 /**
- * Schema for Swish payment requests
+ * Schema for gift card invoice payments
  */
-export const SwishPaymentRequestSchema = BasePaymentRequestSchema.extend({
-  paymentMethod: z.literal(PAYMENT_METHODS.SWISH)
+export const GiftCardPaymentRequestSchema = InvoicePaymentRequestSchema.extend({
+  productType: z.literal(PRODUCT_TYPES.GIFT_CARD),
+  giftCardDetails: GiftCardDetailsSchema
 });
-
-export type SwishPaymentRequest = z.infer<typeof SwishPaymentRequestSchema>;
-
-/**
- * Schema for gift card payment requests (can be either Swish or invoice)
- */
-export const GiftCardPaymentRequestSchema = z.discriminatedUnion("paymentMethod", [
-  InvoicePaymentRequestSchema.extend({
-    productType: z.literal(PRODUCT_TYPES.GIFT_CARD),
-    giftCardDetails: GiftCardDetailsSchema
-  }),
-  SwishPaymentRequestSchema.extend({
-    productType: z.literal(PRODUCT_TYPES.GIFT_CARD),
-    giftCardDetails: GiftCardDetailsSchema
-  })
-]);
 
 export type GiftCardPaymentRequest = z.infer<typeof GiftCardPaymentRequestSchema>;
 
 /**
- * Payment request schema - union of all payment types
+ * Payment request schema
  */
-export const PaymentRequestSchema = z.discriminatedUnion("paymentMethod", [
-  InvoicePaymentRequestSchema,
-  SwishPaymentRequestSchema
-]);
+export const PaymentRequestSchema = InvoicePaymentRequestSchema;
 
 export type PaymentRequest = z.infer<typeof PaymentRequestSchema>;
 
@@ -154,15 +136,6 @@ export function validatePaymentRequest(data: unknown, expectedMethod?: string): 
     
     if (baseFields.data.paymentMethod === PAYMENT_METHODS.INVOICE) {
       const result = InvoicePaymentRequestSchema.safeParse(data);
-      if (!result.success) {
-        return {
-          success: false,
-          errors: result.error.errors.map(err => `${err.path.join('.')}: ${err.message}`)
-        };
-      }
-      validatedData = result.data;
-    } else if (baseFields.data.paymentMethod === PAYMENT_METHODS.SWISH) {
-      const result = SwishPaymentRequestSchema.safeParse(data);
       if (!result.success) {
         return {
           success: false,

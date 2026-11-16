@@ -34,12 +34,8 @@ export async function GET() {
     
     const data = await response.json();
     
-    // Filter to include only future courses
-    const now = new Date();
-    const futureCourses = data.courses.filter((course: any) => {
-      const startDate = course.start_date ? new Date(course.start_date) : null;
-      return startDate && startDate >= now;
-    });
+    // The main courses API already keeps published courses that have not ended.
+    const futureCourses = data.courses;
     
     console.log(`Public API Success: Found ${futureCourses.length} future published courses from main API`);
     

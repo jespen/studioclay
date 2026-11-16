@@ -21,7 +21,7 @@ export type ProductType = 'course' | 'gift_card';  // Now supports both courses 
 // Payment request structure from frontend
 export interface PaymentRequest {
   phone_number: string;      // Format: "0739000001"
-  payment_method: "swish";   // Currently only supporting Swish
+  payment_method: "invoice";
   product_type: ProductType;
   product_id: string;
   amount: number;
@@ -29,24 +29,12 @@ export interface PaymentRequest {
   user_info: UserInfo;
 }
 
-// Swish callback data structure (from Swish API)
-export interface SwishCallbackData {
-  payeePaymentReference: string;  // Our payment reference
-  paymentReference: string;       // Swish payment reference
-  status: PaymentStatus;
-  amount: string;
-  currency: string;
-  timestamp: string;
-  errorCode?: string;
-  errorMessage?: string;
-}
-
 // Payment record structure (database)
 export interface Payment {
   id: string;
   created_at: string;
   status: PaymentStatus;
-  payment_method: 'swish';
+  payment_method: 'invoice';
   amount: number;
   currency: string;
   payment_reference: string;
@@ -60,7 +48,6 @@ export interface Payment {
 // Metadata structure for payments
 export interface PaymentMetadata {
   idempotency_key?: string;
-  swish_reference?: string;
   [key: string]: any;
 }
 
@@ -76,7 +63,7 @@ export type BookingStatus =
   | 'CONFIRMED'
   | 'CANCELLED';
 
-export type PaymentMethod = 'swish' | 'invoice';
+export type PaymentMethod = 'invoice';
 
 export interface PaymentDetails {
   method: PaymentMethod;
@@ -96,10 +83,6 @@ export interface BaseFormErrors {
   'invoiceDetails.postalCode'?: string;
   'invoiceDetails.city'?: string;
   invoice?: string;
-}
-
-export interface SwishFormErrors extends BaseFormErrors {
-  swishPhone?: string;
 }
 
 export interface InvoiceFormErrors extends BaseFormErrors {

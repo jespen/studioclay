@@ -6,9 +6,9 @@
 // Betalningsstatuskoder
 export const PAYMENT_STATUSES = {
   CREATED: 'CREATED',   // Initial state when payment is created
-  PAID: 'PAID',         // Payment confirmed by Swish/Invoice
+  PAID: 'PAID',         // Payment confirmed
   ERROR: 'ERROR',       // Payment failed
-  DECLINED: 'DECLINED'  // Payment declined by user or Swish
+  DECLINED: 'DECLINED'  // Payment declined
 } as const;
 
 // Payment status type - används för typvalidering i TypeScript
@@ -44,7 +44,6 @@ export type ProductType = typeof PRODUCT_TYPES[keyof typeof PRODUCT_TYPES];
 
 // Betalningsmetoder
 export const PAYMENT_METHODS = {
-  SWISH: 'swish',
   INVOICE: 'invoice'
 } as const;
 

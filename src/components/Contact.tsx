@@ -161,9 +161,9 @@ const Kontakt = () => {
         <div className="text-center mb-20">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">Skräddarsy ditt event</h2>
           <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Låt oss skapa en unik keramikupplevelse tillsammans! Oavsett om det gäller företagsevent, 
-            privata bokningar, specialkurser eller möhippa - vi anpassar varje tillfälle efter era önskemål 
-            och behov. Kontakta oss för att diskutera hur vi kan göra ert event minnesvärt.
+            Låt oss skapa en unik keramikupplevelse tillsammans! Skräddarsydda kurser är till för
+            företag och grupper — kick-off, teambuilding, föreningar eller ett kompisgäng.
+            Vi anpassar varje tillfälle efter era önskemål.
           </p>
         </div>
 
@@ -277,7 +277,7 @@ const Kontakt = () => {
                       onChange={handleChange}
                       variant="outlined"
                       size="small"
-                      placeholder="T.ex. Företagsevent, Privat bokning, Möhippa"
+                      placeholder="T.ex. Företagsevent, teambuilding, gruppbokning"
                     />
                     
                     <TextField

@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       customerName: body.customerName || 'Test Användare',
       customerEmail: body.customerEmail || 'test@studioclay.se',
       amount: body.amount || 500,
-      paymentMethod: body.paymentMethod || 'swish',
+      paymentMethod: body.paymentMethod || 'invoice',
       paymentReference: body.paymentReference || `TEST-${Date.now()}`,
       invoiceNumber: body.invoiceNumber,
       additionalInfo: body.additionalInfo || 'Test via POST endpoint'

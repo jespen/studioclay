@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/utils/supabase';
+import { isProductCategoryId } from '@/constants/productCategories';
 
 // Cache duration in seconds
 const CACHE_DURATION = 60; // 1 minute
@@ -54,7 +55,8 @@ export async function GET(request: NextRequest) {
       discount: item.discount || null,
       inStock: item.in_stock,
       stockQuantity: item.stock_quantity,
-      published: item.published
+      published: item.published,
+      category: item.category || 'other'
     }));
     
     // Create response with caching headers
@@ -95,7 +97,8 @@ export async function POST(request: NextRequest) {
       discount: productData.discount || null,
       in_stock: productData.inStock !== undefined ? productData.inStock : true,
       stock_quantity: productData.stockQuantity || 1,
-      published: productData.published !== undefined ? productData.published : true
+      published: productData.published !== undefined ? productData.published : true,
+      category: isProductCategoryId(productData.category) ? productData.category : 'other'
     };
     
     // If id is provided, update existing product
@@ -126,7 +129,8 @@ export async function POST(request: NextRequest) {
           description: data.description || '',
           discount: data.discount,
           inStock: data.in_stock,
-          published: data.published
+          published: data.published,
+          category: data.category || 'other'
         }
       });
     }
@@ -157,7 +161,8 @@ export async function POST(request: NextRequest) {
         description: data.description || '',
         discount: data.discount,
         inStock: data.in_stock,
-        published: data.published
+        published: data.published,
+        category: data.category || 'other'
       }
     });
   } catch (error) {

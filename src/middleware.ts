@@ -18,20 +18,15 @@ const publicPaths = [
   '/api/auth/set-auth-cookie',
   '/api/auth/supabase-auth-test',
   '/api/auth/local-login',
-  '/api/payments/swish/create',    // Verified Swish endpoint
-  '/api/payments/swish/callback',  // Verified Swish callback endpoint
 ];
 
 // Endpoints som kräver rate limiting
 const RATE_LIMITED_ENDPOINTS = [
-  '/api/payments/swish/create',    // Only rate limit Swish create endpoint
-  '/api/payments/status',          // Rate limit status checks
+  '/api/payments/invoice/create',
+  '/api/payments/status',
 ];
 
-// Endpoints som kräver idempotency key
-const IDEMPOTENCY_REQUIRED_ENDPOINTS = [
-  '/api/payments/swish/create',    // Only require idempotency for Swish create
-];
+const IDEMPOTENCY_REQUIRED_ENDPOINTS: string[] = [];
 
 export async function middleware(request: NextRequest) {
   // Initialize response to modify
@@ -77,8 +72,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/course/') ||
     pathname.startsWith('/api/checkout/') ||
     pathname.startsWith('/api/auth/') ||
-    pathname.startsWith('/api/payments/status/') ||       // Allow dynamic status checks
-    pathname.startsWith('/api/payments/swish/callback/')  // Allow Swish callbacks
+    pathname.startsWith('/api/payments/status/') ||
+    pathname.startsWith('/api/payments/invoice/')
   );
 
   // Skip auth check for public paths

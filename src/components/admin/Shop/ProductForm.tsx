@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Product } from '@/components/shop/types';
+import { PRODUCT_CATEGORIES } from '@/constants/productCategories';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 
 interface ProductFormProps {
@@ -27,7 +28,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
     discount: null,
     published: true,
     inStock: true,
-    stockQuantity: 1
+    stockQuantity: 1,
+    category: 'other'
   });
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -206,6 +208,26 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 />
               </div>
               
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Kategori
+                </label>
+                <select
+                  value={currentProduct.category || 'other'}
+                  onChange={(e) => setCurrentProduct({ ...currentProduct, category: e.target.value })}
+                  className="w-full p-2 border border-gray-300 rounded bg-white"
+                >
+                  {PRODUCT_CATEGORIES.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Vaser, skålar och konstverk får egna filter. Burkar, ljuslyktor och övrigt visas under Övrigt.
+                </p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Pris (kr) *

@@ -9,6 +9,7 @@ import StyledButton from '../common/StyledButton';
 import { setFlowType } from '@/utils/flowStorage';
 import { saveItemDetails, saveGiftCardDetails } from '@/utils/dataFetcher';
 import { getNextStepUrl } from '@/utils/flowNavigation';
+import { Clock, HandHeart, ListChecks } from '@phosphor-icons/react';
 import styles from '@/styles/GiftCardSelection.module.css';
 
 interface GiftCardSelectionProps {
@@ -274,9 +275,7 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
       <Box className={styles.featureList}>
         <Box className={styles.featureItem}>
           <Box className={styles.featureIcon}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <Clock size={24} weight="duotone" />
           </Box>
           <Box className={styles.featureText}>
             <Typography variant="subtitle1">Giltigt i 12 månader</Typography>
@@ -288,9 +287,7 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
         
         <Box className={styles.featureItem}>
           <Box className={styles.featureIcon}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
+            <ListChecks size={24} weight="duotone" />
           </Box>
           <Box className={styles.featureText}>
             <Typography variant="subtitle1">Full flexibilitet</Typography>
@@ -302,9 +299,7 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
         
         <Box className={styles.featureItem}>
           <Box className={styles.featureIcon}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
-            </svg>
+            <HandHeart size={24} weight="duotone" />
           </Box>
           <Box className={styles.featureText}>
             <Typography variant="subtitle1">Personlig upplevelse</Typography>

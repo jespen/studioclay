@@ -567,7 +567,6 @@ export default function CourseManagementPage({
                         onChange={(e) => handleAddUserFormChange('payment_method', e.target.value)}
                       >
                         <MenuItem value="invoice">Faktura</MenuItem>
-                        <MenuItem value="swish">Swish</MenuItem>
                         <MenuItem value="admin">Admin-skapad</MenuItem>
                       </Select>
                     </FormControl>

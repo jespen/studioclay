@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, getCourse } from '@/lib/supabaseAdmin';
+import { getConfirmedParticipantCount } from '@/lib/courseCapacity';
 
 // Dynamic API route for course details
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,7 @@ export async function GET(
     }
     
     const course = await getCourse(courseId);
-    
+
     if (!course) {
       console.error('API Route Error: Course not found with ID:', courseId);
       return NextResponse.json(
@@ -32,6 +33,12 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    const confirmedParticipants = await getConfirmedParticipantCount(courseId);
+    course.current_participants = confirmedParticipants;
+    course.availableSpots = course.max_participants !== null && course.max_participants !== undefined
+      ? course.max_participants - confirmedParticipants
+      : null;
     
     // Det behövs ingen mappning eftersom vi nu använder price direkt
     const responseData = {

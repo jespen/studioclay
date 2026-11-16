@@ -46,7 +46,7 @@ const NewsletterBanner = () => {
 
   return (
     <div className={styles.banner}>
-      <div className={styles.container}>
+      <div className={styles.container} data-reveal>
         {!subscribed ? (
           <>
             <h3 className={styles.title}>
@@ -94,7 +94,7 @@ const NewsletterBanner = () => {
             )}
           </>
         ) : (
-          <div className={styles.success}>
+          <div className={styles.success} style={{ animation: 'reveal-zoom 0.6s var(--ease-pop) both' }}>
             <p>Tack för din prenumeration! 🎉</p>
           </div>
         )}

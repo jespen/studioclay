@@ -490,7 +490,9 @@ export default function BookingsList({
                   onChange={(e) => handleEditFormChange('payment_method', e.target.value)}
                 >
                   <MenuItem value="invoice">Faktura</MenuItem>
-                  <MenuItem value="swish">Swish</MenuItem>
+                  {editFormData.payment_method === 'swish' && (
+                    <MenuItem value="swish">Swish (historisk)</MenuItem>
+                  )}
                 </Select>
               </FormControl>
             </Grid>

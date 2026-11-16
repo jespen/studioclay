@@ -25,6 +25,7 @@ import {
   getFieldWithFallback,
   ensureBothFieldFormats
 } from '@/lib/validation/paymentFieldNormalizer';
+import { getConfirmedParticipantCount } from '@/lib/courseCapacity';
 import { 
   generatePaymentReference,
   generateInvoiceNumber,
@@ -1205,7 +1206,7 @@ export const POST = async (req: Request) => {
               // Use the parsed value directly - we've validated it's a valid number
               const participantsToAdd = parsedParticipants;
               
-              const currentParticipants = courseData.current_participants || 0;
+              const currentParticipants = await getConfirmedParticipantCount(productId);
               const maxParticipants = courseData.max_participants || 999;
               
               if (currentParticipants + participantsToAdd > maxParticipants) {

@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getConfirmedParticipantCounts, isCourseStillBookable } from '@/lib/courseCapacity';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 // Function to get courses (either all or only published)
 const getCourses = async (published: string | null) => {
@@ -90,29 +94,44 @@ const getCourses = async (published: string | null) => {
       return processedCourse;
     });
     
-    console.log(`supabaseAdmin: Processed courses count: ${processedCourses.length}`);
-    if (processedCourses.length > 0) {
+    const participantCounts = await getConfirmedParticipantCounts(
+      processedCourses.map((course) => course.id)
+    );
+    const coursesWithAvailability = processedCourses.map((course) => {
+      const currentParticipants = participantCounts.get(course.id) || 0;
+      const maxParticipants = course.max_participants;
+      return {
+        ...course,
+        current_participants: currentParticipants,
+        availableSpots: maxParticipants !== null && maxParticipants !== undefined
+          ? maxParticipants - currentParticipants
+          : null
+      };
+    });
+
+    console.log(`supabaseAdmin: Processed courses count: ${coursesWithAvailability.length}`);
+    if (coursesWithAvailability.length > 0) {
       console.log(`supabaseAdmin: First processed course: ${JSON.stringify({
-        id: processedCourses[0].id,
-        title: processedCourses[0].title,
-        template_id: processedCourses[0].template_id,
-        is_published: processedCourses[0].is_published,
-        start_date: processedCourses[0].start_date,
-        has_rich_description: Boolean(processedCourses[0].rich_description || processedCourses[0].template?.rich_description),
-        image_url: processedCourses[0].image_url
+        id: coursesWithAvailability[0].id,
+        title: coursesWithAvailability[0].title,
+        template_id: coursesWithAvailability[0].template_id,
+        is_published: coursesWithAvailability[0].is_published,
+        start_date: coursesWithAvailability[0].start_date,
+        end_date: coursesWithAvailability[0].end_date,
+        current_participants: coursesWithAvailability[0].current_participants,
+        availableSpots: coursesWithAvailability[0].availableSpots,
+        has_rich_description: Boolean(coursesWithAvailability[0].rich_description || coursesWithAvailability[0].template?.rich_description),
+        image_url: coursesWithAvailability[0].image_url
       })}`);
     }
 
-    // Publik lista: visa bara kommande tillfällen (samma regel som /api/courses/public)
+    // Publik lista: visa publicerade kurser tills de är slut, samma regel som admin.
     if (published === 'true') {
       const now = new Date();
-      return processedCourses.filter((course) => {
-        const startDate = course.start_date ? new Date(course.start_date) : null;
-        return Boolean(startDate && startDate >= now);
-      });
+      return coursesWithAvailability.filter((course) => isCourseStillBookable(course, now));
     }
 
-    return processedCourses;
+    return coursesWithAvailability;
   } catch (error) {
     console.error('Error getting courses:', error);
     throw error;

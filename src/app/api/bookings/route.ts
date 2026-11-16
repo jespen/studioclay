@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getConfirmedParticipantCount } from '@/lib/courseCapacity';
 
 // Dynamic API route for bookings
 export const dynamic = 'force-dynamic';
@@ -178,14 +179,17 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Check if course is fully booked
+    const confirmedParticipants = await getConfirmedParticipantCount(body.course_id);
+    const requestedParticipants = Number(body.number_of_participants) || 0;
+
+    // Check if course is fully booked against confirmed bookings, not the cached counter
     if (course.max_participants !== null && 
-        course.current_participants + body.number_of_participants > course.max_participants) {
+        confirmedParticipants + requestedParticipants > course.max_participants) {
       console.warn('Course is fully booked:', {
         courseId: body.course_id,
-        currentParticipants: course.current_participants,
+        currentParticipants: confirmedParticipants,
         maxParticipants: course.max_participants,
-        requestedParticipants: body.number_of_participants
+        requestedParticipants
       });
       return NextResponse.json(
         { error: 'Course is fully booked', details: 'Not enough available spots' },
@@ -323,7 +327,7 @@ export async function POST(request: NextRequest) {
         const { error: updateError } = await supabaseAdmin
           .from('course_instances')
           .update({ 
-            current_participants: course.current_participants + body.number_of_participants 
+            current_participants: confirmedParticipants + requestedParticipants 
           })
           .eq('id', body.course_id);
           
@@ -334,9 +338,9 @@ export async function POST(request: NextRequest) {
         } else {
           console.log('Updated course participants for confirmed booking:', {
             courseId: body.course_id,
-            oldCount: course.current_participants,
-            addedParticipants: body.number_of_participants,
-            newCount: course.current_participants + body.number_of_participants
+            oldCount: confirmedParticipants,
+            addedParticipants: requestedParticipants,
+            newCount: confirmedParticipants + requestedParticipants
           });
         }
       } else {

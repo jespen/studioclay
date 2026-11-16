@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { ArrowRight, EnvelopeSimple, Palette, SealCheck } from '@phosphor-icons/react';
 import styles from '@/styles/GiftCardBanner.module.css';
 
 const GiftCardBanner = () => {
   return (
     <section id="presentkort" className={styles.section}>
       <div className={styles.container}>
-        <div className={styles.bannerContent}>
+        <div className={styles.bannerContent} data-reveal="zoom">
           <div className={styles.imageContainer}>
             <img 
               src="/pictures/finavaser.jpg"
@@ -25,31 +26,23 @@ const GiftCardBanner = () => {
             <p className={styles.description}>
               Ge bort upplevelsen av drejning till någon du tycker om. Perfekt som present för den som vill utforska keramikens värld eller om du vill ge bort ett konstverk.
             </p>
-            <div className={styles.features}>
+            <div className={styles.features} data-reveal-stagger>
               <div className={styles.featureItem}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="18" height="18" className={styles.featureIcon}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <SealCheck size={22} weight="duotone" className={styles.featureIcon} />
                 <span>Giltiga i 12 månader</span>
               </div>
               <div className={styles.featureItem}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="18" height="18" className={styles.featureIcon}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <Palette size={22} weight="duotone" className={styles.featureIcon} />
                 <span>För kurser och konstverk</span>
               </div>
               <div className={styles.featureItem}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="18" height="18" className={styles.featureIcon}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <EnvelopeSimple size={22} weight="duotone" className={styles.featureIcon} />
                 <span>Skickas direkt via e-post</span>
               </div>
             </div>
             <Link href="/gift-card-flow" className={styles.ctaButton}>
               Köp presentkort
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="16" height="16" className={styles.buttonIcon}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-              </svg>
+              <ArrowRight size={16} weight="bold" className={styles.buttonIcon} />
             </Link>
           </div>
         </div>

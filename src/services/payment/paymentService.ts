@@ -42,7 +42,7 @@ export class PaymentService {
     
     // Set default status based on payment method if not provided
     if (!status) {
-      status = method === 'swish' ? PAYMENT_STATUSES.PAID : PAYMENT_STATUSES.CREATED;
+      status = PAYMENT_STATUSES.CREATED;
     }
     
     console.log(`PaymentService: Setting payment status to ${status}`);
@@ -131,9 +131,7 @@ export class PaymentService {
   static getPaymentEndpoint(method: PaymentMethod | string, productType: ProductType | string): string {
     const paymentMethod = typeof method === 'string' ? method : String(method);
     
-    if (paymentMethod === 'swish' || paymentMethod === PaymentMethod.SWISH) {
-      return '/api/payments/swish/create';
-    } else if (paymentMethod === 'invoice' || paymentMethod === PaymentMethod.INVOICE) {
+    if (paymentMethod === 'invoice' || paymentMethod === PaymentMethod.INVOICE) {
       return '/api/payments/invoice/create';
     }
     

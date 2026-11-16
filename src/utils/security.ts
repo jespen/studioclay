@@ -11,33 +11,6 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 /**
- * Validerar en Swish callback request genom att verifiera signaturen
- */
-export async function validateSwishRequest(headers: Headers, body: string): Promise<boolean> {
-  try {
-    const signature = headers.get('Swish-Signature');
-    if (!signature) {
-      console.error('Missing Swish-Signature header');
-      return false;
-    }
-
-    // I produktion skulle vi validera mot Swish publika nyckel
-    // För test-miljön accepterar vi alla callbacks
-    if (process.env.NEXT_PUBLIC_SWISH_TEST_MODE === 'true') {
-      return true;
-    }
-
-    // For production, we'll need to implement signature verification without using Node's crypto
-    // This could be done using Web Crypto API or a browser-compatible crypto library
-    console.warn('Production signature verification not implemented');
-    return false;
-  } catch (error) {
-    console.error('Error validating Swish request:', error);
-    return false;
-  }
-}
-
-/**
  * Check if an operation with the given idempotency key has already been executed
  */
 export async function checkIdempotency(idempotencyKey: string): Promise<{ exists: boolean; data?: any }> {
