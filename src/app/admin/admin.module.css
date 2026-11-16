@@ -134,12 +134,12 @@
 }
 
 .debugButtonBlue {
-  color: #1d4ed8;
-  background-color: #eff6ff;
+  color: #3D544A;
+  background-color: #e7efe9;
 }
 
 .debugButtonBlue:hover {
-  background-color: #dbeafe;
+  background-color: #d5e4db;
 }
 
 .debugButtonGreen {

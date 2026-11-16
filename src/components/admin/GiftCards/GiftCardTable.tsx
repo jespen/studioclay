@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import EditIcon from '@mui/icons-material/Edit';
@@ -43,7 +44,17 @@ interface GiftCardTableProps {
 }
 
 function codeOnCard(card: GiftCard): string {
-  return card.payment_reference || card.code;
+  return card.code || 'Saknar kod';
+}
+
+function shiftMonths(dateValue: string, months: number) {
+  const base = new Date(`${dateValue}T12:00:00`);
+  if (Number.isNaN(base.getTime())) return dateValue;
+  base.setMonth(base.getMonth() + months);
+  const year = base.getFullYear();
+  const month = String(base.getMonth() + 1).padStart(2, '0');
+  const day = String(base.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function formatDate(dateString: string) {
@@ -70,8 +81,10 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
 }) => {
   const [editingBalance, setEditingBalance] = useState<{[key: string]: string | undefined}>({});
   const [balanceErrors, setBalanceErrors] = useState<{[key: string]: string | undefined}>({});
-  const [editingExpiry, setEditingExpiry] = useState<{[key: string]: string | undefined}>({});
-  const [expiryErrors, setExpiryErrors] = useState<{[key: string]: string | undefined}>({});
+  const [expiryCard, setExpiryCard] = useState<GiftCard | null>(null);
+  const [expiryValue, setExpiryValue] = useState('');
+  const [expiryBase, setExpiryBase] = useState('');
+  const [expiryError, setExpiryError] = useState('');
 
   const handleBalanceChange = (id: string, value: string) => {
     setEditingBalance({...editingBalance, [id]: value});
@@ -128,39 +141,34 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
     setBalanceErrors({...balanceErrors, [id]: undefined});
   };
 
-  const startEditingExpiry = (id: string, expiresAt: string) => {
-    setEditingExpiry({...editingExpiry, [id]: formatDate(expiresAt)});
-    setExpiryErrors({...expiryErrors, [id]: undefined});
+  const openExpiryDialog = (card: GiftCard) => {
+    const current = formatDate(card.expires_at);
+    setExpiryCard(card);
+    setExpiryValue(current);
+    setExpiryBase(current);
+    setExpiryError('');
   };
 
-  const cancelEditingExpiry = (id: string) => {
-    setEditingExpiry({...editingExpiry, [id]: undefined});
-    setExpiryErrors({...expiryErrors, [id]: undefined});
-  };
-
-  const handleExpirySubmit = (id: string) => {
-    const value = editingExpiry[id];
-    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      setExpiryErrors({...expiryErrors, [id]: 'Välj ett datum'});
+  const handleExpirySubmit = () => {
+    if (!expiryCard) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiryValue)) {
+      setExpiryError('Välj ett datum');
       return;
     }
-
-    onUpdateExpiry(id, value);
-    setEditingExpiry({...editingExpiry, [id]: undefined});
-    setExpiryErrors({...expiryErrors, [id]: undefined});
+    onUpdateExpiry(expiryCard.id, expiryValue);
+    setExpiryCard(null);
   };
 
   const renderCode = (card: GiftCard) => {
-    const printedCode = codeOnCard(card);
-    const showInternal = Boolean(card.payment_reference && card.payment_reference !== card.code);
+    const showPrintedReference = Boolean(card.payment_reference && card.payment_reference !== card.code);
 
     return (
       <div>
-        <h3 className={styles.courseTitle} title="Koden som står på presentkortet">
-          {printedCode}
+        <h3 className={styles.courseTitle} title="Presentkortskod">
+          {codeOnCard(card)}
         </h3>
-        {showInternal && (
-          <p className={styles.courseDescription}>Intern kod: {card.code}</p>
+        {showPrintedReference && (
+          <p className={styles.courseDescription}>Referens på utskrivet kort: {card.payment_reference}</p>
         )}
       </div>
     );
@@ -217,52 +225,13 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
   };
 
   const renderExpiry = (card: GiftCard) => {
-    if (editingExpiry[card.id] !== undefined) {
-      return (
-        <div className={styles.dateEditContainer}>
-          <input
-            type="date"
-            value={editingExpiry[card.id]}
-            onChange={(e) => {
-              setEditingExpiry({...editingExpiry, [card.id]: e.target.value});
-              if (expiryErrors[card.id]) {
-                setExpiryErrors({...expiryErrors, [card.id]: undefined});
-              }
-            }}
-            className={`${styles.dateInput} ${expiryErrors[card.id] ? styles.inputError : ''}`}
-            disabled={updatingCards[card.id]}
-            aria-label={`Giltighetsdatum för ${codeOnCard(card)}`}
-          />
-          {expiryErrors[card.id] && (
-            <div className={styles.errorMessage}>{expiryErrors[card.id]}</div>
-          )}
-          <div className={styles.balanceEditActions}>
-            <button
-              onClick={() => handleExpirySubmit(card.id)}
-              disabled={updatingCards[card.id] || !!expiryErrors[card.id]}
-              className={styles.saveButton}
-            >
-              Spara
-            </button>
-            <button
-              onClick={() => cancelEditingExpiry(card.id)}
-              disabled={updatingCards[card.id]}
-              className={styles.editorCancelButton}
-            >
-              Avbryt
-            </button>
-          </div>
-        </div>
-      );
-    }
-
     const past = isPastDate(card.expires_at);
     return (
       <button
         type="button"
         className={`${styles.inlineEditable} ${past ? styles.expiredDate : ''}`}
-        onClick={() => startEditingExpiry(card.id, card.expires_at)}
-        title="Klicka för att ändra giltighetsdatum"
+        onClick={() => openExpiryDialog(card)}
+        title="Ändra giltighetsdatum"
       >
         {formatDate(card.expires_at)}
         <span className={styles.editHint} aria-hidden="true">✎</span>
@@ -379,8 +348,12 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
             className={`${styles.giftCardItem} ${updatingCards[card.id] ? styles.loading : ''}`}
           >
             <div>
-              <span className={styles.giftCardLabel}>Kod på kortet</span>
+              <span className={styles.giftCardLabel}>Presentkortskod</span>
               {renderCode(card)}
+            </div>
+            <div>
+              <span className={styles.giftCardLabel}>Avsändare</span>
+              <span>{card.sender_name}</span>
             </div>
 
             <div className={styles.giftCardMeta}>
@@ -426,6 +399,35 @@ export const GiftCardTable: React.FC<GiftCardTableProps> = ({
           </article>
         ))}
       </div>
+
+      <Dialog open={Boolean(expiryCard)} onClose={() => setExpiryCard(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Ändra giltighet</DialogTitle>
+        <DialogContent>
+          <p className={styles.courseDescription} style={{ marginBottom: 12 }}>
+            {expiryCard ? codeOnCard(expiryCard) : ''}
+          </p>
+          <input
+            type="date"
+            value={expiryValue}
+            onChange={(e) => {
+              setExpiryValue(e.target.value);
+              setExpiryError('');
+            }}
+            className={`${styles.dateInput} ${expiryError ? styles.inputError : ''}`}
+            aria-label="Nytt giltighetsdatum"
+          />
+          {expiryError && <div className={styles.errorMessage}>{expiryError}</div>}
+          <div className={styles.balanceEditActions} style={{ marginTop: 12 }}>
+            <button type="button" className={styles.editorCancelButton} onClick={() => setExpiryValue(shiftMonths(expiryBase, 1))}>+1 mån</button>
+            <button type="button" className={styles.editorCancelButton} onClick={() => setExpiryValue(shiftMonths(expiryBase, 3))}>+3 mån</button>
+            <button type="button" className={styles.editorCancelButton} onClick={() => setExpiryValue(shiftMonths(expiryBase, 6))}>+6 mån</button>
+          </div>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExpiryCard(null)} color="inherit">Avbryt</Button>
+          <Button onClick={handleExpirySubmit} variant="contained">Spara</Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

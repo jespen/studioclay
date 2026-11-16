@@ -66,13 +66,13 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ product, isOpen, onClose,
         role="dialog"
         aria-modal="true"
         aria-labelledby="product-dialog-title"
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl md:flex-row"
       >
-        <div className="relative min-h-0 bg-[#f3f4f2]">
+        <div className="relative flex shrink-0 items-center justify-center bg-[#f3f4f2] md:w-[48%]">
           <img
             src={product.image}
             alt={product.title}
-            className="max-h-[calc(90vh-5.5rem)] w-full object-contain"
+            className="max-h-[46vh] w-full object-contain md:max-h-[92vh]"
           />
 
           <button
@@ -83,51 +83,51 @@ const ProductDialog: React.FC<ProductDialogProps> = ({ product, isOpen, onClose,
           >
             <X size={18} weight="bold" />
           </button>
-
-          <div className="absolute inset-x-0 bottom-0 bg-white/45 px-4 py-3 backdrop-blur-md">
-            <div className="flex items-end justify-between gap-4">
-              <div className="min-w-0">
-                <h2 id="product-dialog-title" className="truncate font-serif text-lg font-medium text-gray-900">
-                  {product.title}
-                </h2>
-                {product.description && (
-                  <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-gray-700">
-                    {product.description}
-                  </p>
-                )}
-              </div>
-              <div className="shrink-0 text-right">
-                {product.originalPrice ? (
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-sm text-gray-500 line-through">{product.originalPrice} kr</span>
-                    <span className="text-lg font-medium text-gray-900">{product.price} kr</span>
-                  </div>
-                ) : (
-                  <span className="text-lg font-medium text-gray-900">{product.price} kr</span>
-                )}
-                {product.stockQuantity !== undefined && (
-                  <p className={`mt-0.5 text-xs ${product.inStock === false ? 'text-red-600' : 'text-gray-600'}`}>
-                    {product.inStock === false ? 'Slutsåld' : `${product.stockQuantity} i lager`}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
 
-        <div className="p-3">
-          <button
-            type="button"
-            className={`w-full rounded-md px-4 py-3 text-sm font-medium transition-colors ${
-              product.inStock === false
-                ? 'cursor-not-allowed bg-gray-400 text-white'
-                : 'bg-primary text-white hover:bg-primary-dark'
-            }`}
-            onClick={product.inStock === false ? undefined : handleBuyClick}
-            disabled={product.inStock === false}
-          >
-            {product.inStock === false ? 'Slutsåld' : 'Köp'}
-          </button>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex flex-1 items-start justify-between gap-6 overflow-y-auto px-6 py-6">
+            <div className="min-w-0">
+              <h2 id="product-dialog-title" className="font-serif text-2xl font-medium text-gray-900">
+                {product.title}
+              </h2>
+              {product.description && (
+                <p className="mt-3 text-sm leading-relaxed text-gray-700">
+                  {product.description}
+                </p>
+              )}
+            </div>
+            <div className="shrink-0 text-right">
+              {product.originalPrice ? (
+                <div className="flex items-baseline justify-end gap-2">
+                  <span className="text-sm text-gray-500 line-through">{product.originalPrice} kr</span>
+                  <span className="text-xl font-medium text-gray-900">{product.price} kr</span>
+                </div>
+              ) : (
+                <span className="text-xl font-medium text-gray-900">{product.price} kr</span>
+              )}
+              {product.stockQuantity !== undefined && (
+                <p className={`mt-1 text-xs ${product.inStock === false ? 'text-red-600' : 'text-gray-600'}`}>
+                  {product.inStock === false ? 'Slutsåld' : `${product.stockQuantity} i lager`}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="p-4 pt-0">
+            <button
+              type="button"
+              className={`w-full rounded-md px-4 py-3 text-sm font-medium transition-colors ${
+                product.inStock === false
+                  ? 'cursor-not-allowed bg-gray-400 text-white'
+                  : 'bg-primary text-white hover:bg-primary-dark'
+              }`}
+              onClick={product.inStock === false ? undefined : handleBuyClick}
+              disabled={product.inStock === false}
+            >
+              {product.inStock === false ? 'Slutsåld' : 'Köp'}
+            </button>
+          </div>
         </div>
       </div>
     </div>,

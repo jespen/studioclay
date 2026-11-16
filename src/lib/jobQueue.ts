@@ -1,3 +1,4 @@
+import { waitUntil } from '@vercel/functions';
 import { createServerSupabaseClient } from '@/utils/supabase';
 import { logError, logInfo, logDebug, logWarning } from '@/lib/logging';
 import { v4 as uuidv4 } from 'uuid';
@@ -25,7 +26,8 @@ export async function createBackgroundJob(
   options: { 
     requestId?: string;
     delay?: number; // fördröjning i millisekunder innan jobbet körs
-    waitForCompletion?: boolean; // ny parameter - vänta på att jobbet är klart
+    waitForCompletion?: boolean; // vänta på att jobbet är klart innan funktionen returnerar
+    deferProcessing?: boolean; // spara jobbet och låt anroparen starta bearbetningen efter svaret
   } = {}
 ): Promise<string | null> {
   const requestId = options.requestId || uuidv4();
@@ -101,6 +103,14 @@ export async function createBackgroundJob(
         userEmail: jobData.userInfo?.email
       }
     });
+
+    if (options.deferProcessing) {
+      logInfo(`Deferred background job ${data.id}; caller schedules processing`, {
+        requestId,
+        jobId: data.id
+      });
+      return data.id;
+    }
     
     // Process jobs regardless of environment
     logInfo(`Processing job immediately`, {
@@ -205,6 +215,46 @@ export async function createBackgroundJob(
       stack: error instanceof Error ? error.stack : undefined
     });
     return null;
+  }
+}
+
+/**
+ * Run the next pending job without blocking the HTTP response.
+ * On Vercel, waitUntil keeps the invocation alive after the response is sent.
+ * In next dev the Node process stays up, so the same promise is left running.
+ */
+export function scheduleBackgroundProcessing(requestId: string): void {
+  const work = runDeferredBackgroundJob(requestId);
+
+  if (process.env.VERCEL) {
+    waitUntil(work);
+  }
+}
+
+async function runDeferredBackgroundJob(requestId: string): Promise<void> {
+  try {
+    const { processNextJob } = await import('../app/api/jobs/process/utils');
+    const result = await processNextJob(requestId);
+
+    if (result.success) {
+      logInfo(`Deferred job processing finished`, {
+        requestId,
+        jobId: result.jobId,
+        jobType: result.jobType,
+        message: result.message
+      });
+      return;
+    }
+
+    logError(`Deferred job processing failed: ${result.error || 'Unknown error'}`, {
+      requestId,
+      jobId: result.jobId
+    });
+  } catch (error) {
+    logError(`Deferred job processing threw: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+      requestId,
+      stack: error instanceof Error ? error.stack : undefined
+    });
   }
 }
 

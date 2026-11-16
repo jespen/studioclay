@@ -3,34 +3,25 @@ import { useRouter } from 'next/navigation';
 import { 
   Box, 
   Typography, 
-  Grid, 
-  Card, 
-  CardContent, 
-  Chip, 
-  Divider, 
-  List, 
-  ListItem, 
-  ListItemIcon, 
-  ListItemText,
   Container,
   Alert,
-  Paper,
   CircularProgress
 } from '@mui/material';
 import EventIcon from '@mui/icons-material/Event';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import PeopleIcon from '@mui/icons-material/People';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PersonIcon from '@mui/icons-material/Person';
 import CategoryIcon from '@mui/icons-material/Category';
 
 import { GenericStep, FlowType } from '../common/BookingStepper';
 import BackToCourses from '../common/BackToCourses';
 import StyledButton from '../common/StyledButton';
+import FlowCard from '../common/FlowCard';
+import FlowActions from '../common/FlowActions';
+import ItemSummary, { SummaryDetail } from '../common/ItemSummary';
+import RichText from '../common/RichText';
 import { CourseDetail, hasMinimalCourseData } from '@/utils/dataFetcher';
 import { fetchCourseWithCache } from '@/utils/apiCache';
-import '@/styles/richText.css';
 import { getNextStepUrl } from '@/utils/flowNavigation';
 import { setItemDetails } from '@/utils/dataStorage';
 
@@ -57,13 +48,6 @@ interface Category {
   created_at?: string;
   updated_at?: string;
 }
-
-// Function to render rich text content safely
-const RichTextContent = ({ content }: { content: string }) => {
-  return (
-    <div className="rich-text-content" dangerouslySetInnerHTML={{ __html: content }} />
-  );
-};
 
 const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext, onBack }) => {
   const router = useRouter();
@@ -179,27 +163,45 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext, onBack 
     }
   };
 
-  // Format duration
-  const formatDuration = (minutes?: number) => {
-    if (!minutes) return 'Kontakta oss för information';
-    
-    if (minutes < 60) {
-      return `${minutes} minuter`;
-    }
-    
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    
-    if (remainingMinutes === 0) {
-      return hours === 1 ? '1 timme' : `${hours} timmar`;
-    }
-    
-    return `${hours} timme${hours > 1 ? 'r' : ''} och ${remainingMinutes} minuter`;
-  };
+  const instructorName = courseDetail.instructor
+    ? (typeof courseDetail.instructor === 'object' && courseDetail.instructor !== null
+        ? courseDetail.instructor.name
+        : courseDetail.instructor)
+    : undefined;
+
+  const categoryName = courseDetail.category
+    ? (typeof courseDetail.category === 'object' && courseDetail.category !== null
+        ? courseDetail.category.name
+        : courseDetail.category)
+    : undefined;
+
+  const details: SummaryDetail[] = [
+    { icon: <EventIcon />, label: formatDate(courseDetail.start_date) },
+    { icon: <LocationOnIcon />, label: courseDetail.location || 'Studio Clay, Norrtullsgatan 65' },
+    {
+      icon: <PeopleIcon />,
+      label: isFullyBooked
+        ? 'Fullbokad'
+        : `${availableSpots} ${availableSpots === 1 ? 'plats' : 'platser'} kvar`,
+    },
+  ];
+
+  if (instructorName) {
+    details.push({ icon: <PersonIcon />, label: instructorName });
+  }
+  if (categoryName) {
+    details.push({ icon: <CategoryIcon />, label: String(categoryName) });
+  }
 
   return (
     <>
-      <Typography variant="h4" component="h1" align="center" gutterBottom>
+      <Typography
+        variant="h4"
+        component="h1"
+        align="center"
+        gutterBottom
+        sx={{ fontSize: { xs: '1.75rem', sm: '2rem' }, letterSpacing: '-0.02em', fontWeight: 700, mb: 1 }}
+      >
         {courseDetail?.title || 'Laddar kurs...'}
       </Typography>
       
@@ -220,165 +222,50 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext, onBack 
         </Typography>
       )}
       
-      <Paper 
-        elevation={3} 
-        sx={{ 
-          borderRadius: 2, 
-          p: { xs: 2, sm: 4 }, 
-          mt: 4 
-        }}
-      >
+      <FlowCard sx={{ mt: 1 }}>
         {hasLimitedData && (
           <Alert severity="info" sx={{ mb: 3 }}>
             Vi håller på att ladda all kursinformation. Vissa detaljer kan saknas.
           </Alert>
         )}
-        
-        {/* Course description */}
+
+        <ItemSummary
+          details={details}
+          price={courseDetail.price || 'Kontakta oss'}
+          priceSuffix={courseDetail.price ? 'kr' : ''}
+          priceNote="Inklusive moms, material och verktyg"
+        />
+
+        {!isFullyBooked && availableSpots <= 3 && availableSpots > 0 && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            Endast {availableSpots} {availableSpots === 1 ? 'plats' : 'platser'} kvar!
+          </Alert>
+        )}
+
+        {isFullyBooked && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            Denna kurs är tyvärr fullbokad.
+          </Alert>
+        )}
+
         {courseDetail.rich_description ? (
-          <Box sx={{ mb: 4 }}>
-            <RichTextContent content={courseDetail.rich_description} />
-          </Box>
+          <RichText content={courseDetail.rich_description} />
         ) : (
-          <Typography variant="body1" paragraph>
+          <Typography variant="body1">
             {courseDetail.description || 'Ingen beskrivning tillgänglig.'}
           </Typography>
         )}
-        
-        <Divider sx={{ my: 3 }} />
-        
-        {/* Course details */}
-        <Typography variant="h6" gutterBottom>
-          Kursdetaljer
-        </Typography>
-        
-        <List sx={{ mb: 4 }}>
-          <ListItem disableGutters>
-            <ListItemIcon>
-              <EventIcon sx={{ color: 'var(--primary)' }} />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Startdatum" 
-              secondary={formatDate(courseDetail.start_date)} 
-            />
-          </ListItem>
-          
-          {/* <ListItem disableGutters>
-            <ListItemIcon>
-              <AccessTimeIcon sx={{ color: 'var(--primary)' }} />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Längd" 
-              secondary={formatDuration(courseDetail.duration_minutes)} 
-            />
-          </ListItem> */}
-          
-          <ListItem disableGutters>
-            <ListItemIcon>
-              <LocationOnIcon sx={{ color: 'var(--primary)' }} />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Plats" 
-              secondary={courseDetail.location || 'Studio Clay, Norrtullsgatan 65'} 
-            />
-          </ListItem>
-          
-          <ListItem disableGutters>
-            <ListItemIcon>
-              <PeopleIcon sx={{ color: 'var(--primary)' }} />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Deltagare" 
-              secondary={`${courseDetail.current_participants || 0} av ${courseDetail.max_participants || 0} platser bokade`} 
-            />
-          </ListItem>
-          
-          {courseDetail.instructor && (
-            <ListItem disableGutters>
-              <ListItemIcon>
-                <PersonIcon sx={{ color: 'var(--primary)' }} />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Instruktör" 
-                secondary={
-                  typeof courseDetail.instructor === 'object' && courseDetail.instructor !== null
-                    ? courseDetail.instructor.name || 'Ingen instruktör angiven'
-                    : courseDetail.instructor
-                } 
-              />
-            </ListItem>
-          )}
-          
-          {courseDetail.category && (
-            <ListItem disableGutters>
-              <ListItemIcon>
-                <CategoryIcon sx={{ color: 'var(--primary)' }} />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Kategori" 
-                secondary={
-                  typeof courseDetail.category === 'object' && courseDetail.category !== null
-                    ? courseDetail.category.name || 'Ingen kategori angiven'
-                    : courseDetail.category
-                } 
-              />
-            </ListItem>
-          )}
-        </List>
-        
-        <Divider sx={{ my: 3 }} />
-        
-        {/* Price information */}
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            Kurspris
-          </Typography>
-          
-          <Box sx={{ display: 'flex', alignItems: 'baseline', mb: 1 }}>
-            <Typography variant="h4" sx={{ color: 'var(--primary)', mr: 1 }}>
-              {courseDetail.price || 'Kontakta oss'} {courseDetail.price ? 'kr' : ''}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Inklusive moms, material och verktyg
-            </Typography>
-          </Box>
-          
-          {!isFullyBooked && availableSpots <= 3 && availableSpots > 0 && (
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              Endast {availableSpots} {availableSpots === 1 ? 'plats' : 'platser'} kvar!
-            </Alert>
-          )}
-          
-          {isFullyBooked && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              Denna kurs är tyvärr fullbokad.
-            </Alert>
-          )}
-        </Box>
-        
-        {/* Buttons */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
-          <StyledButton 
-          secondary
-            onClick={handleBackToHome}
-            variant="outlined"
-          >
-            Tillbaka
-          </StyledButton>
-          
-          <StyledButton 
-            onClick={handleContinue}
-            disabled={isFullyBooked}
-          >
-            {isFullyBooked 
-              ? 'Kursen är fullbokad' 
-              : 'Fortsätt till Dina uppgifter'}
-          </StyledButton>
-        </Box>
-        
+
+        <FlowActions
+          onBack={handleBackToHome}
+          onNext={handleContinue}
+          nextDisabled={isFullyBooked}
+          nextLabel={isFullyBooked ? 'Kursen är fullbokad' : 'Fortsätt till dina uppgifter'}
+        />
+
         {isFullyBooked && (
           <Box sx={{ mt: 2, textAlign: 'center' }}>
-            <StyledButton 
+            <StyledButton
               secondary
               onClick={() => router.push(`/waitlist/${courseId}`)}
             >
@@ -386,7 +273,7 @@ const CourseDetails: React.FC<CourseDetailsProps> = ({ courseId, onNext, onBack 
             </StyledButton>
           </Box>
         )}
-      </Paper>
+      </FlowCard>
     </>
   );
 };

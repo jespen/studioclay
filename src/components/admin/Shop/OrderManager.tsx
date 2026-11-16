@@ -4,6 +4,9 @@ import SectionContainer from '../Dashboard/SectionContainer';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 import OrderForm from './OrderForm';
 import StatusToggle from '../common/StatusToggle';
+import StandardTable from '../common/StandardTable';
+import RowActions from '../common/RowActions';
+import ConfirmDialog from '../common/ConfirmDialog';
 import { ShopOrder } from '@/types/shop';
 import { formatDate } from '@/utils/dateUtils';
 import { fetchOrdersWithCache, invalidateCache } from '@/utils/apiCache';
@@ -21,6 +24,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
   const [editingOrder, setEditingOrder] = useState<ShopOrder | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [updatingOrders, setUpdatingOrders] = useState<{ [key: string]: boolean }>({});
+  const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
 
   // Memoized fetch function to prevent unnecessary renders
   const fetchOrders = useCallback(async () => {
@@ -156,10 +160,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
   };
 
   const handleDeleteOrder = async (orderId: string) => {
-    if (!window.confirm('Are you sure you want to delete this order?')) {
-      return;
-    }
-    
     try {
       const response = await fetch(`/api/art-orders/${orderId}`, {
         method: 'DELETE',
@@ -210,89 +210,61 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
     <div className={styles.pageContainer}>
       {showHeader && <AdminHeader title="Beställningar" subtitle="Hantera Köpta produkter i webshopen"/>}
       <main className={styles.mainContent}>
-        <SectionContainer title="Hantera beställningar">
-          <div className="overflow-x-auto">
-            {loading ? (
-              <p>Laddar beställningar...</p>
-            ) : orders.length === 0 ? (
-              <p>Inga beställningar hittades.</p>
-            ) : (
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Datum</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kund</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produkt</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pris</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Betalning</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Åtgärder</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {orders.map((order) => (
-                    <tr key={order.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.order_reference}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(order.created_at)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.customer_name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{order.product?.title || 'Unknown'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.total_price} {order.currency}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <StatusToggle
-                          currentValue={order.status}
-                          option1={{
-                            value: 'confirmed',
-                            label: 'Bekräftad',
-                            color: 'blue'
-                          }}
-                          option2={{
-                            value: 'completed',
-                            label: 'Genomförd',
-                            color: 'green'
-                          }}
-                          onChange={(newStatus) => handleUpdateOrderStatus(order.id, newStatus)}
-                          loading={updatingOrders[order.id]}
-                        />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <StatusToggle
-                          currentValue={order.payment_status.toUpperCase()}
-                          option1={{
-                            value: 'CREATED',
-                            label: 'Ej betald',
-                            color: 'yellow'
-                          }}
-                          option2={{
-                            value: 'PAID',
-                            label: 'Betald',
-                            color: 'green'
-                          }}
-                          onChange={(newPaymentStatus) => handleUpdatePaymentStatus(order.id, newPaymentStatus)}
-                          loading={updatingOrders[`${order.id}-payment`]}
-                        />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        <button
-                          onClick={() => handleEditOrder(order)}
-                          className="text-indigo-600 hover:text-indigo-900 mr-4"
-                        >
-                          Visa/Redigera
-                        </button>
-                        <button
-                          onClick={() => handleDeleteOrder(order.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Ta bort
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+        <SectionContainer title="Hantera beställningar" count={orders.length}>
+          {loading ? (
+            <p>Laddar beställningar...</p>
+          ) : (
+            <StandardTable
+              headers={['Referens', 'Datum', 'Kund', 'Produkt', 'Pris', 'Status', 'Betalning', 'Åtgärder']}
+              emptyMessage="Inga beställningar hittades."
+            >
+              {orders.map((order) => (
+                <tr key={order.id} className={styles.tableRow}>
+                  <td className={styles.tableCell}>{order.order_reference}</td>
+                  <td className={styles.tableCell}>{formatDate(order.created_at)}</td>
+                  <td className={styles.tableCell}>{order.customer_name}</td>
+                  <td className={styles.tableCell}>{order.product?.title || 'Okänd'}</td>
+                  <td className={styles.tableCell}>{order.total_price} {order.currency}</td>
+                  <td className={styles.tableCell}>
+                    <StatusToggle
+                      currentValue={order.status}
+                      option1={{ value: 'confirmed', label: 'Bekräftad', color: 'blue' }}
+                      option2={{ value: 'completed', label: 'Genomförd', color: 'green' }}
+                      onChange={(newStatus) => handleUpdateOrderStatus(order.id, newStatus)}
+                      loading={updatingOrders[order.id]}
+                    />
+                  </td>
+                  <td className={styles.tableCell}>
+                    <StatusToggle
+                      currentValue={order.payment_status.toUpperCase()}
+                      option1={{ value: 'CREATED', label: 'Ej betald', color: 'yellow' }}
+                      option2={{ value: 'PAID', label: 'Betald', color: 'green' }}
+                      onChange={(newPaymentStatus) => handleUpdatePaymentStatus(order.id, newPaymentStatus)}
+                      loading={updatingOrders[`${order.id}-payment`]}
+                    />
+                  </td>
+                  <td className={styles.tableCell}>
+                    <RowActions
+                      onEdit={() => handleEditOrder(order)}
+                      editLabel="Visa"
+                      items={[{ label: 'Ta bort', danger: true, onClick: () => setOrderToDelete(order.id) }]}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </StandardTable>
+          )}
         </SectionContainer>
+        <ConfirmDialog
+          open={Boolean(orderToDelete)}
+          title="Ta bort beställning"
+          message="Vill du ta bort beställningen? Det går inte att ångra."
+          onConfirm={() => {
+            if (orderToDelete) handleDeleteOrder(orderToDelete);
+            setOrderToDelete(null);
+          }}
+          onCancel={() => setOrderToDelete(null)}
+        />
       </main>
     </div>
   );

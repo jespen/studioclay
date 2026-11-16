@@ -3,12 +3,14 @@ import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 
 interface SectionContainerProps {
   title: string;
+  count?: number;
   children: ReactNode;
   variant?: 'default' | 'draft' | 'past';
 }
 
 export const SectionContainer: React.FC<SectionContainerProps> = ({ 
   title, 
+  count,
   children, 
   variant = 'default' 
 }) => {
@@ -21,7 +23,7 @@ export const SectionContainer: React.FC<SectionContainerProps> = ({
   return (
     <div className={containerClassName}>
       <div className={headerClassName}>
-        <h2 className={styles.sectionTitle}>{title}</h2>
+        <h2 className={styles.sectionTitle}>{count === undefined ? title : `${title} (${count})`}</h2>
       </div>
       {children}
     </div>

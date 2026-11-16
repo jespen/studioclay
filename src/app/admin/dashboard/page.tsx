@@ -130,7 +130,7 @@ export default function DashboardPage() {
           </div>
           <button 
             onClick={() => router.push('/admin')}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+            className="bg-[#547264] hover:bg-[#3D544A] text-white font-bold py-2 px-4 rounded"
           >
             Gå till inloggning
           </button>

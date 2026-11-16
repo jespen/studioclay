@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 import GiftCardTable from './GiftCardTable';
-import { Box, Paper, Typography, Button, CircularProgress } from '@mui/material';
+import { Box, Paper, Typography, Button, CircularProgress, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import SectionContainer from '../Dashboard/SectionContainer';
+import ConfirmDialog from '../common/ConfirmDialog';
 import { jsPDF } from 'jspdf';
 
 interface GiftCard {
@@ -23,13 +24,15 @@ interface GiftCard {
   created_at: string;
   expires_at: string;
   invoice_number?: string;
-  payment_reference?: string;
+  payment_reference?: string | null;
 }
 
 const GiftCardManager: React.FC = () => {
   const [giftCards, setGiftCards] = useState<GiftCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, active, redeemed, expired, digital, physical, paid, unpaid
+  const [search, setSearch] = useState('');
+  const [cardToDelete, setCardToDelete] = useState<GiftCard | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCardData, setNewCardData] = useState({
     type: 'digital',
@@ -577,11 +580,6 @@ const GiftCardManager: React.FC = () => {
       return;
     }
 
-    // Confirm deletion
-    if (!confirm(`Är du säker på att du vill ta bort presentkort ${card.code}? Detta kan inte ångras.`)) {
-      return;
-    }
-
     setUpdatingCards(prev => ({ ...prev, [id]: true }));
 
     try {
@@ -895,6 +893,15 @@ const GiftCardManager: React.FC = () => {
                 <option value="CREATED">Ej betalda</option>
               </select>
               
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Sök kod, referens, namn..."
+                className={styles.formControl}
+                aria-label="Sök presentkort"
+                style={{ maxWidth: 280 }}
+              />
               <button
                 onClick={fetchGiftCards}
                 className={styles.publishButton}
@@ -910,44 +917,46 @@ const GiftCardManager: React.FC = () => {
               )}
             </div>
 
-            {giftCards.length === 0 ? (
+            {(() => {
+              const query = search.trim().toLowerCase();
+              const visibleCards = giftCards.filter((card) => {
+                if (!query) return true;
+                return [card.code, card.payment_reference, card.recipient_name, card.sender_name, card.recipient_email, card.sender_email]
+                  .filter(Boolean)
+                  .some((value) => String(value).toLowerCase().includes(query));
+              });
+              if (visibleCards.length === 0) {
+                return (
               <div className={styles.emptyState}>
                 <p>Inga presentkort hittades</p>
-                <p className={styles.emptyStateSubtext}>Presentkorten som har köpts via hemsidan visas här.</p>
+                <p className={styles.emptyStateSubtext}>Prova ett annat filter eller en annan sökning.</p>
               </div>
-            ) : (
+                );
+              }
+              return (
               <GiftCardTable 
-                giftCards={giftCards}
+                giftCards={visibleCards}
                 updatingCards={updatingCards}
                 onStatusChange={handleChangeStatus}
                 onTogglePayment={handleTogglePaymentStatus}
                 onGeneratePDF={generateGiftCardPDF}
                 onGenerateInvoicePDF={generateInvoicePDF}
-                onDeleteGiftCard={handleDeleteGiftCard}
+                onDeleteGiftCard={(id) => setCardToDelete(giftCards.find((card) => card.id === id) || null)}
                 onSendEmail={sendGiftCardEmail}
                 onMarkAsEmailed={handleMarkAsEmailed}
                 onUpdateBalance={handleUpdateRemainingBalance}
                 onUpdateExpiry={handleUpdateExpiry}
               />
-            )}
+              );
+            })()}
           </SectionContainer>
         </>
       )}
       
       {/* Modal for adding new gift card */}
-      {isModalOpen && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modal}>
-            <div className={styles.modalHeader}>
-              <h3>Lägg till nytt presentkort</h3>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className={styles.modalCloseButton}
-              >
-                ✕
-              </button>
-            </div>
-            <div className={styles.modalBody}>
+      <Dialog open={isModalOpen} onClose={() => setIsModalOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Lägg till nytt presentkort</DialogTitle>
+        <DialogContent>
               <form onSubmit={handleCreateCard}>
                 <div className={styles.formGroup}>
                   <label htmlFor="type">Typ av presentkort</label>
@@ -1086,10 +1095,19 @@ const GiftCardManager: React.FC = () => {
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(cardToDelete)}
+        title="Ta bort presentkort"
+        message={`Vill du ta bort presentkort ${cardToDelete?.code || ''}? Det går inte att ångra.`}
+        onConfirm={() => {
+          if (cardToDelete) handleDeleteGiftCard(cardToDelete.id);
+          setCardToDelete(null);
+        }}
+        onCancel={() => setCardToDelete(null)}
+      />
     </>
   );
 };

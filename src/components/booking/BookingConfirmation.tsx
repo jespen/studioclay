@@ -28,6 +28,7 @@ import HomeIcon from '@mui/icons-material/Home';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 
 import StyledButton from '../common/StyledButton';
+import FlowCard from '../common/FlowCard';
 import Link from 'next/link';
 import { FlowStateData } from '../common/FlowStepWrapper';
 import { cleanupCheckoutFlow } from '@/utils/dataStorage';
@@ -128,9 +129,9 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flo
 
   return (
     <>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <CheckCircleIcon color="success" sx={{ fontSize: 40, mr: 2 }} />
-        <Typography variant="h6">
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3, gap: 1.5 }}>
+        <CheckCircleIcon color="success" sx={{ fontSize: 36 }} />
+        <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
           Din bokning är bekräftad!
         </Typography>
       </Box>
@@ -139,14 +140,7 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flo
         En bokningsbekräftelse har skickats till din e-postadress. Du kan behöva kontrollera din skräppost om du inte hittar e-postmeddelandet.
       </Alert>
       
-      <Paper 
-        elevation={3} 
-        sx={{ 
-          borderRadius: 2, 
-          p: { xs: 2, sm: 4 }, 
-          mb: 4 
-        }}
-      >
+      <FlowCard sx={{ mb: 4 }}>
         <Typography variant="h6" gutterBottom>
           Bokningsdetaljer
         </Typography>
@@ -256,7 +250,7 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flo
         
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, borderColor: 'var(--border)' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <PaymentIcon sx={{ mr: 1, color: 'var(--primary)' }} />
                 <Typography variant="subtitle2">
@@ -297,7 +291,7 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flo
           </Grid>
         </Grid>
         
-        <Box sx={{ mt: 4, textAlign: 'center' }}>
+        <Box sx={{ mt: 4, pt: 3, textAlign: 'center', borderTop: '1px solid var(--border)' }}>
           <Typography variant="body2" paragraph>
             Vi har skickat en bekräftelse via e-post med alla detaljer om din bokning.
           </Typography>
@@ -308,7 +302,7 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({ courseId, flo
             </StyledButton>
           </Link>
         </Box>
-      </Paper>
+      </FlowCard>
     </>
   );
 };

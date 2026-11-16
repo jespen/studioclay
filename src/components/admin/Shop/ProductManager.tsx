@@ -4,9 +4,11 @@ import AdminHeader from '../Dashboard/AdminHeader';
 import SectionContainer from '../Dashboard/SectionContainer';
 import ProductForm from './ProductForm';
 import { Product } from '@/components/shop/types';
-import { categoryLabel } from '@/constants/productCategories';
+import { categoryLabel, PRODUCT_CATEGORIES } from '@/constants/productCategories';
+import StandardTable from '../common/StandardTable';
+import RowActions from '../common/RowActions';
+import ConfirmDialog from '../common/ConfirmDialog';
 import { fetchProductsWithCache, invalidateCache } from '@/utils/apiCache';
-import Image from 'next/image';
 
 interface ProductManagerProps {
   /**
@@ -24,6 +26,8 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [loadingImages, setLoadingImages] = useState(false);
   const [updatingProductIds, setUpdatingProductIds] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   // Memoize fetch functions to prevent unnecessary rerenders
   const fetchProducts = useCallback(async () => {
@@ -103,7 +107,6 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (window.confirm('Är du säker på att du vill ta bort denna produkt?')) {
       try {
         const response = await fetch(`/api/products/${id}`, {
           method: 'DELETE',
@@ -122,7 +125,6 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
         console.error('Error deleting product:', err);
         setError(err.message);
       }
-    }
   };
 
   const handleSaveProduct = async (product: Product) => {
@@ -246,112 +248,81 @@ const ProductManager: React.FC<ProductManagerProps> = ({ showHeader = true }) =>
           </button>
         </div>
 
-        <SectionContainer title="Produkter">
+        <SectionContainer title="Produkter" count={products.filter((product) => categoryFilter === 'all' || product.category === categoryFilter).length}>
+          <div className={styles.filterContainer} style={{ margin: '1rem' }}>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className={styles.statusSelect}
+              aria-label="Filtrera på kategori"
+            >
+              <option value="all">Alla kategorier</option>
+              {PRODUCT_CATEGORIES.map((category) => (
+                <option key={category.id} value={category.id}>{category.label}</option>
+              ))}
+            </select>
+          </div>
           {loading ? (
             <p>Laddar produkter...</p>
           ) : error ? (
             <p className="text-red-500">{error}</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bild</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Titel</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pris</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rabatt</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ny</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lagerstatus</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lagersaldo</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Publicerad</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Åtgärder</th>
+            <StandardTable
+              headers={['Bild', 'Titel', 'Kategori', 'Pris', 'Lager', 'Publicerad', 'Åtgärder']}
+              emptyMessage="Inga produkter i den här kategorin."
+            >
+              {products
+                .filter((product) => categoryFilter === 'all' || product.category === categoryFilter)
+                .map((product) => (
+                  <tr key={product.id} className={styles.tableRow}>
+                    <td className={styles.tableCell}>
+                      <div style={{ width: 48, height: 48, background: '#f3f4f6', borderRadius: 6, overflow: 'hidden' }}>
+                        {product.image && (
+                          <img src={product.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        )}
+                      </div>
+                    </td>
+                    <td className={styles.tableCell}>{product.title}</td>
+                    <td className={styles.tableCell}>{categoryLabel(product.category)}</td>
+                    <td className={styles.tableCell}>
+                      {product.price} kr{product.discount ? ` (−${product.discount}%)` : ''}
+                    </td>
+                    <td className={styles.tableCell}>
+                      <span className={`${styles.statusBadge} ${product.inStock === false ? styles.draftBadge : styles.publishedBadge}`}>
+                        {product.inStock === false ? 'Såld' : 'Till salu'}
+                      </span>
+                    </td>
+                    <td className={styles.tableCell}>
+                      <button
+                        type="button"
+                        className={`${styles.statusBadge} ${product.published !== false ? styles.publishedBadge : styles.draftBadge}`}
+                        disabled={updatingProductIds.includes(product.id)}
+                        onClick={() => togglePublished(product.id, !(product.published !== false))}
+                      >
+                        {updatingProductIds.includes(product.id) ? 'Sparar...' : product.published !== false ? 'Ja' : 'Nej'}
+                      </button>
+                    </td>
+                    <td className={styles.tableCell}>
+                      <RowActions
+                        onEdit={() => handleEditProduct(product)}
+                        items={[{ label: 'Ta bort', danger: true, onClick: () => setProductToDelete(product) }]}
+                      />
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {products.map((product) => (
-                    <tr key={product.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="h-12 w-12 bg-gray-100">
-                          {product.image && (
-                            <img 
-                              src={product.image} 
-                              alt={product.title}
-                              className="h-full w-full object-cover"
-                            />
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">{product.title}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">{categoryLabel(product.category)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">{product.price} kr</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {product.discount ? `-${product.discount}%` : '—'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {product.isNew ? 'Ja' : 'Nej'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={product.inStock === false ? 'text-red-500' : 'text-green-600'}>
-                          {product.inStock === false ? 'Såld' : 'Till Salu'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {product.stockQuantity !== undefined ? product.stockQuantity : '—'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <label className="inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={product.published !== false}
-                            disabled={updatingProductIds.includes(product.id)}
-                            onChange={(e) => togglePublished(product.id, e.target.checked)}
-                            className="mr-2 h-4 w-4 rounded border-gray-300 cursor-pointer"
-                          />
-                          <span 
-                            className={`text-sm ${
-                              updatingProductIds.includes(product.id)
-                                ? 'text-gray-400 italic'
-                                : product.published !== false
-                                  ? 'text-green-600'
-                                  : 'text-gray-500'
-                            }`}
-                            onClick={() => {
-                              if (!updatingProductIds.includes(product.id)) {
-                                togglePublished(product.id, !(product.published !== false));
-                              }
-                            }}
-                          >
-                            {updatingProductIds.includes(product.id)
-                              ? 'Sparar...'
-                              : product.published !== false
-                                ? 'Ja'
-                                : 'Nej'
-                            }
-                          </span>
-                        </label>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => handleEditProduct(product)}
-                          className="text-indigo-600 hover:text-indigo-900 mr-4"
-                        >
-                          Redigera
-                        </button>
-                        <button
-                          onClick={() => handleDeleteProduct(product.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Ta bort
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+            </StandardTable>
           )}
         </SectionContainer>
+        <ConfirmDialog
+          open={Boolean(productToDelete)}
+          title="Ta bort produkt"
+          message={`Vill du ta bort "${productToDelete?.title || 'produkten'}"?`}
+          onConfirm={() => {
+            if (productToDelete) handleDeleteProduct(productToDelete.id);
+            setProductToDelete(null);
+          }}
+          onCancel={() => setProductToDelete(null)}
+        />
       </main>
     </div>
   );

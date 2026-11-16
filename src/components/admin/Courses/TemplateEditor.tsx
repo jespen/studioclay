@@ -11,56 +11,8 @@ import {
   FormControlLabel,
   Switch,
   CircularProgress,
-  ThemeProvider,
-  createTheme,
 } from '@mui/material';
 import RichTextEditor from '../../../components/common/RichTextEditor';
-
-// Create a theme with the primary color from globals.css
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#547264', // sage green from globals.css
-      light: '#7A9387',
-      dark: '#3D544A',
-    },
-    secondary: {
-      main: '#698577',
-      light: '#9CB3A8',
-      dark: '#415A50',
-    },
-  },
-  typography: {
-    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    h6: {
-      fontFamily: 'Georgia, serif',
-      fontWeight: 700,
-    },
-    subtitle1: {
-      fontWeight: 600,
-    },
-  },
-  components: {
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          borderRadius: '0.5rem',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-        },
-      },
-    },
-    MuiButton: {
-      styleOverrides: {
-        contained: {
-          boxShadow: 'none',
-          '&:hover': {
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-          },
-        },
-      },
-    },
-  },
-});
 
 interface TemplateEditorProps {
   template: CourseTemplate | null;
@@ -173,8 +125,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template, onSave, onCan
   };
 
   return (
-    <ThemeProvider theme={theme}>
-      <Paper elevation={3} sx={{ p: 0, overflow: 'hidden' }}>
+      <Paper elevation={1} sx={{ p: 0, overflow: 'hidden', maxWidth: 900, mx: 'auto' }}>
         <Box sx={{ bgcolor: 'primary.main', color: 'white', px: 3, py: 2 }}>
           <Typography variant="h6">
             {template?.id ? 'Redigera kursmall' : 'Skapa ny kursmall'}
@@ -288,7 +239,6 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({ template, onSave, onCan
           </Box>
         </Box>
       </Paper>
-    </ThemeProvider>
   );
 };
 

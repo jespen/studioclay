@@ -64,7 +64,7 @@ export async function generateGiftCardPDF(giftCardData: GiftCardData): Promise<B
     });
 
     // Determine which reference to use for the PDF
-    const referenceToUse = giftCardData.payment_reference || giftCardData.code;
+    const referenceToUse = giftCardData.code || giftCardData.payment_reference;
     if (!referenceToUse) {
       logError(`❌ GIFT CARD PDF GENERATOR - No reference found for PDF`, {
         hasCode: !!giftCardData.code,
@@ -119,10 +119,10 @@ export async function generateGiftCardPDF(giftCardData: GiftCardData): Promise<B
     // Add gift card reference - move it below the presentkort title
     doc.setFontSize(14);
     doc.setTextColor(50, 50, 50);
-    doc.text(`Referens: ${referenceToUse}`, pageWidth / 2, margin + 40, { align: 'center' });
+    doc.text(`Presentkortskod: ${referenceToUse}`, pageWidth / 2, margin + 40, { align: 'center' });
     
     // Add a reference box (subtle background) to make it stand out - adjusted position
-    const referenceTextWidth = doc.getTextWidth(`Referens: ${referenceToUse}`);
+    const referenceTextWidth = doc.getTextWidth(`Presentkortskod: ${referenceToUse}`);
     doc.setFillColor(245, 245, 245);
     doc.roundedRect(
       pageWidth / 2 - (referenceTextWidth / 2) - 5, 
@@ -134,7 +134,7 @@ export async function generateGiftCardPDF(giftCardData: GiftCardData): Promise<B
     
     // Draw reference text again on top of the background - adjusted position
   doc.setTextColor(50, 50, 50);
-    doc.text(`Referens: ${referenceToUse}`, pageWidth / 2, margin + 40, { align: 'center' });
+    doc.text(`Presentkortskod: ${referenceToUse}`, pageWidth / 2, margin + 40, { align: 'center' });
     
     logInfo(`📝 GIFT CARD PDF GENERATOR - Added reference to PDF`, {
       referenceType: giftCardData.payment_reference ? 'payment_reference' : 'code',

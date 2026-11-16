@@ -18,6 +18,8 @@ interface GenericFlowContainerProps {
   backButtonLabel?: string;
   backUrl?: string;
   className?: string;
+  /** Optional purchase summary rendered between the subtitle and the step content. */
+  summary?: ReactNode;
 }
 
 /**
@@ -36,10 +38,8 @@ const GenericFlowContainer: React.FC<GenericFlowContainerProps> = ({
   backButtonLabel,
   backUrl,
   className,
+  summary,
 }) => {
-  // Log the activeStep when component renders
-  console.log(`GenericFlowContainer rendering with activeStep: ${activeStep}, flowType: ${flowType}`);
-  
   // Ensure activeStep is a number
   const numericActiveStep = typeof activeStep === 'number' ? activeStep : GenericStep.ITEM_SELECTION;
 
@@ -102,16 +102,24 @@ const GenericFlowContainer: React.FC<GenericFlowContainerProps> = ({
       )}
       
       {title && (
-        <Typography variant="h4" component="h1" align="center" gutterBottom>
+        <Typography
+          variant="h4"
+          component="h1"
+          align="center"
+          gutterBottom
+          sx={{ fontSize: { xs: '1.75rem', sm: '2rem' }, letterSpacing: '-0.02em', fontWeight: 700, mb: 1 }}
+        >
           {title}
         </Typography>
       )}
       
       {subtitle && (
-        <Typography variant="body1" align="center" paragraph>
+        <Typography variant="body1" align="center" color="text.secondary" sx={{ mb: 3 }}>
           {subtitle}
         </Typography>
       )}
+
+      {summary}
       
       {children}
     </Container>

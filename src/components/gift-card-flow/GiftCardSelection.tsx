@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Typography, Paper, Box, TextField, InputAdornment, Divider } from '@mui/material';
+import { Typography, Box, TextField, InputAdornment } from '@mui/material';
 import FlowStepWrapper from '../common/FlowStepWrapper';
 import { FlowType, GenericStep } from '../common/BookingStepper';
-import StyledButton from '../common/StyledButton';
+import FlowCard from '../common/FlowCard';
+import FlowActions from '../common/FlowActions';
+import ItemSummary from '../common/ItemSummary';
 import { setFlowType } from '@/utils/flowStorage';
 import { saveItemDetails, saveGiftCardDetails } from '@/utils/dataFetcher';
 import { getNextStepUrl } from '@/utils/flowNavigation';
@@ -147,21 +149,18 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
     }
   };
 
-  return (
-    <Paper 
-      elevation={3} 
-      sx={{ 
-        borderRadius: 2, 
-        p: { xs: 2, sm: 4 }, 
-        mt: 4 
-      }}
-    >
-      {/* Gift Card header */}
-      <Typography variant="h4" component="h2" gutterBottom sx={{ color: 'var(--primary)' }}>
-        Digitalt Presentkort
-      </Typography>
+  const displayAmount = amount === 'custom' ? customAmount || '0' : amount;
 
-      <Typography variant="body1" paragraph>
+  return (
+    <FlowCard>
+      <ItemSummary
+        title="Digitalt presentkort"
+        details={[{ label: 'Giltigt i 12 månader' }, { label: 'Kurser, workshops och produkter' }]}
+        price={displayAmount}
+        priceNote="Inklusive moms"
+      />
+
+      <Typography variant="body1" sx={{ mb: 2 }}>
         Ge bort en kreativ upplevelse från Studio Clay. Presentkortet är giltigt i 12 månader och kan användas till kurser, workshops, studiotid eller produkter.
       </Typography>
 
@@ -175,13 +174,11 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
         <div className={styles.giftCardImageOverlay}>
           <div className={styles.giftCardLabel}>Presentkort</div>
           <div className={styles.giftCardAmount}>
-            {amount === 'custom' ? `${customAmount || '0'} kr` : `${amount} kr`}
+            {displayAmount} kr
           </div>
         </div>
       </Box>
       
-      <Divider sx={{ my: 3 }} />
-
       {/* Amount Selection */}
       <Typography variant="h6" gutterBottom>
         Välj belopp
@@ -217,8 +214,6 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
         </Box>
       </Box>
       
-      <Divider sx={{ my: 3 }} />
-
       {/* Recipient Information */}
       <Typography variant="h6" gutterBottom>
         Mottagarinformation
@@ -265,8 +260,6 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
         />
       </Box>
       
-      <Divider sx={{ my: 3 }} />
-
       {/* Features */}
       <Typography variant="h6" gutterBottom>
         Varför våra presentkort?
@@ -310,44 +303,12 @@ const GiftCardSelection: React.FC<GiftCardSelectionProps> = ({ onNext }) => {
         </Box>
       </Box>
       
-      {/* Price display */}
-      <Divider sx={{ my: 3 }} />
-      
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" gutterBottom>
-          Presentkortspris
-        </Typography>
-        
-        <Box sx={{ display: 'flex', alignItems: 'baseline', mb: 1 }}>
-          <Typography variant="h4" sx={{ color: 'var(--primary)', mr: 1 }}>
-            {amount === 'custom' ? customAmount || '0' : amount} kr
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Inklusive moms
-          </Typography>
-        </Box>
-      </Box>
-
-      {/* Buttons */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-        <StyledButton 
-          secondary 
-          onClick={() => {
-            // Use flowNavigation to go back to home
-            router.push('/');
-          }}
-          sx={{ mr: 2 }}
-        >
-          Tillbaka
-        </StyledButton>
-        
-        <StyledButton 
-          onClick={handleNext}
-        >
-          Fortsätt till dina uppgifter
-        </StyledButton>
-      </Box>
-    </Paper>
+      <FlowActions
+        onBack={() => router.push('/')}
+        onNext={handleNext}
+        nextLabel="Fortsätt till dina uppgifter"
+      />
+    </FlowCard>
   );
 };
 

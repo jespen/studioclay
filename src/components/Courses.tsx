@@ -56,6 +56,61 @@ interface DisplayCourse {
   weekday: string;
 }
 
+function ringText(phrase: string) {
+  const unit = `${phrase} • `;
+  const repeats = Math.max(2, Math.round(40 / unit.length));
+  return unit.repeat(repeats);
+}
+
+export function CourseStatusBadge({
+  courseId,
+  isFullyBooked,
+  availableSpots,
+  toneClass,
+}: {
+  courseId: string;
+  isFullyBooked: boolean;
+  availableSpots: number | null;
+  toneClass: string;
+}) {
+  if (!isFullyBooked && availableSpots === null) return null;
+
+  const phrase = isFullyBooked
+    ? 'SLUTSÅLD'
+    : availableSpots === 1
+      ? '1 PLATS KVAR'
+      : `${availableSpots} PLATSER KVAR`;
+  const pathId = `course-badge-${courseId}`;
+  const label = isFullyBooked
+    ? 'Slutsåld'
+    : `${availableSpots} ${availableSpots === 1 ? 'plats' : 'platser'} kvar`;
+
+  return (
+    <div
+      className={`${styles.statusBadge} ${isFullyBooked ? styles.soldOutBadge : toneClass}`}
+      role="img"
+      aria-label={label}
+    >
+      <svg className={styles.statusBadgeRing} viewBox="0 0 100 100" aria-hidden="true">
+        <defs>
+          <path
+            id={pathId}
+            d="M50,50 m-37,0 a37,37 0 1,1 74,0 a37,37 0 1,1 -74,0"
+          />
+        </defs>
+        <text>
+          <textPath href={`#${pathId}`} textLength="232" lengthAdjust="spacing">
+            {ringText(phrase)}
+          </textPath>
+        </text>
+      </svg>
+      <span className={styles.statusBadgeCenter} aria-hidden="true">
+        {isFullyBooked ? '–' : availableSpots}
+      </span>
+    </div>
+  );
+}
+
 const Courses = () => {
   const [tryCourses, setTryCourses] = useState<DisplayCourse[]>([]);
   const [longerCourses, setLongerCourses] = useState<DisplayCourse[]>([]);
@@ -326,6 +381,58 @@ const Courses = () => {
     return styles.high;
   };
 
+  const renderCourseCard = (
+    course: DisplayCourse,
+    marker?: { label: string; placement: 'lead' | 'divider' }
+  ) => (
+    <div
+      key={course.id}
+      className={`${styles.courseCard} ${course.isFullyBooked ? styles.soldOutCourse : ''} ${marker ? styles.sectionStart : ''} ${marker?.placement === 'lead' ? styles.sectionLead : ''}`}
+    >
+      {marker && (
+        <span className={`${styles.sectionLabel} ${marker.placement === 'lead' ? styles.sectionLabelLead : ''}`}>
+          {marker.label}
+        </span>
+      )}
+      <div className={styles.courseImageContainer} style={{ backgroundImage: `url(${course.imageUrl || '/pictures/gronvas.jpg'})` }}>
+        <CourseStatusBadge
+          courseId={course.id}
+          isFullyBooked={course.isFullyBooked}
+          availableSpots={course.availableSpots}
+          toneClass={getSpotsClass(course.availableSpots)}
+        />
+        <div className={styles.courseImageOverlay}>
+          <div className={styles.courseDate}>
+            <div className={styles.weekday}>{course.weekday}</div>
+            <div className={styles.dateRange}>
+              {course.startDateFormatted}-{course.endDateFormatted.split(' ')[0]} {course.endDateFormatted.split(' ')[1]}
+            </div>
+            <div className={styles.courseTime}>{course.timeFormatted}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.courseInfo}>
+        <div className={styles.courseHeading}>
+          <h3 className={styles.courseName}>{course.name}</h3>
+          <div className={styles.coursePrice}>
+            <span className={styles.priceValue}>{course.price}</span>
+            <span className={styles.priceFrequency}>{course.frequency}</span>
+          </div>
+        </div>
+
+        <div className={styles.cardFooter}>
+          <Link
+            href={course.buttonLink}
+            className={`${styles.actionButton} ${course.isSecondary ? styles.secondaryButton : ''}`}
+          >
+            {course.buttonText}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <section id="courses" className={styles.section}>
       <div className={styles.container}>
@@ -346,110 +453,23 @@ const Courses = () => {
           </div>
         ) : (
           <>
-            {tryCourses.length > 0 && (
+            {(tryCourses.length > 0 || longerCourses.length > 0) && (
               <div className={styles.categorySection}>
-                <h3 className={styles.categoryTitle} data-reveal>Prova på</h3>
                 <div className={styles.courseGrid} data-reveal-stagger="zoom">
-                  {tryCourses.map((course) => (
-                    <div 
-                      key={course.id} 
-                      className={`${styles.courseCard} ${course.isFullyBooked ? styles.soldOutCourse : ''}`}
-                    >
-                      <div className={styles.courseImageContainer} style={{ backgroundImage: `url(${course.imageUrl || '/pictures/gronvas.jpg'})` }}>
-                        {!course.isFullyBooked && course.availableSpots !== null && (
-                          <div className={`${styles.availableSpots} ${getSpotsClass(course.availableSpots)}`}>
-                            {course.availableSpots} plats{course.availableSpots !== 1 ? 'er' : ''} kvar
-                          </div>
-                        )}
-                        <div className={styles.courseImageOverlay}>
-                          <div className={styles.courseDate}>
-                            <div className={styles.weekday}>{course.weekday}</div>
-                            <div className={styles.dateRange}>
-                              {course.startDateFormatted}-{course.endDateFormatted.split(' ')[0]} {course.endDateFormatted.split(' ')[1]}
-                            </div>
-                            <div className={styles.courseTime}>{course.timeFormatted}</div>
-                          </div>
-                        </div>
-                        
-                        {course.isFullyBooked && (
-                          <div className={styles.soldOutTag}>
-                            Slutsåld
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className={styles.courseInfo}>
-                        <h3 className={styles.courseName}>{course.name}</h3>
-                        <div className={styles.coursePrice}>
-                          <span className={styles.priceValue}>{course.price}</span>
-                          <span className={styles.priceFrequency}>{course.frequency}</span>
-                        </div>
-                        
-                        <div className={styles.cardFooter}>
-                          <Link 
-                            href={course.buttonLink} 
-                            className={`${styles.actionButton} ${course.isSecondary ? styles.secondaryButton : ''}`}
-                          >
-                            {course.buttonText}
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {longerCourses.length > 0 && (
-              <div className={styles.categorySection}>
-                <h3 className={styles.categoryTitle} data-reveal>Längre kurser</h3>
-                <div className={styles.courseGrid} data-reveal-stagger="zoom">
-                  {longerCourses.map((course) => (
-                    <div 
-                      key={course.id} 
-                      className={`${styles.courseCard} ${course.isFullyBooked ? styles.soldOutCourse : ''}`}
-                    >
-                      <div className={styles.courseImageContainer} style={{ backgroundImage: `url(${course.imageUrl || '/pictures/gronvas.jpg'})` }}>
-                        {!course.isFullyBooked && course.availableSpots !== null && (
-                          <div className={`${styles.availableSpots} ${getSpotsClass(course.availableSpots)}`}>
-                            {course.availableSpots} plats{course.availableSpots !== 1 ? 'er' : ''} kvar
-                          </div>
-                        )}
-                        <div className={styles.courseImageOverlay}>
-                          <div className={styles.courseDate}>
-                            <div className={styles.weekday}>{course.weekday}</div>
-                            <div className={styles.dateRange}>
-                              {course.startDateFormatted}-{course.endDateFormatted.split(' ')[0]} {course.endDateFormatted.split(' ')[1]}
-                            </div>
-                            <div className={styles.courseTime}>{course.timeFormatted}</div>
-                          </div>
-                        </div>
-                        
-                        {course.isFullyBooked && (
-                          <div className={styles.soldOutTag}>
-                            Slutsåld
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className={styles.courseInfo}>
-                        <h3 className={styles.courseName}>{course.name}</h3>
-                        <div className={styles.coursePrice}>
-                          <span className={styles.priceValue}>{course.price}</span>
-                          <span className={styles.priceFrequency}>{course.frequency}</span>
-                        </div>
-                        
-                        <div className={styles.cardFooter}>
-                          <Link 
-                            href={course.buttonLink} 
-                            className={`${styles.actionButton} ${course.isSecondary ? styles.secondaryButton : ''}`}
-                          >
-                            {course.buttonText}
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                  {tryCourses.map((course, index) =>
+                    renderCourseCard(course, index === 0 ? { label: 'Prova på', placement: 'lead' } : undefined)
+                  )}
+                  {longerCourses.map((course, index) =>
+                    renderCourseCard(
+                      course,
+                      index === 0
+                        ? {
+                            label: 'Längre kurser',
+                            placement: tryCourses.length > 0 ? 'divider' : 'lead',
+                          }
+                        : undefined
+                    )
+                  )}
                 </div>
               </div>
             )}

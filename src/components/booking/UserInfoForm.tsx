@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Box, 
-  Typography, 
-  Paper, 
   Grid,
   Alert, 
   CircularProgress,
@@ -14,10 +12,15 @@ import {
   FormHelperText,
   SelectChangeEvent,
 } from '@mui/material';
+import EventIcon from '@mui/icons-material/Event';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
 
 import { GenericStep, FlowType } from '../common/BookingStepper';
 import GenericFlowContainer from '../common/GenericFlowContainer';
-import StyledButton from '../common/StyledButton';
+import FlowCard from '../common/FlowCard';
+import FlowActions from '../common/FlowActions';
+import ItemSummary, { SummaryDetail } from '../common/ItemSummary';
+import { getItemDetails } from '@/utils/dataStorage';
 import { FormTextField } from '../common/FormField';
 import { fetchCourseDetail, CourseDetail, saveUserInfo, getUserInfo } from '@/utils/dataFetcher';
 import { getFlowType } from '@/utils/flowStorage';
@@ -315,25 +318,54 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
     </Grid>
   ;
 
-  // Extract buttons rendering
+  const renderSummary = () => {
+    if (!isShopFlow && courseDetail) {
+      const details: SummaryDetail[] = [];
+      if (courseDetail.start_date) {
+        details.push({
+          icon: <EventIcon />,
+          label: new Date(courseDetail.start_date).toLocaleDateString('sv-SE', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          }),
+        });
+      }
+      if (courseDetail.location) {
+        details.push({ icon: <LocationOnIcon />, label: courseDetail.location });
+      }
+      return (
+        <ItemSummary
+          title={courseDetail.title}
+          price={courseDetail.price}
+          details={details}
+        />
+      );
+    }
+
+    if (isShopFlow && typeof window !== 'undefined') {
+      const product = getItemDetails<{ title?: string; price?: number; originalPrice?: number }>();
+      if (product) {
+        return (
+          <ItemSummary
+            title={product.title}
+            price={product.price}
+            originalPrice={product.originalPrice}
+          />
+        );
+      }
+    }
+
+    return null;
+  };
+
   const renderButtons = () => (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
-      <StyledButton 
-      secondary
-        onClick={handleBack}
-        variant="outlined"
-      >
-        Tillbaka
-      </StyledButton>
-      
-      <StyledButton 
-        onClick={handleSubmit}
-        sx={{ minWidth: 150 }}
-        disabled={isSubmitting}
-      >
-        Fortsätt
-      </StyledButton>
-    </Box>
+    <FlowActions
+      onBack={handleBack}
+      onNext={(e) => handleSubmit(e as unknown as React.FormEvent)}
+      nextDisabled={isSubmitting}
+      nextLabel="Fortsätt"
+    />
   );
 
   if (loading && !isShopFlow) {
@@ -355,10 +387,11 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
               {submitError}
             </Alert>
           )}
-          <Paper elevation={3} sx={{ p: { xs: 2, md: 4 }, mb: 4, borderRadius: 2 }}>
+          <FlowCard>
+            {renderSummary()}
             {renderFormContent()}
             {renderButtons()}
-          </Paper>
+          </FlowCard>
         </Box>
       ) : (
         // Standalone rendering with GenericFlowContainer
@@ -371,10 +404,11 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ courseId, onNext, onBack })
           alertSeverity="error"
         >
           <Box component="form" onSubmit={handleSubmit} noValidate>
-            <Paper elevation={3} sx={{ p: { xs: 2, md: 4 }, mb: 4, borderRadius: 2 }}>
+            <FlowCard>
+              {renderSummary()}
               {renderFormContent()}
               {renderButtons()}
-            </Paper>
+            </FlowCard>
           </Box>
         </GenericFlowContainer>
       )}

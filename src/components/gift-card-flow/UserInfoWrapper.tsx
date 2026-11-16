@@ -4,19 +4,17 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Box, 
-  Typography, 
   TextField, 
   Button, 
-  Paper, 
-  FormControl,
-  FormHelperText,
   CircularProgress,
   Alert,
   Grid
 } from '@mui/material';
 import FlowStepWrapper from '../common/FlowStepWrapper';
 import { FlowType, GenericStep } from '../common/BookingStepper';
-import StyledButton from '../common/StyledButton';
+import FlowCard from '../common/FlowCard';
+import FlowActions from '../common/FlowActions';
+import ItemSummary from '../common/ItemSummary';
 import { saveUserInfo } from '@/utils/dataFetcher';
 import { getNextStepUrl, getPreviousStepUrl } from '@/utils/flowNavigation';
 
@@ -39,9 +37,10 @@ interface FormErrors {
 interface UserInfoWrapperProps {
   onNext?: (data: any) => void;
   onBack?: () => void;
+  itemDetails?: { amount?: number; recipientName?: string } | null;
 }
 
-const UserInfoWrapper: React.FC<UserInfoWrapperProps> = ({ onNext, onBack }) => {
+const UserInfoWrapper: React.FC<UserInfoWrapperProps> = ({ onNext, onBack, itemDetails }) => {
   const router = useRouter();
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -193,11 +192,15 @@ const UserInfoWrapper: React.FC<UserInfoWrapperProps> = ({ onNext, onBack }) => 
         </Alert>
       )}
       
-      <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Dina kontaktuppgifter
-        </Typography>
-        
+      <FlowCard>
+        {itemDetails?.amount ? (
+          <ItemSummary
+            title="Presentkort"
+            price={itemDetails.amount}
+            details={itemDetails.recipientName ? [{ label: `Till ${itemDetails.recipientName}` }] : [{ label: 'Digitalt presentkort' }]}
+          />
+        ) : null}
+
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <TextField
@@ -271,25 +274,16 @@ const UserInfoWrapper: React.FC<UserInfoWrapperProps> = ({ onNext, onBack }) => 
             />
           </Grid>
         </Grid>
-      </Paper>
-      
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-        <StyledButton 
-          type="button"
-          onClick={handleBack}
-          disabled={isSubmitting}
-          secondary
-        >
-          Tillbaka
-        </StyledButton>
-        
-        <StyledButton
-          type="submit"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? <CircularProgress size={24} /> : 'Fortsätt till betalning'}
-        </StyledButton>
-      </Box>
+
+        <FlowActions
+          onBack={handleBack}
+          backDisabled={isSubmitting}
+          nextType="submit"
+          nextDisabled={isSubmitting}
+          nextLabel={isSubmitting ? 'Sparar...' : 'Fortsätt till betalning'}
+          nextEndIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : undefined}
+        />
+      </FlowCard>
     </Box>
   );
 };
@@ -308,7 +302,11 @@ const UserInfoFlowWrapper = () => {
       }}
     >
       {(props) => (
-        <UserInfoWrapper onNext={props.onNext} onBack={props.onBack} />
+        <UserInfoWrapper
+          onNext={props.onNext}
+          onBack={props.onBack}
+          itemDetails={props.flowData.itemDetails}
+        />
       )}
     </FlowStepWrapper>
   );

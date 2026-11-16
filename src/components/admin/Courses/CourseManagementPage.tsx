@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Container, Box, Paper, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, FormControl, InputLabel, Select, MenuItem, SelectChangeEvent } from '@mui/material';
+import { Container, Box, Paper, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, FormControl, InputLabel, Select, MenuItem, SelectChangeEvent, Tabs, Tab, Chip } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
 import CourseForm from '@/app/admin/dashboard/courses/CourseForm';
 import BookingsTable from './BookingsTable';
 import WaitlistComponent from './WaitlistComponent';
+import BookingHistoryList from './BookingHistory';
 import { Course } from '@/types/course';
 import type { ExtendedBooking } from '@/types/booking';
 
@@ -51,9 +52,12 @@ export default function CourseManagementPage({
   // Waitlist prefill state and function
   const [waitlistEntryToProcess, setWaitlistEntryToProcess] = useState<any>(null);
   const [removeWaitlistFunction, setRemoveWaitlistFunction] = useState<((entryId: string) => Promise<void>) | null>(null);
-  
-  // Primary color from globals.css
-  const primaryColor = '#547264';
+  const [reservationToReplace, setReservationToReplace] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState(0);
+  const [reserveOpen, setReserveOpen] = useState(false);
+  const [reserveCount, setReserveCount] = useState(1);
+  const [reserveNote, setReserveNote] = useState('');
+  const [reserveLoading, setReserveLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -193,6 +197,7 @@ export default function CourseManagementPage({
     setAddUserDialogOpen(false);
     // Clear waitlist prefill state
     setWaitlistEntryToProcess(null);
+    setReservationToReplace(null);
     // Reset form data
     setAddUserFormData({
       customer_name: '',
@@ -347,6 +352,15 @@ export default function CourseManagementPage({
       const result = await response.json();
       console.log("Booking created successfully:", result);
 
+      if (reservationToReplace) {
+        try {
+          await fetch(`/api/bookings/${reservationToReplace}`, { method: 'DELETE' });
+        } catch (reservationError) {
+          console.error('Failed to remove reservation after conversion:', reservationError);
+          alert('Deltagaren lades till, men reservationen kunde inte tas bort automatiskt.');
+        }
+      }
+
       // If this booking was created from a waitlist entry, remove it from waitlist
       if (waitlistEntryToProcess && removeWaitlistFunction) {
         try {
@@ -381,6 +395,63 @@ export default function CourseManagementPage({
     }
   };
 
+  const handleConvertReservation = (booking: ExtendedBooking) => {
+    setReservationToReplace(booking.id);
+    setAddUserFormData({
+      customer_name: '',
+      customer_email: '',
+      customer_phone: '',
+      number_of_participants: booking.number_of_participants || 1,
+      payment_method: 'invoice',
+      payment_status: 'CREATED',
+      status: 'confirmed',
+      message: booking.message || '',
+      invoice_address: '',
+      invoice_postal_code: '',
+      invoice_city: '',
+      invoice_reference: ''
+    });
+    setAddUserDialogOpen(true);
+  };
+
+  const handleReserveSpots = async () => {
+    try {
+      setReserveLoading(true);
+      const count = Math.max(1, Number(reserveCount) || 1);
+      const reference = `RES-${Date.now().toString(36).toUpperCase()}`;
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          course_id: courseId,
+          customer_name: 'Reservation',
+          customer_email: '',
+          number_of_participants: count,
+          payment_method: 'reservation',
+          payment_status: 'PAID',
+          status: 'confirmed',
+          booking_reference: reference,
+          unit_price: 0,
+          total_price: 0,
+          currency: 'SEK',
+          message: reserveNote.trim(),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Kunde inte reservera platser');
+      }
+      setReserveOpen(false);
+      setReserveCount(1);
+      setReserveNote('');
+      handleDataUpdate();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunde inte reservera platser');
+    } finally {
+      setReserveLoading(false);
+    }
+  };
+
   // Calculate available spots
   const currentParticipants = bookings
     .filter(b => b.status === 'confirmed')
@@ -405,32 +476,16 @@ export default function CourseManagementPage({
     );
   }
 
+  const confirmedCount = bookings.filter(b => b.status === 'confirmed').length;
+  const waitlistLabel = 'Väntelista';
+
   return (
-    <Container 
-      maxWidth={false}
-      sx={{ 
-        px: { xs: 2, sm: 3 }, // Smaller padding on the sides
-        maxWidth: '100%',
-        '@media (min-width: 1200px)': {
-          px: 4, // Even on large screens, keep padding reasonable
-        }
-      }}
-    >
-      <Box sx={{ mt: 4, mb: 4 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => router.push('/admin/dashboard')}
-          sx={{ 
-            mb: 2,
-            color: primaryColor,
-            '&:hover': {
-              backgroundColor: 'rgba(84, 114, 100, 0.08)'
-            }
-          }}
-        >
-          Tillbaka till översikt
+    <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3 }, maxWidth: 1100, mx: 'auto', pb: 6 }}>
+      <Box sx={{ mt: 3, mb: 4 }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => router.push('/admin/dashboard')} sx={{ mb: 1 }} color="primary">
+          Kurser
         </Button>
-        
+
         {loading ? (
           <Typography>Laddar...</Typography>
         ) : error ? (
@@ -439,64 +494,117 @@ export default function CourseManagementPage({
           <Typography>Kursen kunde inte hittas</Typography>
         ) : (
           <>
-            <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-              <Typography variant="h5" gutterBottom>
-                {course.title}
-              </Typography>
-              <CourseForm
-                course={course}
-                onSave={handleSave}
-                onCancel={() => router.push('/admin/dashboard')}
-              />
-            </Paper>
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">Bekräftade bokningar</Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<AddIcon />}
-                onClick={handleOpenAddUserModal}
-                disabled={availableSpots <= 0}
-                sx={{ 
-                  backgroundColor: primaryColor,
-                  '&:hover': {
-                    backgroundColor: 'rgba(84, 114, 100, 0.9)'
-                  }
-                }}
-              >
-                {availableSpots <= 0 ? 'Kursen är fullbokad' : 'Lägg till deltagare'}
-              </Button>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+              <Box>
+                <Typography variant="body2" color="text.secondary">Kurser / {course.title}</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                  <Chip
+                    size="small"
+                    label={course.is_published ? 'Publicerad' : 'Utkast'}
+                    color={course.is_published ? 'primary' : 'default'}
+                    variant={course.is_published ? 'filled' : 'outlined'}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    {currentParticipants}/{course.max_participants || 0} platser
+                  </Typography>
+                </Box>
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button variant="outlined" onClick={() => setReserveOpen(true)} disabled={availableSpots <= 0}>
+                  Reservera platser
+                </Button>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAddUserModal} disabled={availableSpots <= 0}>
+                  {availableSpots <= 0 ? 'Fullbokad' : 'Lägg till deltagare'}
+                </Button>
+              </Box>
             </Box>
-            
-            <BookingsTable
-              title="Bekräftade bokningar"
-              bookings={bookings}
-              loading={loading}
-              error={error}
-              status="confirmed"
-              onBookingUpdate={handleDataUpdate}
-              participantInfo={`${currentParticipants} av ${course?.max_participants || 0}`}
+
+            <CourseForm
+              course={course}
+              onSave={handleSave}
+              onCancel={() => router.push('/admin/dashboard')}
             />
-            
-            <WaitlistComponent
-              courseId={courseId}
-              onWaitlistUpdate={handleDataUpdate}
-              onAddToCoursePrefill={handleWaitlistPrefill}
-              onRegisterRemoveFunction={handleRegisterWaitlistRemove}
-            />
-            
-            <BookingsTable
-              title="Avbokade"
-              bookings={bookings}
-              loading={loading}
-              error={error}
-              status="cancelled"
-              onBookingUpdate={handleDataUpdate}
-              participantInfo={`${bookings
-                .filter(b => b.status === 'cancelled')
-                .reduce((sum, b) => sum + b.number_of_participants, 0)}`}
-            />
+
+            <Paper variant="outlined" sx={{ mt: 3 }}>
+              <Tabs
+                value={detailTab}
+                onChange={(_, value) => setDetailTab(value)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{ px: 1, borderBottom: '1px solid #e6ece8' }}
+              >
+                <Tab label={`Deltagare (${currentParticipants}/${course.max_participants || 0})`} />
+                <Tab label={waitlistLabel} />
+                <Tab label="Avbokade" />
+                <Tab label="Historik" />
+              </Tabs>
+              <Box sx={{ p: { xs: 1, sm: 2 } }}>
+                {detailTab === 0 && (
+                  <BookingsTable
+                    title="Deltagare"
+                    bookings={bookings}
+                    loading={loading}
+                    error={error}
+                    status="confirmed"
+                    embedded
+                    onBookingUpdate={handleDataUpdate}
+                    onConvertReservation={handleConvertReservation}
+                    participantInfo={`${confirmedCount} bokningar`}
+                  />
+                )}
+                {detailTab === 1 && (
+                  <WaitlistComponent
+                    courseId={courseId}
+                    onWaitlistUpdate={handleDataUpdate}
+                    onAddToCoursePrefill={handleWaitlistPrefill}
+                    onRegisterRemoveFunction={handleRegisterWaitlistRemove}
+                  />
+                )}
+                {detailTab === 2 && (
+                  <BookingsTable
+                    title="Avbokade"
+                    bookings={bookings}
+                    loading={loading}
+                    error={error}
+                    status="cancelled"
+                    embedded
+                    onBookingUpdate={handleDataUpdate}
+                  />
+                )}
+                {detailTab === 3 && <BookingHistoryList courseId={courseId} />}
+              </Box>
+            </Paper>
+
+            <Dialog open={reserveOpen} onClose={() => !reserveLoading && setReserveOpen(false)} fullWidth maxWidth="xs">
+              <DialogTitle>Reservera platser</DialogTitle>
+              <DialogContent>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Platserna räknas mot kursen utan att du behöver fylla i en kund. {availableSpots} lediga.
+                </Typography>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Antal platser"
+                  value={reserveCount}
+                  onChange={(e) => setReserveCount(parseInt(e.target.value, 10) || 1)}
+                  inputProps={{ min: 1, max: Math.max(availableSpots, 1) }}
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  fullWidth
+                  label="Anteckning (valfritt)"
+                  placeholder="Till exempel Annas vänner"
+                  value={reserveNote}
+                  onChange={(e) => setReserveNote(e.target.value)}
+                />
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setReserveOpen(false)} disabled={reserveLoading} color="inherit">Avbryt</Button>
+                <Button onClick={handleReserveSpots} variant="contained" disabled={reserveLoading || availableSpots <= 0}>
+                  {reserveLoading ? 'Sparar...' : 'Reservera'}
+                </Button>
+              </DialogActions>
+            </Dialog>
             
             {/* Add User Dialog - Adapted from BookingsList edit dialog */}
             <Dialog
@@ -513,8 +621,8 @@ export default function CourseManagementPage({
               </DialogTitle>
               <DialogContent>
                 {waitlistEntryToProcess && (
-                  <Box sx={{ mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
-                    <Typography variant="body2" color="info.contrastText">
+                  <Box sx={{ mb: 2, p: 2, bgcolor: '#e7efe9', borderRadius: 1 }}>
+                    <Typography variant="body2" color="text.primary">
                       📋 Formuläret är förifyllt med information från väntelistan. 
                       Kontrollera och komplettera med faktureringsuppgifter innan du sparar.
                     </Typography>
@@ -589,7 +697,7 @@ export default function CourseManagementPage({
                   {addUserFormData.payment_method === 'invoice' && (
                     <>
                       <Grid item xs={12}>
-                        <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, color: primaryColor }}>
+                        <Typography variant="subtitle2" sx={{ mt: 2, mb: 1, color: 'primary.main' }}>
                           Faktureringsuppgifter
                         </Typography>
                       </Grid>
@@ -651,7 +759,7 @@ export default function CourseManagementPage({
                   onClick={handleAddUser} 
                   variant="contained" 
                   disabled={addUserLoading || availableSpots <= 0}
-                  sx={{ backgroundColor: primaryColor, '&:hover': { backgroundColor: 'rgba(84, 114, 100, 0.9)' } }}
+                  color="primary"
                 >
                   {addUserLoading ? 'Lägger till...' : 'Lägg till deltagare'}
                 </Button>

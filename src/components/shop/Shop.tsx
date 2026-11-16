@@ -117,7 +117,7 @@ const Shop = () => {
       {visibleProducts.length === 0 ? (
         <p className="text-center text-gray-500">Inga produkter i den här kategorin just nu.</p>
       ) : (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-10" data-reveal-stagger>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-[1.85rem] gap-y-6" data-reveal-stagger>
         {visibleProducts.slice(0, displayedProducts).map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}

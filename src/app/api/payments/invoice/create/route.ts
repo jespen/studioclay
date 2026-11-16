@@ -26,6 +26,7 @@ import {
   ensureBothFieldFormats
 } from '@/lib/validation/paymentFieldNormalizer';
 import { getConfirmedParticipantCount } from '@/lib/courseCapacity';
+import { generateUniqueGiftCardCode } from '@/utils/giftCardUtils';
 import { 
   generatePaymentReference,
   generateInvoiceNumber,
@@ -35,7 +36,7 @@ import {
 import { generateAndStoreInvoicePdf, generateAndStoreGiftCardPdf } from '@/utils/pdfGenerator';
 import type { GiftCardData as GiftCardPdfData } from '@/utils/giftCardPDF';
 import { convertObjectToSnakeCase } from '@/utils/caseConverter';
-import { createBackgroundJob, JobType } from '@/lib/jobQueue';
+import { createBackgroundJob, scheduleBackgroundProcessing, JobType } from '@/lib/jobQueue';
 
 // Utöka UserInfo interface för att inkludera presentkortsfält
 interface ExtendedUserInfo {
@@ -273,7 +274,7 @@ async function generateInvoiceAndSendEmail(
           });
           
           // Generera en unik presentkortskod
-          const giftCardCode = `GC-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+          const giftCardCode = await generateUniqueGiftCardCode(supabase);
           
           // Skapa utgångsdatum (1 år)
           const expiryDate = new Date();
@@ -388,7 +389,7 @@ async function generateInvoiceAndSendEmail(
         
         // Make sure the completeGiftCardData is converted to snake_case for database storage
         const completeGiftCardData: GiftCardPdfData = {
-          code: giftCardDetails.code || `GC-${Date.now()}`, // Behåll för bakåtkompatibilitet
+          code: giftCardDetails.code || '',
           payment_reference: paymentReference, // Använd payment_reference som huvudidentifierare
           amount: giftCardDetails.amount || amount,
           recipientName: giftCardDetails.recipientName || 'Presentkortsmottagare',
@@ -956,11 +957,23 @@ export const POST = async (req: Request) => {
           product_type: getValidProductType(requestData.product_type)
         });
         
+        let checkoutProductDetails: Record<string, unknown> | null = null;
+
         // Om detta är ett presentkort, skapa en post i gift_cards-tabellen
         if (productType === PRODUCT_TYPES.GIFT_CARD) {
+          checkoutProductDetails = {
+            id: requestData.product_id,
+            title: 'Presentkort Studio Clay',
+            name: 'Presentkort Studio Clay',
+            description: 'Presentkort för användning i Studio Clay',
+            price: requestData.amount,
+            start_date: new Date().toISOString(),
+            location: 'Studio Clay, Stockholm',
+          };
+
           try {
             // Skapa en unik presentkortskod
-            const giftCardCode = `GC-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+            const giftCardCode = await generateUniqueGiftCardCode(supabase);
             
             logInfo(`Creating gift card record for invoice payment`, {
               requestId,
@@ -1072,54 +1085,47 @@ export const POST = async (req: Request) => {
                 orderReference
               });
 
-              // Uppdatera produktens stock om det är en konstprodukt
+              // Minska lagret atomiskt så två samtidiga köp inte kan gå under noll
               try {
                 logInfo(`Updating product stock for art product`, {
                   requestId,
                   productId
                 });
-                
-                // Först hämta nuvarande stock för produkten
-                const { data: productData, error: productFetchError } = await supabase
-                  .from('products')
-                  .select('stock_quantity, in_stock')
-                  .eq('id', productId)
-                  .single();
-                
-                if (productFetchError) {
-                  logWarning(`Failed to fetch product data for stock update, continuing`, {
+
+                const { data: stockRows, error: stockUpdateError } = await supabase
+                  .rpc('decrement_product_stock', { p_product_id: productId });
+
+                const updatedProduct = Array.isArray(stockRows) ? stockRows[0] : stockRows;
+
+                if (stockUpdateError) {
+                  logWarning(`Failed to update product stock, continuing`, {
                     requestId,
-                    error: productFetchError
+                    error: stockUpdateError
                   });
-                } else if (productData) {
-                  // Beräkna nya värden för stock
-                  const newStockQuantity = (productData.stock_quantity || 0) - 1;
-                  const newInStock = newStockQuantity > 0;
-                  
-                  // Uppdatera produkten med nya värden
-                  const { error: stockUpdateError } = await supabase
-                    .from('products')
-                    .update({
-                      stock_quantity: newStockQuantity,
-                      in_stock: newInStock,
-                      updated_at: new Date().toISOString()
-                    })
-                    .eq('id', productId);
-                  
-                  if (stockUpdateError) {
-                    logWarning(`Failed to update product stock, continuing`, {
-                      requestId,
-                      error: stockUpdateError
-                    });
-                  } else {
-                    logInfo(`Product stock updated successfully`, {
-                      requestId,
-                      productId,
-                      oldStock: productData.stock_quantity,
-                      newStock: newStockQuantity,
-                      inStock: newInStock
-                    });
-                  }
+                } else if (!updatedProduct) {
+                  logWarning(`Product stock was not decremented`, {
+                    requestId,
+                    productId
+                  });
+                } else {
+                  checkoutProductDetails = {
+                    id: updatedProduct.id,
+                    title: updatedProduct.title,
+                    name: updatedProduct.title,
+                    description: updatedProduct.description,
+                    price: updatedProduct.price,
+                    image: updatedProduct.image,
+                    start_date: new Date().toISOString(),
+                    location: 'Studio Clay, Stockholm',
+                    stock: updatedProduct.stock_quantity,
+                  };
+
+                  logInfo(`Product stock updated successfully`, {
+                    requestId,
+                    productId,
+                    newStock: updatedProduct.stock_quantity,
+                    inStock: updatedProduct.in_stock
+                  });
                 }
               } catch (stockError) {
                 logError(`Error updating product stock`, {
@@ -1159,20 +1165,35 @@ export const POST = async (req: Request) => {
               userInfoProvided: userInfoObj
             });
             
-            // First check if the course exists and get its current data
-            const { data: courseData, error: courseError } = await supabase
-              .from('course_instances')
-              .select('current_participants, max_participants, price')
-              .eq('id', productId)
-              .single();
+            // Kursraden och platserna är oberoende och hämtas i samma vända
+            const [courseResult, currentParticipants] = await Promise.all([
+              supabase
+                .from('course_instances')
+                .select('id, title, description, start_date, price, max_participants')
+                .eq('id', productId)
+                .single(),
+              getConfirmedParticipantCount(productId)
+            ]);
+            const courseData = courseResult.data;
+            const courseError = courseResult.error;
               
-            if (courseError) {
+            if (courseError || !courseData) {
               logWarning(`Failed to fetch course data for booking creation, continuing`, {
                 requestId,
                 error: courseError
               });
               // Continue despite error - we still have the payment record
             } else {
+              checkoutProductDetails = {
+                id: courseData.id,
+                title: courseData.title,
+                name: courseData.title,
+                description: courseData.description,
+                price: courseData.price,
+                start_date: courseData.start_date,
+                location: 'Studio Clay, Norrtullsgatan 65',
+              };
+
               // The participant value should already be guaranteed to exist and be valid
               const participantValue = userInfoObj.numberOfParticipants;
               
@@ -1206,7 +1227,6 @@ export const POST = async (req: Request) => {
               // Use the parsed value directly - we've validated it's a valid number
               const participantsToAdd = parsedParticipants;
               
-              const currentParticipants = await getConfirmedParticipantCount(productId);
               const maxParticipants = courseData.max_participants || 999;
               
               if (currentParticipants + participantsToAdd > maxParticipants) {
@@ -1282,17 +1302,25 @@ export const POST = async (req: Request) => {
                     participantsSource: 'userInfoObj.numberOfParticipants'
                   });
 
-                  const { error: updateError } = await supabase
-                    .from('course_instances')
-                    .update({ 
-                      current_participants: newParticipantCount
-                    })
-                    .eq('id', productId);
-                    
-                  if (updateError) {
+                  const [participantUpdate, paymentLink] = await Promise.all([
+                    supabase
+                      .from('course_instances')
+                      .update({
+                        current_participants: newParticipantCount
+                      })
+                      .eq('id', productId),
+                    supabase
+                      .from('payments')
+                      .update({
+                        booking_id: booking.id
+                      })
+                      .eq('payment_reference', paymentReference)
+                  ]);
+
+                  if (participantUpdate.error) {
                     logWarning(`Failed to update course participant count, continuing`, {
                       requestId,
-                      error: updateError
+                      error: participantUpdate.error
                     });
                   } else {
                     logInfo(`Course participant count updated successfully`, {
@@ -1303,19 +1331,11 @@ export const POST = async (req: Request) => {
                       newCount: newParticipantCount
                     });
                   }
-                  
-                  // Link payment to booking
-                  const { error: linkError } = await supabase
-                    .from('payments')
-                    .update({
-                      booking_id: booking.id
-                    })
-                    .eq('payment_reference', paymentReference);
-                    
-                  if (linkError) {
+
+                  if (paymentLink.error) {
                     logWarning(`Failed to link payment to booking, continuing`, {
                       requestId,
-                      error: linkError
+                      error: paymentLink.error
                     });
                   } else {
                     logInfo(`Payment linked to booking successfully`, {
@@ -1354,12 +1374,12 @@ export const POST = async (req: Request) => {
               userInfo: userInfoObj,
               invoiceDetails,
               amount: requestData.amount,
-              giftCardDetails
+              giftCardDetails,
+              productDetails: checkoutProductDetails
             },
             { 
               requestId,
-              delay: 100,     // Liten fördröjning för att säkerställa att databasoperationer har slutförts
-              waitForCompletion: true  // NYTT: Vänta på att jobbet verkligen är klart
+              deferProcessing: true
             }
           );
           
@@ -1369,6 +1389,7 @@ export const POST = async (req: Request) => {
               jobId,
               invoiceNumber
             });
+            scheduleBackgroundProcessing(requestId);
           } else {
             throw new Error('Failed to create background job');
           }

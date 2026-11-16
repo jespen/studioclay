@@ -1,6 +1,6 @@
 'use client';
 
-import React, { ReactNode, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { ReactNode, useEffect, useLayoutEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Box, CircularProgress } from '@mui/material';
 import { FlowType, GenericStep } from './BookingStepper';
@@ -110,17 +110,14 @@ const FlowStepWrapper: React.FC<FlowStepWrapperProps> = ({
     [validateData]
   );
 
-  // Load and validate data
-  useEffect(() => {
+  // Read flow data before paint so a client-side step change does not flash a spinner.
+  useLayoutEffect(() => {
     // Skip if already redirecting
     if (isRedirectingRef.current) return;
     
-    const loadData = async () => {
-      // Don't trigger state updates if we're already loading
-      if (!isLoadingRef.current) {
-        isLoadingRef.current = true;
-        setIsLoading(true);
-      }
+    const loadData = () => {
+      // Keep the current screen up when this step already has its data.
+      // A fresh mount starts in the loading state and clears it before paint.
       
       setError(null);
       
@@ -217,6 +214,13 @@ const FlowStepWrapper: React.FC<FlowStepWrapperProps> = ({
     itemId, 
     redirectOnInvalid
   ]);
+
+  useEffect(() => {
+    const nextStepUrl = getNextStepUrl(activeStep, flowType, itemId);
+    if (nextStepUrl) {
+      router.prefetch(nextStepUrl);
+    }
+  }, [router, activeStep, flowType, itemId]);
 
   // Handle navigation to next step
   const handleNextStep = (data?: any) => {

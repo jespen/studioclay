@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import AdminThemeProvider from '@/components/admin/AdminThemeProvider';
 
 export const metadata: Metadata = {
   title: 'Admin - Studio Clay',
@@ -14,5 +15,5 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return <AdminThemeProvider>{children}</AdminThemeProvider>;
 } 

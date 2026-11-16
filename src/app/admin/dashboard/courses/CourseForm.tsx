@@ -1,12 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Course, Category, Instructor, CourseInstance, CourseTemplate } from '../../../../types/course';
-import { TextField, Button, Box, Paper, Typography, FormControlLabel, Switch, Grid, MenuItem, IconButton, Select, FormControl, InputLabel, SelectChangeEvent } from '@mui/material';
+import { Course, CourseInstance, CourseTemplate } from '../../../../types/course';
+import { TextField, Button, Box, Paper, Typography, FormControlLabel, Switch, Grid, MenuItem, IconButton, Select, FormControl, SelectChangeEvent } from '@mui/material';
 import RichTextEditor from '../../../../components/common/RichTextEditor';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import ClearIcon from '@mui/icons-material/Clear';
-import Image from 'next/image';
 import { fetchWithCache, fetchTemplatesWithCache } from '@/utils/apiCache';
 
 type CourseFormProps = {
@@ -42,9 +41,6 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [selectedGalleryImage, setSelectedGalleryImage] = useState<string>('');
   const [loadingImages, setLoadingImages] = useState(false);
-  
-  // Primary color from globals.css
-  const primaryColor = '#547264';
   
   // Memoize fetch functions to prevent unnecessary renders
   const fetchImages = useCallback(async () => {
@@ -319,7 +315,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     // Create course data with required values - save everything to the instance
     const courseData: Partial<CourseInstance> = {
       id: course?.id || undefined,
-      title: selectedTemplate.title || selectedTemplate.categorie || '',
+      title: title.trim() || selectedTemplate.title || selectedTemplate.categorie || '',
       start_date: combinedStartDate.toISOString(),
       end_date: combinedEndDate.toISOString(),
       max_participants: parseInt(maxParticipants),
@@ -366,390 +362,171 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     );
   }
 
-  // Custom styles for Material UI components
-  const inputStyles = {
-    '& .MuiOutlinedInput-root': {
-      '&:hover fieldset': {
-        borderColor: primaryColor,
-      },
-      '&.Mui-focused fieldset': {
-        borderColor: primaryColor,
-        borderWidth: 2,
-      },
-    },
-    '& .MuiInputLabel-root.Mui-focused': {
-      color: primaryColor,
-    },
-    mb: 3
-  };
+  const fieldSx = { mb: 0 };
 
   return (
-    <Paper elevation={3} sx={{ overflow: 'hidden', borderRadius: 2 }}>
-      {/* Material UI-style header with primary color */}
-      <Box sx={{ 
-        bgcolor: primaryColor, 
-        color: 'white', 
-        px: 3, 
-        py: 2 
-      }}>
-        <Typography variant="h6" component="h2">
-          {course ? 'Redigera kurs' : 'Skapa kurs'}
-        </Typography>
-      </Box>
-      
-      {/* Form */}
-      <Box component="form" onSubmit={handleSubmit} sx={{ p: 3 }}>
-        {/* Template Selection */}
-        <TextField
-          fullWidth
-          required
-          select
-          id="template"
-          name="template"
-          label="Kursmall"
-          value={templateId}
-          onChange={(e) => {
-            const newTemplateId = e.target.value;
-            setTemplateId(newTemplateId);
-            // Find the selected template and update description
-            const selectedTemplate = templates.find(temp => temp.id === newTemplateId);
-            // Only set rich description if we're not editing an existing course
-            if (selectedTemplate?.rich_description && !course) {
-              setRichDescription(selectedTemplate.rich_description);
-              // Set default title from template
-              setTitle(selectedTemplate.title || selectedTemplate.categorie || '');
-              // Set default price and other details if available
-              if (selectedTemplate.price) setPrice(selectedTemplate.price.toString());
-              if (selectedTemplate.max_participants) setMaxParticipants(selectedTemplate.max_participants.toString());
-              // Set image from template if available
-              if (selectedTemplate.image_url) {
-                setImagePreview(selectedTemplate.image_url);
-              }
-            }
-          }}
-          variant="outlined"
-          size="small"
-          sx={inputStyles}
-        >
-          <MenuItem value="">Välj kursmall</MenuItem>
-          {/* Log template rendering outside JSX to avoid 'void' errors */}
-          {(() => { console.log('CourseForm: Rendering template dropdown with templates:', templates); return null; })()}
-          {templates.map((template) => (
-            <MenuItem key={template.id} value={template.id}>
-              {template.title || template.categorie}
-            </MenuItem>
-          ))}
-        </TextField>
-        
-        {/* Course Image Selection */}
-        <Box sx={{ mb: 3, mt: 2 }}>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>Kursbild</Typography>
-          
-          {/* Gallery Image Selection */}
-          <FormControl fullWidth sx={{ mb: 2 }}>
-            {/* <InputLabel id="gallery-image-label">Välj bild från galleri</InputLabel> */}
-            <Select
-              labelId="gallery-image-label"
-              id="gallery-image"
-              value={selectedGalleryImage}
-              onChange={handleGalleryImageChange}
-              label="Välj bild från galleri"
-              displayEmpty
+    <Box component="form" onSubmit={handleSubmit} sx={{ pb: 11 }}>
+      <Typography variant="h5" sx={{ mb: 2 }}>
+        {course ? course.title || 'Redigera kurs' : 'Ny kurs'}
+      </Typography>
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={7}>
+          <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 700 }}>Grundinfo</Typography>
+            <TextField
+              fullWidth
+              required
+              id="title"
+              name="title"
+              label="Titel"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              variant="outlined"
               size="small"
-              sx={inputStyles}
-              MenuProps={{
-                PaperProps: {
-                  style: {
-                    maxHeight: 400,
-                    overflow: 'auto'
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth
+              required
+              select
+              id="template"
+              name="template"
+              label="Kursmall"
+              value={templateId}
+              onChange={(e) => {
+                const newTemplateId = e.target.value;
+                setTemplateId(newTemplateId);
+                const selectedTemplate = templates.find(temp => temp.id === newTemplateId);
+                if (selectedTemplate?.rich_description && !course) {
+                  setRichDescription(selectedTemplate.rich_description);
+                  setTitle(selectedTemplate.title || selectedTemplate.categorie || '');
+                  if (selectedTemplate.price) setPrice(selectedTemplate.price.toString());
+                  if (selectedTemplate.max_participants) setMaxParticipants(selectedTemplate.max_participants.toString());
+                  if (selectedTemplate.image_url) {
+                    setImagePreview(selectedTemplate.image_url);
+                    setSelectedGalleryImage(selectedTemplate.image_url);
                   }
-                },
-                anchorOrigin: {
-                  vertical: 'bottom',
-                  horizontal: 'left'
-                },
-                transformOrigin: {
-                  vertical: 'top',
-                  horizontal: 'left'
                 }
               }}
-              disabled={loadingImages}
+              variant="outlined"
+              size="small"
+              sx={fieldSx}
             >
-              <MenuItem value="">Ingen galleribild</MenuItem>
-              
-              {loadingImages && (
-                <MenuItem disabled>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
-                    Laddar bilder...
-                  </Box>
-                </MenuItem>
-              )}
-              
-              {!loadingImages && galleryImages.length === 0 && (
-                <MenuItem disabled>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
-                    Inga bilder hittades
-                  </Box>
-                </MenuItem>
-              )}
-              
-              {galleryImages.map((image) => (
-                <MenuItem key={image} value={image} sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  gap: '10px',
-                  paddingY: '8px'
-                }}>
-                  <Box 
-                    component="img" 
-                    src={image} 
-                    alt="Gallery thumbnail" 
-                    sx={{ 
-                      width: '60px', 
-                      height: '45px', 
-                      objectFit: 'cover',
-                      borderRadius: '4px' 
-                    }} 
-                  />
-                  <Box sx={{ fontSize: '0.8rem', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {image.split('/').pop()}
-                  </Box>
+              <MenuItem value="">Välj kursmall</MenuItem>
+              {templates.map((template) => (
+                <MenuItem key={template.id} value={template.id}>
+                  {template.title || template.categorie}
                 </MenuItem>
               ))}
-            </Select>
-          </FormControl>
-          
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Eller ladda upp en ny bild:
-          </Typography>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Button
-              component="label"
-              variant="outlined"
-              startIcon={<CloudUploadIcon />}
-              sx={{ 
-                borderColor: primaryColor,
-                color: primaryColor,
-                '&:hover': { borderColor: primaryColor, backgroundColor: 'rgba(84, 114, 100, 0.04)' }
-              }}
-            >
-              Välj bild
-              <input 
-                type="file" 
-                accept="image/*" 
-                hidden 
-                onChange={handleImageChange} 
-                disabled={uploading}
-              />
-            </Button>
-            
-            {imagePreview && (
-              <IconButton 
-                onClick={clearImage} 
-                color="error" 
-                sx={{ ml: 1 }}
-                disabled={uploading}
+            </TextField>
+          </Paper>
+
+          <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 700 }}>Beskrivning</Typography>
+            <RichTextEditor
+              value={richDescription}
+              onChange={setRichDescription}
+              placeholder="Skriv kursbeskrivning här..."
+            />
+          </Paper>
+        </Grid>
+
+        <Grid item xs={12} md={5}>
+          <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 700 }}>Tid</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField fullWidth required id="start-date" label="Startdatum" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} size="small" />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField fullWidth required id="start-time" label="Starttid" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} InputLabelProps={{ shrink: true }} size="small" />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField fullWidth required id="end-date" label="Slutdatum" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} InputLabelProps={{ shrink: true }} size="small" />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField fullWidth required id="end-time" label="Sluttid" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} InputLabelProps={{ shrink: true }} size="small" />
+              </Grid>
+            </Grid>
+          </Paper>
+
+          <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 700 }}>Pris och platser</Typography>
+            <TextField fullWidth required id="price" label="Pris (SEK)" type="number" value={price} onChange={(e) => setPrice(e.target.value)} size="small" sx={{ mb: 2 }} />
+            <TextField fullWidth required id="max-participants" label="Max antal deltagare" type="number" value={maxParticipants} onChange={(e) => setMaxParticipants(e.target.value)} size="small" sx={{ mb: 1 }} />
+            <FormControlLabel
+              control={<Switch checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} color="primary" />}
+              label="Publicera kurs"
+            />
+          </Paper>
+
+          <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 700 }}>Bild</Typography>
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <Select
+                id="gallery-image"
+                value={selectedGalleryImage}
+                onChange={handleGalleryImageChange}
+                displayEmpty
+                size="small"
+                disabled={loadingImages}
               >
-                <ClearIcon />
-              </IconButton>
-            )}
-          </Box>
-          
-          {/* Image Preview */}
-          {imagePreview && (
-            <Box sx={{ mt: 2, mb: 2, position: 'relative' }}>
-              <Box 
-                component="img" 
-                src={imagePreview} 
-                alt="Course preview" 
-                sx={{ 
-                  maxWidth: '100%', 
-                  maxHeight: '200px', 
-                  borderRadius: 1,
-                  border: '1px solid #e0e0e0' 
-                }} 
-              />
-              
-              {uploading && (
-                <Box 
-                  sx={{ 
-                    position: 'absolute', 
-                    bottom: 0, 
-                    left: 0, 
-                    width: `${uploadProgress}%`, 
-                    height: '4px', 
-                    bgcolor: primaryColor,
-                    transition: 'width 0.3s ease'
-                  }} 
-                />
+                <MenuItem value="">Välj bild från galleriet</MenuItem>
+                {loadingImages && <MenuItem disabled>Laddar bilder...</MenuItem>}
+                {!loadingImages && galleryImages.length === 0 && <MenuItem disabled>Inga bilder hittades</MenuItem>}
+                {galleryImages.map((image) => (
+                  <MenuItem key={image} value={image}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box component="img" src={image} alt="" sx={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 0.5 }} />
+                      <Box sx={{ fontSize: '0.8rem', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {image.split('/').pop()}
+                      </Box>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Button component="label" variant="outlined" startIcon={<CloudUploadIcon />} size="small">
+                Byt bild
+                <input type="file" accept="image/*" hidden onChange={handleImageChange} disabled={uploading} />
+              </Button>
+              {imagePreview && (
+                <IconButton onClick={clearImage} color="error" disabled={uploading} aria-label="Ta bort bild">
+                  <ClearIcon />
+                </IconButton>
               )}
             </Box>
-          )}
-          
-          <Typography variant="caption" color="text.secondary">
-            Bilden kommer att visas ovanför kursinformationen. Max storlek: 5MB.
-          </Typography>
-        </Box>
-        
-        {/* Rich Description */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>Beskrivning</Typography>
-          <RichTextEditor
-            value={richDescription}
-            onChange={setRichDescription}
-            placeholder="Skriv kursbeskrivning här..."
-          />
-        </Box>
-        
-        {/* Time and Date */}
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              required
-              id="start-date"
-              name="start-date"
-              label="Startdatum"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              variant="outlined"
-              size="small"
-              sx={inputStyles}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              required
-              id="start-time"
-              name="start-time"
-              label="Starttid"
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              variant="outlined"
-              size="small"
-              sx={inputStyles}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              required
-              id="end-date"
-              name="end-date"
-              label="Slutdatum"
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              variant="outlined"
-              size="small"
-              sx={inputStyles}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              required
-              id="end-time"
-              name="end-time"
-              label="Sluttid"
-              type="time"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              variant="outlined"
-              size="small"
-              sx={inputStyles}
-            />
-          </Grid>
+            {imagePreview && (
+              <Box component="img" src={imagePreview} alt="Förhandsvisning" sx={{ width: 140, height: 105, objectFit: 'cover', borderRadius: 1, border: '1px solid #e6ece8' }} />
+            )}
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              Visas ovanför kursen. Max 5 MB.
+            </Typography>
+          </Paper>
         </Grid>
-        
-        {/* Price and Max participants */}
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              required
-              id="price"
-              name="price"
-              label="Pris (SEK)"
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              variant="outlined"
-              size="small"
-              sx={inputStyles}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              required
-              id="max-participants"
-              name="max-participants"
-              label="Max antal deltagare"
-              type="number"
-              value={maxParticipants}
-              onChange={(e) => setMaxParticipants(e.target.value)}
-              variant="outlined"
-              size="small"
-              sx={inputStyles}
-            />
-          </Grid>
-        </Grid>
-        
-        {/* Published status */}
-        <FormControlLabel
-          control={
-            <Switch
-              checked={isPublished}
-              onChange={(e) => setIsPublished(e.target.checked)}
-              color="primary"
-              sx={{ 
-                '& .MuiSwitch-switchBase.Mui-checked': {
-                  color: primaryColor
-                },
-                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                  backgroundColor: primaryColor
-                }
-              }}
-            />
-          }
-          label="Publicera kurs"
-          sx={{ mb: 3 }}
-        />
-        
-        {/* Buttons */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-          <Button 
-            onClick={onCancel} 
-            sx={{ 
-              mr: 2,
-              color: 'text.secondary',
-              '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' }
-            }}
-          >
-            Avbryt
-          </Button>
-          <Button 
-            type="submit" 
-            variant="contained" 
-            sx={{ 
-              bgcolor: primaryColor,
-              '&:hover': { bgcolor: '#3e5349' }
-            }}
-            disabled={uploading}
-          >
-            {uploading ? 'Laddar upp...' : (course ? 'Spara ändringar' : 'Skapa kurs')}
-          </Button>
-        </Box>
+      </Grid>
+
+      <Box
+        sx={{
+          position: 'sticky',
+          bottom: 0,
+          mt: 3,
+          py: 1.5,
+          px: 2,
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 1,
+          bgcolor: 'rgba(247, 246, 243, 0.94)',
+          borderTop: '1px solid #e6ece8',
+          zIndex: 2,
+        }}
+      >
+        <Button onClick={onCancel} color="inherit">Avbryt</Button>
+        <Button type="submit" variant="contained" disabled={uploading}>
+          {uploading ? 'Laddar upp...' : (course ? 'Spara ändringar' : 'Skapa kurs')}
+        </Button>
       </Box>
-    </Paper>
+    </Box>
   );
-} 
+}

@@ -50,20 +50,9 @@ export async function GET(request: NextRequest) {
 
     // Process the data to ensure all cards have a code and map database status to frontend status
     const processedData = (data || []).map(card => {
-      // Handle missing code
-      let processedCard = card;
-      if (!card.code) {
-        console.warn(`API: Card ${card.id} missing code field, generating fallback`);
-        processedCard = {
-          ...card,
-          code: `GC-${card.id.substring(0, 8)}`
-        };
-      }
-      
-      // Map database status back to frontend status
       return {
-        ...processedCard,
-        status: processedCard.status === 'used' ? 'redeemed' : processedCard.status
+        ...card,
+        status: card.status === 'used' ? 'redeemed' : card.status
       };
     });
 

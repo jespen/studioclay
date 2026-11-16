@@ -27,8 +27,6 @@ export default function BookingHistoryList({ courseId }: BookingHistoryProps) {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   
   // Primary color from globals.css
-  const primaryColor = '#547264';
-
   useEffect(() => {
     fetchHistory();
   }, [courseId]);
@@ -66,7 +64,7 @@ export default function BookingHistoryList({ courseId }: BookingHistoryProps) {
   if (loading) {
     return (
       <Paper elevation={3} sx={{ overflow: 'hidden', borderRadius: 2, mt: 4, p: 3, textAlign: 'center' }}>
-        <CircularProgress size={24} sx={{ color: primaryColor }} />
+        <CircularProgress size={24} sx={{ color: 'primary.main' }} />
         <Typography sx={{ mt: 1 }}>Laddar historik...</Typography>
       </Paper>
     );
@@ -83,7 +81,7 @@ export default function BookingHistoryList({ courseId }: BookingHistoryProps) {
   if (!history.length) {
     return (
       <Paper elevation={3} sx={{ overflow: 'hidden', borderRadius: 2, mt: 4 }}>
-        <Box sx={{ bgcolor: primaryColor, color: 'white', px: 3, py: 2 }}>
+        <Box sx={{ bgcolor: 'primary.main', color: 'white', px: 3, py: 2 }}>
           <Typography variant="h6" component="h2">
             Bokningshistorik
           </Typography>
@@ -97,7 +95,7 @@ export default function BookingHistoryList({ courseId }: BookingHistoryProps) {
 
   return (
     <Paper elevation={3} sx={{ overflow: 'hidden', borderRadius: 2, mt: 4 }}>
-      <Box sx={{ bgcolor: primaryColor, color: 'white', px: 3, py: 2 }}>
+      <Box sx={{ bgcolor: 'primary.main', color: 'white', px: 3, py: 2 }}>
         <Typography variant="h6" component="h2">
           Bokningshistorik ({history.length})
         </Typography>

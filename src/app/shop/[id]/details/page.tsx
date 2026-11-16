@@ -4,16 +4,17 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Typography, 
-  Paper, 
   Box, 
   Alert, 
   CircularProgress, 
-  Divider, 
   Chip
 } from '@mui/material';
+import InventoryIcon from '@mui/icons-material/Inventory';
 import FlowStepWrapper from '@/components/common/FlowStepWrapper';
 import { FlowType, GenericStep } from '@/components/common/BookingStepper';
-import StyledButton from '@/components/common/StyledButton';
+import FlowCard from '@/components/common/FlowCard';
+import FlowActions from '@/components/common/FlowActions';
+import ItemSummary from '@/components/common/ItemSummary';
 import { Product } from '@/components/shop/types';
 import { saveItemDetails } from '@/utils/dataFetcher';
 
@@ -82,17 +83,24 @@ const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({ params }) => {
       );
     }
 
+    const stockDetails = product.stockQuantity !== undefined && product.inStock !== false
+      ? [{ icon: <InventoryIcon />, label: `${product.stockQuantity} i lager` }]
+      : product.inStock === false
+        ? [{ label: 'Slutsåld' }]
+        : [];
+
     return (
-      <Paper elevation={3} sx={{ borderRadius: 2, p: { xs: 2, sm: 4 }, mt: 4 }}>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 4 }}>
-          {/* Product Image */}
+      <FlowCard>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, mb: 1 }}>
           <Box 
             sx={{ 
-              width: { xs: '100%', md: '50%' }, 
-              height: { xs: '300px', md: '400px' },
+              width: { xs: '100%', md: '46%' }, 
+              height: { xs: '260px', md: '320px' },
               position: 'relative',
-              borderRadius: 1,
-              overflow: 'hidden'
+              borderRadius: 2,
+              overflow: 'hidden',
+              flexShrink: 0,
+              bgcolor: '#f4f5f4'
             }}
           >
             <img
@@ -105,107 +113,48 @@ const ProductDetailsPage: React.FC<ProductDetailsPageProps> = ({ params }) => {
               }}
             />
             
-            {/* Tags */}
-            <Box sx={{ position: 'absolute', top: 16, left: 16, display: 'flex', gap: 1 }}>
+            <Box sx={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 1 }}>
               {product.isNew && (
-                <Chip label="Ny" color="primary" size="small" />
+                <Chip label="Ny" size="small" sx={{ bgcolor: 'var(--primary)', color: 'white' }} />
               )}
               {product.discount && (
-                <Chip label={`-${product.discount}%`} color="secondary" size="small" />
+                <Chip label={`-${product.discount}%`} size="small" sx={{ bgcolor: 'var(--primary-dark)', color: 'white' }} />
               )}
             </Box>
           </Box>
           
-          {/* Product Details */}
-          <Box sx={{ width: { xs: '100%', md: '50%' } }}>
-            <Typography variant="h4" component="h1" gutterBottom>
-              {product.title}
-            </Typography>
-            
-            <Box sx={{ display: 'flex', alignItems: 'baseline', mb: 2 }}>
-              {product.originalPrice ? (
-                <>
-                  <Typography 
-                    variant="body1" 
-                    component="span" 
-                    sx={{ 
-                      textDecoration: 'line-through', 
-                      color: 'text.secondary',
-                      mr: 1
-                    }}
-                  >
-                    {product.originalPrice} kr
-                  </Typography>
-                  <Typography 
-                    variant="h5" 
-                    component="span" 
-                    sx={{ color: 'var(--primary)', fontWeight: 'bold' }}
-                  >
-                    {product.price} kr
-                  </Typography>
-                </>
-              ) : (
-                <Typography 
-                  variant="h5" 
-                  component="span" 
-                  sx={{ color: 'var(--primary)', fontWeight: 'bold' }}
-                >
-                  {product.price} kr
-                </Typography>
-              )}
-            </Box>
-            
-            <Divider sx={{ my: 2 }} />
-            
-            <Typography variant="body1" paragraph>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <ItemSummary
+              title={product.title}
+              details={stockDetails}
+              price={product.price}
+              originalPrice={product.originalPrice}
+              priceNote="Inklusive moms"
+            />
+
+            <Typography variant="body1" sx={{ mb: 2 }}>
               {product.description}
             </Typography>
             
             {product.inStock === false ? (
-              <Alert severity="error" sx={{ mb: 3 }}>
+              <Alert severity="error">
                 Tyvärr är denna produkt slutsåld.
               </Alert>
             ) : (
-              <Alert severity="info" sx={{ mb: 3 }}>
+              <Alert severity="info">
                 Produkter från butiken hämtas för närvarande på Studio Clay, Norrtullsgatan 65. Leverans är inte tillgängligt.
               </Alert>
             )}
-            
-            {product.stockQuantity !== undefined && product.inStock !== false && (
-              <Typography variant="body2" sx={{ color: 'green', mb: 2 }}>
-                {product.stockQuantity} i lager
-              </Typography>
-            )}
           </Box>
         </Box>
-        
-        <Divider sx={{ my: 3 }} />
-        
-        {/* Buttons */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-          <StyledButton 
-            secondary
-            onClick={handleBack}
-          >
-            Tillbaka
-          </StyledButton>
-          
-          {product.inStock !== false ? (
-            <StyledButton 
-              onClick={handleContinue}
-            >
-              Fortsätt till dina uppgifter
-            </StyledButton>
-          ) : (
-            <StyledButton 
-              disabled
-              sx={{ opacity: 0.5, cursor: 'not-allowed' }}
-            >
-              Slutsåld
-            </StyledButton>
-          )}
-        </Box>
-      </Paper>
+
+        <FlowActions
+          onBack={handleBack}
+          onNext={handleContinue}
+          nextDisabled={product.inStock === false}
+          nextLabel={product.inStock === false ? 'Slutsåld' : 'Fortsätt till dina uppgifter'}
+        />
+      </FlowCard>
     );
   };
 

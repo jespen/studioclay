@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CourseTemplate, Category } from '../../../types/course';
 import StandardTable from '../common/StandardTable';
-import ActionButton from '../common/ActionButton';
+import RowActions from '../common/RowActions';
+import ConfirmDialog from '../common/ConfirmDialog';
+import { htmlToText } from '@/utils/htmlToText';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 
 interface TemplateTableProps {
@@ -30,18 +32,16 @@ export const TemplateTable: React.FC<TemplateTableProps> = ({
     return date.toLocaleDateString('sv-SE', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
-  // Format rich description preview
+  const [templateToDelete, setTemplateToDelete] = useState<CourseTemplate | null>(null);
+
   const formatRichDescription = (richDescription: string | undefined) => {
-    if (!richDescription) return 'Ingen beskrivning';
-    
-    // Remove HTML tags and get plain text
-    const plainText = richDescription.replace(/<[^>]*>/g, '');
-    
-    // Truncate to 50 characters if longer
-    return plainText.length > 50 ? plainText.substring(0, 50) + '...' : plainText;
+    const plainText = htmlToText(richDescription);
+    if (!plainText) return 'Ingen beskrivning';
+    return plainText.length > 80 ? plainText.substring(0, 80) + '...' : plainText;
   };
 
   return (
+    <>
     <StandardTable 
       headers={['Namn', 'Kategori', 'Skapat', 'Publicerad', 'Beskrivning', 'Antal kurser', 'Åtgärder']}
       emptyMessage="Inga kursmallar hittades. Klicka på 'Lägg till ny mall' för att skapa en."
@@ -69,7 +69,7 @@ export const TemplateTable: React.FC<TemplateTableProps> = ({
           <td className={styles.tableCell}>
             <div 
               className={styles.descriptionPreview} 
-              title={template.rich_description ? template.rich_description.replace(/<[^>]*>/g, '') : 'Ingen beskrivning'}
+              title={htmlToText(template.rich_description) || 'Ingen beskrivning'}
             >
               {formatRichDescription(template.rich_description)}
             </div>
@@ -80,24 +80,29 @@ export const TemplateTable: React.FC<TemplateTableProps> = ({
             </span>
           </td>
           <td className={styles.tableCell}>
-            <div className={styles.actionButtonsContainer}>
-              <ActionButton
-                variant="edit"
-                onClick={() => onEditTemplate(template)}
-              />
-              <ActionButton
-                variant="delete"
-                onClick={() => {
-                  if (confirm('Är du säker på att du vill ta bort denna mall? Detta påverkar INTE existerande kurser.')) {
-                    onDeleteTemplate(template.id);
-                  }
-                }}
-              />
-            </div>
+            <RowActions
+              onEdit={() => onEditTemplate(template)}
+              items={[{
+                label: 'Ta bort',
+                danger: true,
+                onClick: () => setTemplateToDelete(template),
+              }]}
+            />
           </td>
         </tr>
       ))}
     </StandardTable>
+      <ConfirmDialog
+        open={Boolean(templateToDelete)}
+        title="Ta bort kursmall"
+        message={`Vill du ta bort mallen "${templateToDelete?.title || 'utan namn'}"? Befintliga kurser påverkas inte.`}
+        onConfirm={() => {
+          if (templateToDelete) onDeleteTemplate(templateToDelete.id);
+          setTemplateToDelete(null);
+        }}
+        onCancel={() => setTemplateToDelete(null)}
+      />
+    </>
   );
 };
 

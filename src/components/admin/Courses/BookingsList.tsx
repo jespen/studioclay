@@ -37,6 +37,7 @@ import { styled } from '@mui/system';
 import type { Booking, PaymentStatus, ExtendedBooking } from '@/types/booking';
 import PaymentStatusBadge from '../Payments/PaymentStatusBadge';
 import PaymentStatusUpdater from '../Payments/PaymentStatusUpdater';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 // Styled components
 const StyledTableContainer = styled(TableContainer)({
@@ -69,9 +70,10 @@ export default function BookingsList({
   error, 
   onBookingUpdate,
   title = "Bokningar",
-  participantInfo 
-}: BookingsListProps) {
-  const primaryColor = '#547264';
+  participantInfo,
+  embedded = false,
+  onConvertReservation,
+}: BookingsListProps & { embedded?: boolean; onConvertReservation?: (booking: ExtendedBooking) => void }) {
   
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -272,7 +274,7 @@ export default function BookingsList({
   if (loading) {
     return (
       <Paper elevation={3} sx={{ overflow: 'hidden', borderRadius: 2, mt: 4, p: 3, textAlign: 'center' }}>
-        <CircularProgress size={24} sx={{ color: primaryColor }} />
+        <CircularProgress size={24} color="primary" />
         <Typography sx={{ mt: 1 }}>Laddar bokningar...</Typography>
       </Paper>
     );
@@ -288,23 +290,16 @@ export default function BookingsList({
 
   if (!bookings.length) {
     return (
-      <Paper elevation={3} sx={{ overflow: 'hidden', borderRadius: 2, mt: 4 }}>
-        <Box sx={{ bgcolor: primaryColor, color: 'white', px: 3, py: 2 }}>
-          <Typography variant="h6" component="h2">
-            {title}
-          </Typography>
-        </Box>
-        <Box sx={{ p: 3 }}>
-          <Typography>Inga bokningar hittades.</Typography>
-        </Box>
-      </Paper>
+      <Box sx={{ p: embedded ? 1 : 3 }}>
+        <Typography color="text.secondary">Inga bokningar hittades.</Typography>
+      </Box>
     );
   }
 
   return (
-    <Paper elevation={3} sx={{ overflow: 'hidden', borderRadius: 2, mt: 4 }}>
-      <Box sx={{ 
-        bgcolor: primaryColor, 
+    <Paper elevation={embedded ? 0 : 3} sx={{ overflow: 'hidden', borderRadius: embedded ? 0 : 2, mt: embedded ? 0 : 4 }}>
+      {!embedded && <Box sx={{ 
+        bgcolor: 'primary.main', 
         color: 'white', 
         px: 3, 
         py: 2,
@@ -320,7 +315,7 @@ export default function BookingsList({
             {participantInfo}
           </Typography>
         )}
-      </Box>
+      </Box>}
 
       <StyledTableContainer>
         <Table stickyHeader aria-label="bookings table">
@@ -345,7 +340,16 @@ export default function BookingsList({
                 key={booking.id}
                 sx={booking.status === 'cancelled' ? { opacity: 0.6 } : {}}
               >
-                <TableCell>{booking.customer_name}</TableCell>
+                <TableCell>
+                  {booking.payment_method === 'reservation' ? (
+                    <Box>
+                      <Chip size="small" label="Reservation" color="primary" variant="outlined" />
+                      {booking.message ? (
+                        <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>{booking.message}</Typography>
+                      ) : null}
+                    </Box>
+                  ) : booking.customer_name}
+                </TableCell>
                 <TableCell>{booking.customer_email}</TableCell>
                 <TableCell>{booking.customer_phone || '–'}</TableCell>
                 <TableCell>{booking.number_of_participants}</TableCell>
@@ -374,7 +378,8 @@ export default function BookingsList({
                         </Tooltip>
                       )}
                     </Box>
-                  ) : booking.payment_method === 'swish' ? 'Swish' : 
+                  ) : booking.payment_method === 'reservation' ? 'Reservation' :
+                   booking.payment_method === 'swish' ? 'Swish' : 
                    booking.payment_method || '–'}
                 </TableCell>
                 <TableCell>
@@ -385,10 +390,15 @@ export default function BookingsList({
                 <TableCell>{new Date(booking.created_at).toLocaleDateString('sv-SE')}</TableCell>
                 <TableCell>{booking.message ? booking.message.slice(0, 30) + (booking.message.length > 30 ? '...' : '') : '–'}</TableCell>
                 <TableCell>
+                  {booking.payment_method === 'reservation' && onConvertReservation && booking.status !== 'cancelled' && (
+                    <Button size="small" onClick={() => onConvertReservation(booking)} sx={{ mr: 1 }}>
+                      Gör om till bokning
+                    </Button>
+                  )}
                   <IconButton
                     size="small"
                     onClick={() => handleEditClick(booking)}
-                    disabled={booking.status === 'cancelled'}
+                    disabled={booking.status === 'cancelled' || booking.payment_method === 'reservation'}
                     sx={{ color: 'action.active' }}
                   >
                     <EditIcon fontSize="small" />
@@ -518,31 +528,24 @@ export default function BookingsList({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditDialogOpen(false)}>Avbryt</Button>
-          <Button onClick={handleEditSave} variant="contained" style={{ backgroundColor: primaryColor }}>
+          <Button onClick={handleEditSave} variant="contained" color="primary">
             Spara ändringar
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Cancel Confirmation Dialog */}
-      <Dialog
+      <ConfirmDialog
         open={cancelDialogOpen}
-        onClose={() => setCancelDialogOpen(false)}
-      >
-        <DialogTitle>Bekräfta avbokning</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Är du säker på att du vill avboka bokningen för {bookingToCancel?.customer_name}?
-            Bokningen kommer att markeras som avbokad.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCancelDialogOpen(false)}>Avbryt</Button>
-          <Button onClick={handleCancelConfirm} color="error" autoFocus>
-            Avboka
-          </Button>
-        </DialogActions>
-      </Dialog>
+        title={bookingToCancel?.payment_method === 'reservation' ? 'Ta bort reservation' : 'Avboka'}
+        message={
+          bookingToCancel?.payment_method === 'reservation'
+            ? 'Vill du ta bort reservationen? Platserna blir lediga igen.'
+            : `Vill du avboka bokningen för ${bookingToCancel?.customer_name || 'deltagaren'}?`
+        }
+        confirmLabel={bookingToCancel?.payment_method === 'reservation' ? 'Ta bort' : 'Avboka'}
+        onConfirm={handleCancelConfirm}
+        onCancel={() => setCancelDialogOpen(false)}
+      />
 
       {/* Invoice PDF Dialog */}
       <Dialog

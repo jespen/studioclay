@@ -2,53 +2,16 @@ import React, { useState, useMemo } from 'react';
 import { Course } from '../../../types/course';
 import styles from '../../../app/admin/dashboard/courses/courses.module.css';
 import StandardTable from '../common/StandardTable';
-import ActionButton from '../common/ActionButton';
+import RowActions from '../common/RowActions';
+import ConfirmDialog from '../common/ConfirmDialog';
+import { htmlToText } from '@/utils/htmlToText';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-
-// Add DeleteConfirmationDialog component
-interface DeleteConfirmationDialogProps {
-  isOpen: boolean;
-  courseTitle: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-
-const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
-  isOpen,
-  courseTitle,
-  onConfirm,
-  onCancel
-}) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className={styles.dialogOverlay}>
-      <div className={styles.dialogContent}>
-        <h3>Bekräfta borttagning</h3>
-        <p>Är du verkligen säker på att du vill ta bort kursen "{courseTitle}"?</p>
-        <div className={styles.dialogButtons}>
-          <button 
-            className={`${styles.dialogButton} ${styles.confirmButton}`}
-            onClick={onConfirm}
-          >
-            JA
-          </button>
-          <button 
-            className={`${styles.dialogButton} ${styles.cancelButton}`}
-            onClick={onCancel}
-          >
-            NEJ
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 interface CourseTableProps {
   courses: Course[];
   variant?: 'default' | 'draft' | 'past';
+  defaultSortDirection?: 'asc' | 'desc';
   onEdit?: (course: Course) => void;
   onPublish?: (course: Course) => void;
   onDelete?: (courseId: string) => void;
@@ -57,48 +20,71 @@ interface CourseTableProps {
 type SortField = 'title' | 'date' | 'status' | 'price' | 'participants';
 type SortDirection = 'asc' | 'desc';
 
+function stockholmParts(date: Date) {
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Stockholm',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return {
+    weekday: get('weekday').replace('.', ''),
+    day: get('day'),
+    month: get('month').replace('.', ''),
+    time: `${get('hour')}:${get('minute')}`,
+    dayKey: new Intl.DateTimeFormat('sv-SE', {
+      timeZone: 'Europe/Stockholm',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date),
+  };
+}
+
+function formatCourseWhen(startValue: string | null, endValue: string | null) {
+  if (!startValue) return 'Datum saknas';
+  const start = new Date(startValue);
+  if (Number.isNaN(start.getTime())) return 'Datum saknas';
+  const startParts = stockholmParts(start);
+  if (!endValue) return `${startParts.weekday} ${startParts.day} ${startParts.month} ${startParts.time}`;
+
+  const end = new Date(endValue);
+  if (Number.isNaN(end.getTime())) {
+    return `${startParts.weekday} ${startParts.day} ${startParts.month} ${startParts.time}`;
+  }
+  const endParts = stockholmParts(end);
+  if (startParts.dayKey === endParts.dayKey) {
+    return `${startParts.weekday} ${startParts.day} ${startParts.month} ${startParts.time}–${endParts.time}`;
+  }
+  return `${startParts.day} ${startParts.month} – ${endParts.day} ${endParts.month}`;
+}
+
 export const CourseTable: React.FC<CourseTableProps> = ({
   courses,
   variant = 'default',
+  defaultSortDirection = 'asc',
   onEdit,
   onPublish,
   onDelete
 }) => {
   const [sortField, setSortField] = useState<SortField>('date');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  // Add state for delete confirmation dialog
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(defaultSortDirection);
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
 
-  const rowClassName = variant === 'past'
-    ? `${styles.tableRow} ${styles.pastRow}`
-    : styles.tableRow;
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return `${date.toLocaleDateString('sv-SE')} ${date.toLocaleTimeString('sv-SE', {
-      hour: '2-digit',
-      minute: '2-digit'
-    })}`;
-  };
+  const rowClassName = styles.tableRow;
 
   const formatPrice = (price: number | null | undefined) => {
-    if (price === null || price === undefined) return '-';
+    if (price === null || price === undefined) return '–';
     return `${price.toLocaleString('sv-SE')} kr`;
-  };
-
-  const formatParticipants = (current: number, max: number | null) => {
-    if (max === null) return `-`;
-    return `${current}/${max}`;
   };
 
   const handleSort = (field: SortField) => {
     if (field === sortField) {
-      // Toggle direction if same field
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      // Set new field and default to ascending
       setSortField(field);
       setSortDirection('asc');
     }
@@ -107,47 +93,41 @@ export const CourseTable: React.FC<CourseTableProps> = ({
   const sortedCourses = useMemo(() => {
     return [...courses].sort((a, b) => {
       const multiplier = sortDirection === 'asc' ? 1 : -1;
-      
+
       switch (sortField) {
         case 'title':
-          return multiplier * (a.title || '').localeCompare(b.title || '');
-        
-        case 'date':
-          const dateA = a.start_date ? new Date(a.start_date).getTime() : 0;
-          const dateB = b.start_date ? new Date(b.start_date).getTime() : 0;
+          return multiplier * (a.title || '').localeCompare(b.title || '', 'sv');
+        case 'date': {
+          const dateA = (variant === 'past' ? a.end_date : a.start_date)
+            ? new Date((variant === 'past' ? a.end_date : a.start_date) as string).getTime()
+            : 0;
+          const dateB = (variant === 'past' ? b.end_date : b.start_date)
+            ? new Date((variant === 'past' ? b.end_date : b.start_date) as string).getTime()
+            : 0;
           return multiplier * (dateA - dateB);
-        
+        }
         case 'status':
           return multiplier * (Number(a.is_published) - Number(b.is_published));
-        
         case 'price':
-          const priceA = a.price || 0;
-          const priceB = b.price || 0;
-          return multiplier * (priceA - priceB);
-        
+          return multiplier * ((a.price || 0) - (b.price || 0));
         case 'participants':
-          const participantsA = a.current_participants || 0;
-          const participantsB = b.current_participants || 0;
-          return multiplier * (participantsA - participantsB);
-        
+          return multiplier * ((a.current_participants || 0) - (b.current_participants || 0));
         default:
           return 0;
       }
     });
-  }, [courses, sortField, sortDirection]);
+  }, [courses, sortField, sortDirection, variant]);
 
-  // Custom table headers with sort indicators
   const renderSortableHeader = (label: string, field: SortField) => {
     return (
-      <div 
-        className={styles.sortableHeader} 
+      <div
+        className={styles.sortableHeader}
         onClick={() => handleSort(field)}
-        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
       >
         {label}
         {sortField === field && (
-          <span style={{ marginLeft: '4px' }}>
-            {sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />}
+          <span style={{ marginLeft: '4px', display: 'inline-flex' }}>
+            {sortDirection === 'asc' ? <ArrowUpwardIcon sx={{ fontSize: 16 }} /> : <ArrowDownwardIcon sx={{ fontSize: 16 }} />}
           </span>
         )}
       </div>
@@ -165,90 +145,86 @@ export const CourseTable: React.FC<CourseTableProps> = ({
 
   return (
     <>
-      <StandardTable 
+      <StandardTable
         headers={tableHeaders}
-        emptyMessage="Inga kurser att visa"
+        columnLabels={['Titel', 'Datum', 'Status', 'Pris', 'Deltagare', 'Åtgärder']}
+        emptyMessage="Inga kurser här ännu."
         variant={variant}
       >
-        {sortedCourses.map((course) => (
-          <tr key={course.id} className={rowClassName}>
-            <td className={styles.tableCell}>
-              <div>
-                <h3 className={styles.courseTitle}>{course.title}</h3>
-                <p 
-                  className={styles.courseDescription} 
-                  title={course.template?.rich_description || 'Ingen beskrivning tillgänglig'}
-                >
-                  {course.template?.rich_description 
-                    ? `${course.template.rich_description.substring(0, 70)}${course.template.rich_description.length > 70 ? '...' : ''}` 
-                    : 'Ingen beskrivning tillgänglig'}
-                </p>
-              </div>
-            </td>
-            <td className={styles.tableCell}>
-              <div>
-                <div>Start: {formatDate(course.start_date)}</div>
-                <div>Slut: {formatDate(course.end_date)}</div>
-              </div>
-            </td>
-            <td className={styles.tableCell}>
-              <span className={`${styles.statusBadge} ${course.is_published ? styles.publishedBadge : styles.draftBadge}`}>
-                {course.is_published ? 'Publicerad' : 'Avpublicerad'}
-              </span>
-            </td>
-            <td className={styles.tableCell}>
-              {formatPrice(course.price)}
-            </td>
-            <td className={styles.tableCell}>
-              {formatParticipants(course.current_participants, course.max_participants)}
-            </td>
-            <td className={styles.tableCell}>
-              <div className={styles.actionButtonsContainer}>
-                {onEdit && (
-                  <ActionButton
-                    variant="edit"
-                    onClick={() => onEdit(course)}
-                  />
-                )}
-                {onPublish && variant !== 'past' && (
-                  <ActionButton
-                    variant={course.is_published ? "unpublish" : "publish"}
-                    onClick={() => onPublish(course)}
-                  />
-                )}
-                {onDelete && (
-                  <ActionButton
-                    variant="delete"
-                    onClick={() => {
-                      setCourseToDelete(course);
-                      setDeleteDialogOpen(true);
-                    }}
-                  />
-                )}
-              </div>
-            </td>
-          </tr>
-        ))}
+        {sortedCourses.map((course) => {
+          const description = htmlToText(course.template?.rich_description || course.rich_description);
+          const current = course.current_participants || 0;
+          const max = course.max_participants;
+          const ratio = max ? Math.min(100, Math.round((current / max) * 100)) : 0;
+
+          return (
+            <tr key={course.id} className={rowClassName}>
+              <td className={styles.tableCell}>
+                <div>
+                  <h3 className={styles.courseTitle}>{course.title}</h3>
+                  <p className={styles.courseDescription} title={description || 'Ingen beskrivning'}>
+                    {description || 'Ingen beskrivning'}
+                  </p>
+                </div>
+              </td>
+              <td className={styles.tableCell}>
+                {formatCourseWhen(course.start_date, course.end_date)}
+              </td>
+              <td className={styles.tableCell}>
+                <span className={`${styles.statusBadge} ${course.is_published ? styles.publishedBadge : styles.draftBadge}`}>
+                  {course.is_published ? 'Publicerad' : 'Utkast'}
+                </span>
+              </td>
+              <td className={styles.tableCell}>
+                {formatPrice(course.price)}
+              </td>
+              <td className={styles.tableCell}>
+                <div className={styles.capacity}>
+                  <span>{max === null || max === undefined ? '–' : `${current}/${max}`}</span>
+                  {max ? (
+                    <div className={styles.capacityTrack} aria-hidden="true">
+                      <div className={styles.capacityFill} style={{ width: `${ratio}%` }} />
+                    </div>
+                  ) : null}
+                </div>
+              </td>
+              <td className={styles.tableCell}>
+                <RowActions
+                  onEdit={onEdit ? () => onEdit(course) : undefined}
+                  items={[
+                    ...(onPublish && variant !== 'past'
+                      ? [{
+                          label: course.is_published ? 'Avpublicera' : 'Publicera',
+                          onClick: () => onPublish(course),
+                        }]
+                      : []),
+                    ...(onDelete
+                      ? [{
+                          label: 'Ta bort',
+                          danger: true,
+                          onClick: () => setCourseToDelete(course),
+                        }]
+                      : []),
+                  ]}
+                />
+              </td>
+            </tr>
+          );
+        })}
       </StandardTable>
-      
-      {/* Add Delete Confirmation Dialog */}
-      <DeleteConfirmationDialog
-        isOpen={deleteDialogOpen}
-        courseTitle={courseToDelete?.title || ''}
+
+      <ConfirmDialog
+        open={Boolean(courseToDelete)}
+        title="Ta bort kurs"
+        message={`Vill du ta bort kursen "${courseToDelete?.title || ''}"? Det går inte att ångra.`}
         onConfirm={() => {
-          if (courseToDelete && onDelete) {
-            onDelete(courseToDelete.id);
-          }
-          setDeleteDialogOpen(false);
+          if (courseToDelete && onDelete) onDelete(courseToDelete.id);
           setCourseToDelete(null);
         }}
-        onCancel={() => {
-          setDeleteDialogOpen(false);
-          setCourseToDelete(null);
-        }}
+        onCancel={() => setCourseToDelete(null)}
       />
     </>
   );
 };
 
-export default CourseTable; 
+export default CourseTable;

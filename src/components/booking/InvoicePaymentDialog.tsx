@@ -36,17 +36,6 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
 }) => {
   const [processingTime, setProcessingTime] = useState(0);
 
-  // Automatically close the dialog and proceed to the confirmation page on 'success'
-  useEffect(() => {
-    if (status === 'success' && open) {
-      // Add a small delay to allow the user to see the success state
-      const timer = setTimeout(() => {
-        onClose();
-      }, 500); // Reducerat från 1500ms för snabbare redirect
-      return () => clearTimeout(timer);
-    }
-  }, [status, open, onClose]);
-
   // Timer to show processing time
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -87,8 +76,8 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <ReceiptIcon color="primary" />
           <Typography variant="h6">
-            {status === 'loading' ? 'Skapar faktura...' : 
-             status === 'success' ? 'Faktura skapad!' : 'Ett fel uppstod'}
+            {status === 'loading' ? 'Registrerar beställning...' : 
+             status === 'success' ? 'Beställning registrerad!' : 'Ett fel uppstod'}
           </Typography>
         </Box>
       </DialogTitle>
@@ -98,8 +87,7 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
             <CircularProgress size={60} sx={{ mb: 2 }} />
             <Typography variant="body1" align="center" gutterBottom>
-              Vi bearbetar din beställning, genererar dokument och skickar bekräftelse.
-              Processen pågår i bakgrunden.
+              Vi registrerar din beställning. Bekräftelsen skickas till din e-post.
             </Typography>
             
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
@@ -198,7 +186,7 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
             <CheckCircleIcon color="success" sx={{ fontSize: 48, mb: 2 }} />
             <Typography variant="body1" paragraph align="center">
-              Allt är klart! Din beställning är slutförd.
+              Din beställning är registrerad.
             </Typography>
             {invoiceNumber && (
               <Typography variant="body2" color="text.secondary">
@@ -211,11 +199,7 @@ const InvoicePaymentDialog: React.FC<InvoicePaymentDialogProps> = ({
               </Typography>
             )}
             <Typography variant="body2" sx={{ mt: 2 }} align="center">
-              ✅ Faktura genererad och skickad till din e-post
-              <br />
-              📧 Bekräftelsemail har levererats
-              <br />
-              🚀 Omdirigerar till bekräftelsesidan...
+              En bekräftelse med faktura skickas till din e-post.
             </Typography>
           </Box>
         )}

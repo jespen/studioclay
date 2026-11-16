@@ -1,5 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { generateGiftCardPDF } from '@/utils/giftCardPDF';
+
+async function regenerateStoredPdf(card: {
+  code?: string | null;
+  payment_reference?: string | null;
+  amount: number;
+  recipient_name?: string | null;
+  recipient_email?: string | null;
+  message?: string | null;
+  sender_name?: string | null;
+  sender_email?: string | null;
+  sender_phone?: string | null;
+  created_at?: string | null;
+  expires_at?: string | null;
+}) {
+  const rawName = card.payment_reference || card.code;
+  if (!rawName || !card.code) return false;
+
+  const pdfBlob = await generateGiftCardPDF({
+    code: card.code,
+    payment_reference: card.payment_reference || undefined,
+    amount: card.amount,
+    recipientName: card.recipient_name || undefined,
+    recipientEmail: card.recipient_email || undefined,
+    message: card.message || undefined,
+    senderName: card.sender_name || undefined,
+    senderEmail: card.sender_email || undefined,
+    senderPhone: card.sender_phone || undefined,
+    createdAt: card.created_at ? new Date(card.created_at) : undefined,
+    expiresAt: card.expires_at ? new Date(card.expires_at) : undefined,
+  });
+  if (!pdfBlob) return false;
+
+  const fileName = `${rawName.replace(/[^a-zA-Z0-9-_.]/g, '_')}.pdf`;
+  const buffer = Buffer.from(await pdfBlob.arrayBuffer());
+  const { error } = await supabaseAdmin.storage.from('giftcards').upload(fileName, buffer, {
+    contentType: 'application/pdf',
+    upsert: true,
+  });
+  return !error;
+}
 
 function stockholmToday(): string {
   return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Stockholm' }).format(new Date());
@@ -69,12 +110,22 @@ export async function POST(request: NextRequest) {
       data.status = 'redeemed';
     }
 
+    let pdfUpdated = false;
+    try {
+      pdfUpdated = await regenerateStoredPdf(data);
+    } catch (pdfError) {
+      console.error('Could not regenerate gift card PDF after expiry change:', pdfError);
+    }
+
     return NextResponse.json({
       message: reactivated
         ? 'Giltighetsdatum uppdaterat och presentkortet är aktivt igen'
-        : 'Giltighetsdatum uppdaterat',
+        : pdfUpdated
+          ? 'Giltighetsdatum uppdaterat och presentkortet är omskapat'
+          : 'Giltighetsdatum uppdaterat. Presentkortet kunde inte skapas om automatiskt.',
       data,
       reactivated,
+      pdfUpdated,
       status: 'success'
     });
   } catch (error) {

@@ -97,12 +97,27 @@ export async function POST(request: NextRequest) {
       console.log(`  ${key}: ${typeof body[key]} = ${body[key]}`);
     });
     
+    const isReservation = body.payment_method === 'reservation';
+    if (isReservation) {
+      body.customer_name = (body.customer_name || 'Reservation').trim() || 'Reservation';
+      body.customer_email = (body.customer_email || '').trim();
+      body.number_of_participants = Number(body.number_of_participants) || 1;
+      body.status = 'confirmed';
+      body.payment_status = 'PAID';
+      body.unit_price = 0;
+      body.total_price = 0;
+      body.currency = body.currency || 'SEK';
+      if (!body.booking_reference) {
+        body.booking_reference = `RES-${Date.now().toString(36).toUpperCase()}`;
+      }
+    }
+
     // Enhanced validation for required fields
     const missingFields = [];
     
     if (!body.course_id) missingFields.push('course_id');
     if (!body.customer_name?.trim()) missingFields.push('customer_name');
-    if (!body.customer_email?.trim()) missingFields.push('customer_email');
+    if (!isReservation && !body.customer_email?.trim()) missingFields.push('customer_email');
     if (!body.number_of_participants || body.number_of_participants < 1) missingFields.push('number_of_participants');
     if (!body.payment_method) missingFields.push('payment_method');
     if (!body.booking_reference) missingFields.push('booking_reference');
@@ -241,7 +256,7 @@ export async function POST(request: NextRequest) {
       const bookingRecord = {
         course_id: body.course_id,
         customer_name: body.customer_name.trim(), // NOT NULL field
-        customer_email: body.customer_email.trim(), // NOT NULL field
+        customer_email: isReservation ? (body.customer_email || '') : body.customer_email.trim(),
         customer_phone: body.customer_phone, // Form field - should come from frontend
         number_of_participants: body.number_of_participants, // NOT NULL field
         booking_date: body.booking_date || new Date().toISOString(),

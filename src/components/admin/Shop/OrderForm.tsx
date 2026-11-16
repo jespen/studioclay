@@ -136,7 +136,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onUpdate }) => {
                 <button 
                   onClick={handleSave}
                   type="button"
-                  className="px-4 py-2 bg-blue-600 text-white rounded"
+                  className={styles.saveButton}
                   disabled={loading}
                 >
                   {loading ? 'Sparar...' : 'Spara ändringar'}
@@ -146,7 +146,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onUpdate }) => {
               <button 
                 onClick={() => setIsEditing(true)}
                 type="button"
-                className="px-4 py-2 bg-blue-600 text-white rounded"
+                className={styles.saveButton}
               >
                 Redigera
               </button>
@@ -224,8 +224,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onUpdate }) => {
                         />
                       ) : (
                         <span className={`inline-block px-2 py-1 rounded ${
-                          currentOrder.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          'bg-blue-100 text-blue-800'
+                          currentOrder.status === 'completed' ? 'bg-[#e7efe9] text-[#3D544A]' :
+                          'bg-[#e7efe9] text-[#3D544A]'
                         }`}>
                           {currentOrder.status === 'confirmed' ? 'Bekräftad' :
                            currentOrder.status === 'completed' ? 'Genomförd' :
@@ -398,7 +398,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onUpdate }) => {
                 {/* Om faktura */}
                 {currentOrder.payment_method === 'invoice' && currentOrder.invoice_number && (
                   <button 
-                    className="flex items-center px-4 py-2 mb-2 w-full bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100"
+                    className="flex items-center px-4 py-2 mb-2 w-full rounded border border-[#c5d5cb] bg-[#e7efe9] text-[#3D544A]"
                     onClick={async () => {
                       try {
                         // Använd den befintliga API-endpointen för att hämta faktura

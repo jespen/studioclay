@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { generateUniqueGiftCardCode } from '@/utils/giftCardUtils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,16 +14,8 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Generate a unique code for the gift card
-    const generateUniqueCode = () => {
-      // Generate a random code - in production this should be more sophisticated
-      const random = Math.random().toString(36).substring(2, 10).toUpperCase();
-      return `GC-${random}`;
-    };
-    
-    // Create a complete gift card object with all required fields
     const giftCardData = {
-      code: generateUniqueCode(),
+      code: await generateUniqueGiftCardCode(supabaseAdmin),
       amount: Number(body.amount),
       type: body.type,
       sender_name: body.sender_name,

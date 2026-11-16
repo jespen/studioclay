@@ -1,5 +1,6 @@
 import React from 'react';
 import { Stepper, Step, StepLabel, Box, Typography, useTheme, useMediaQuery } from '@mui/material';
+import CheckIcon from '@mui/icons-material/Check';
 import InfoIcon from '@mui/icons-material/Info';
 import PersonIcon from '@mui/icons-material/Person';
 import PaymentIcon from '@mui/icons-material/Payment';
@@ -126,9 +127,6 @@ const GenericStepper: React.FC<StepperProps> = ({
   customSteps,
   className
 }) => {
-  // Add debugging for the active step
-  console.log(`GenericStepper rendering with activeStep: ${activeStep}, flowType: ${flowType}`);
-  
   // Parse the active step to ensure it's a number and within valid range
   const numericActiveStep = typeof activeStep === 'number' ? activeStep : 0;
   
@@ -188,10 +186,6 @@ const GenericStepper: React.FC<StepperProps> = ({
   // Make sure active step is within valid bounds
   const validActiveStep = Math.max(0, Math.min(adjustedActiveStep, steps.length - 1));
   
-  if (validActiveStep !== numericActiveStep) {
-    console.log(`Mapped activeStep ${numericActiveStep} to ${validActiveStep} for flow ${flowType}`);
-  }
-
   return (
     <Box sx={{ width: '100%', mb: 4, mt: 2 }} className={className}>
       {/* Add debug info */}
@@ -208,6 +202,7 @@ const GenericStepper: React.FC<StepperProps> = ({
         sx={{ 
           '& .MuiStepConnector-line': {
             borderColor: 'var(--border)',
+            borderTopWidth: 1,
           }
         }}
       >
@@ -226,17 +221,18 @@ const GenericStepper: React.FC<StepperProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      width: 30,
-                      height: 30,
+                      width: 28,
+                      height: 28,
                       borderRadius: '50%',
-                      // Different background colors based on step state
                       backgroundColor: isActive 
                         ? 'var(--primary)' 
                         : (isCompleted ? 'var(--primary-dark)' : '#e5e7eb'),
                       color: isInactive ? '#9ca3af' : 'white',
+                      boxShadow: isActive ? '0 0 0 4px rgba(84, 114, 100, 0.18)' : 'none',
+                      '& .MuiSvgIcon-root': { fontSize: 16 },
                     }}
                   >
-                    {step.icon}
+                    {isCompleted ? <CheckIcon /> : step.icon}
                   </Box>
                 );
               }}

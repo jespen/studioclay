@@ -69,24 +69,25 @@
 
 .amountButton {
   flex: 1;
-  padding: 0.75rem;
-  border: 2px solid #E5E7EB;
-  border-radius: 0.5rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   background-color: white;
   font-weight: 600;
   font-size: 1rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
   text-align: center;
 }
 
 .amountButton:hover {
-  border-color: var(--primary-light);
+  border-color: var(--primary);
 }
 
 .amountSelected {
   border-color: var(--primary);
-  background-color: rgba(var(--primary-rgb), 0.05);
+  background-color: var(--primary);
+  color: white;
 }
 
 .infoPanel {
@@ -113,7 +114,7 @@
   justify-content: center;
   width: 2.5rem;
   height: 2.5rem;
-  background-color: rgba(var(--primary-rgb), 0.1);
+  background-color: rgba(84, 114, 100, 0.1);
   border-radius: 50%;
   color: var(--primary);
   flex-shrink: 0;

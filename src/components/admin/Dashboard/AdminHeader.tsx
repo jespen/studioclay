@@ -15,6 +15,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
   const router = useRouter();
   const pathname = usePathname();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const supabase = getBrowserSupabaseInstance();
 
   const handleLogout = async () => {
@@ -72,7 +73,16 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
             </div>
           )}
           
-          <div className={styles.navButtonsRow}>
+          <button
+            type="button"
+            className={styles.menuToggle}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? 'Stäng meny' : 'Meny'}
+          </button>
+
+          <div className={`${styles.navButtonsRow} ${menuOpen ? styles.navOpen : ''}`}>
             <Link 
               href="/admin/dashboard" 
               className={`${styles.navButton} ${isActiveRoute('/admin/dashboard') ? styles.activeNavButton : ''}`}
@@ -92,6 +102,13 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ title, subtitle, userE
               className={`${styles.navButton} ${isActiveRoute('/admin/dashboard/shop') ? styles.activeNavButton : ''}`}
             >
               Webshop
+            </Link>
+
+            <Link
+              href="/admin/dashboard/portfolio"
+              className={`${styles.navButton} ${isActiveRoute('/admin/dashboard/portfolio') ? styles.activeNavButton : ''}`}
+            >
+              Portfolio
             </Link>
             
             <Link 

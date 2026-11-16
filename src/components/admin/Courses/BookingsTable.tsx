@@ -16,6 +16,8 @@ interface BookingsTableProps {
   status: 'confirmed' | 'pending' | 'cancelled';
   onBookingUpdate: () => void;
   participantInfo?: string;
+  embedded?: boolean;
+  onConvertReservation?: (booking: ExtendedBooking) => void;
 }
 
 export default function BookingsTable({
@@ -25,14 +27,15 @@ export default function BookingsTable({
   error,
   status,
   onBookingUpdate,
-  participantInfo
+  participantInfo,
+  embedded = false,
+  onConvertReservation,
 }: BookingsTableProps) {
-  const primaryColor = '#547264';
 
   if (loading) {
     return (
       <Paper elevation={3} sx={{ overflow: 'hidden', borderRadius: 2, mt: 4, p: 3, textAlign: 'center' }}>
-        <CircularProgress size={24} sx={{ color: primaryColor }} />
+        <CircularProgress size={24} color="primary" />
         <Typography sx={{ mt: 1 }}>Laddar bokningar...</Typography>
       </Paper>
     );
@@ -51,7 +54,7 @@ export default function BookingsTable({
   if (!filteredBookings.length) {
     return (
       <Paper elevation={3} sx={{ overflow: 'hidden', borderRadius: 2, mt: 4 }}>
-        <Box sx={{ bgcolor: primaryColor, color: 'white', px: 3, py: 2 }}>
+        <Box sx={{ px: 3, py: 2 }}>
           <Typography variant="h6" component="h2">
             {title}
           </Typography>
@@ -71,6 +74,8 @@ export default function BookingsTable({
       onBookingUpdate={onBookingUpdate}
       title={title}
       participantInfo={participantInfo}
+      embedded={embedded}
+      onConvertReservation={onConvertReservation}
     />
   );
 } 

@@ -179,6 +179,101 @@ export async function processNextJob(requestId: string = uuidv4()): Promise<JobP
   }
 }
 
+function productSnapshotFromJob(jobData: any): any | null {
+  const snapshot = jobData?.productDetails;
+  if (!snapshot || typeof snapshot !== 'object') return null;
+
+  const title = snapshot.title || snapshot.name;
+  if (!title || snapshot.price == null) return null;
+
+  return {
+    ...snapshot,
+    title,
+    name: snapshot.name || title,
+    location: snapshot.location || 'Studio Clay, Norrtullsgatan 65',
+    start_date: snapshot.start_date || new Date().toISOString(),
+  };
+}
+
+async function prepareGiftCardAttachment(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  generateAndStoreGiftCardPdf: (options: any) => Promise<any>,
+  requestId: string,
+  paymentReference: string
+): Promise<{ pdfResult: any | null; code: string | null }> {
+  const { data: giftCardData, error } = await supabase
+    .from('gift_cards')
+    .select('*')
+    .eq('payment_reference', paymentReference)
+    .maybeSingle();
+
+  if (error || !giftCardData) {
+    logError(`No gift card found for payment reference`, {
+      requestId,
+      paymentReference,
+      error: error?.message
+    });
+    return { pdfResult: null, code: null };
+  }
+
+  logInfo(`Retrieved gift card data for PDF generation`, {
+    requestId,
+    giftCardId: giftCardData.id,
+    code: giftCardData.code,
+    paymentReference: giftCardData.payment_reference
+  });
+
+  const giftCardPdfResult = await generateAndStoreGiftCardPdf({
+    requestId,
+    giftCardData: {
+      amount: giftCardData.amount,
+      code: giftCardData.code,
+      payment_reference: giftCardData.payment_reference,
+      recipientName: giftCardData.recipient_name,
+      recipientEmail: giftCardData.recipient_email,
+      senderName: giftCardData.sender_name,
+      message: giftCardData.message,
+      createdAt: new Date(giftCardData.created_at),
+      expiresAt: new Date(giftCardData.expires_at)
+    },
+    paymentReference,
+    storeToBucket: true
+  });
+
+  if (!giftCardPdfResult.success) {
+    logError(`Failed to generate gift card PDF`, {
+      requestId,
+      error: giftCardPdfResult.error,
+      paymentReference
+    });
+    return { pdfResult: null, code: giftCardData.code };
+  }
+
+  logInfo(`Successfully generated gift card PDF`, {
+    requestId,
+    storagePath: giftCardPdfResult.storagePath,
+    publicUrl: giftCardPdfResult.publicUrl
+  });
+
+  const { error: updateError } = await supabase
+    .from('gift_cards')
+    .update({
+      pdf_url: giftCardPdfResult.publicUrl,
+      updated_at: new Date().toISOString()
+    })
+    .eq('payment_reference', paymentReference);
+
+  if (updateError) {
+    logWarning(`Failed to update gift card with PDF URL`, {
+      requestId,
+      paymentReference,
+      error: updateError.message
+    });
+  }
+
+  return { pdfResult: giftCardPdfResult, code: giftCardData.code };
+}
+
 /**
  * Bearbetar ett invoice email-jobb
  */
@@ -206,8 +301,7 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
       productId,
       userInfo,
       invoiceDetails,
-      amount,
-      giftCardDetails
+      amount
     } = jobData;
     
     // Validera och logga nyckeldata för felsökning
@@ -237,10 +331,16 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
       productType
     });
     
-    // Fetch product details
-    let productDetails: any = null;
-    
-    if (productType === PRODUCT_TYPES.COURSE) {
+    // Fetch product details unless the checkout request already supplied them
+    let productDetails: any = productSnapshotFromJob(jobData);
+
+    if (productDetails) {
+      logInfo(`Using product details from job payload`, {
+        requestId,
+        productType,
+        title: productDetails.title
+      });
+    } else if (productType === PRODUCT_TYPES.COURSE) {
       // Hämta kursinstans och kursmall för att få tillgång till all nödvändig data
       const { data: courseInstance, error: courseError } = await supabase
         .from('course_instances')
@@ -439,8 +539,13 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
         }
       });
       
-      // Först försöker vi generera PDF och spara den i lagringen
+      // Först försöker vi generera PDF och spara den i lagringen.
+      // Presentkorts-PDF startas i samma try så den kan köras parallellt.
       let pdfResult;
+      let giftCardPromise: Promise<{ pdfResult: any | null; code: string | null }> = Promise.resolve({
+        pdfResult: null,
+        code: null
+      });
       try {
         // Skapa ett komplett objekt för PDF-generering
         const pdfOptions = {
@@ -464,6 +569,22 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
             userEmail: userInfo.email
           }
         });
+
+        giftCardPromise = productType === PRODUCT_TYPES.GIFT_CARD
+          ? prepareGiftCardAttachment(
+              supabase,
+              generateAndStoreGiftCardPdf,
+              requestId,
+              paymentReference
+            ).catch((giftCardError: unknown) => {
+              logError(`Exception during gift card PDF generation`, {
+                requestId,
+                error: giftCardError instanceof Error ? giftCardError.message : 'Unknown error',
+                stack: giftCardError instanceof Error ? giftCardError.stack : undefined
+              });
+              return { pdfResult: null, code: null as string | null };
+            })
+          : Promise.resolve({ pdfResult: null, code: null as string | null });
         
         pdfResult = await generateAndStoreInvoicePdf(pdfOptions);
         
@@ -506,205 +627,9 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
         throw pdfGenerationError;
       }
       
-      // Now, if this is a gift card, we need to also generate a gift card PDF
-      let giftCardPdfResult = null;
-      
-      if (productType === PRODUCT_TYPES.GIFT_CARD) {
-        logInfo(`This is a gift card purchase, generating gift card PDF`, {
-          requestId,
-          paymentReference,
-          hasGiftCardDetails: !!giftCardDetails
-        });
-        
-        try {
-          // Först logga hur många presentkort som finns med denna referens
-          const { count: giftCardCount, error: countError } = await supabase
-            .from('gift_cards')
-            .select('*', { count: 'exact', head: true })
-            .eq('payment_reference', paymentReference);
-            
-          if (countError) {
-            logWarning(`Could not count gift cards with this payment reference`, {
-              requestId,
-              paymentReference,
-              error: countError.message
-            });
-          } else {
-            const count = giftCardCount || 0;
-            logInfo(`Found ${count} gift cards with payment reference ${paymentReference}`, {
-              requestId,
-              count
-            });
-            
-            if (count === 0) {
-              logWarning(`No gift cards found with payment_reference=${paymentReference}`, {
-                requestId,
-                paymentReference,
-                giftCardCodeFromDetails: giftCardDetails?.code
-              });
-            } else if (count > 1) {
-              logWarning(`Multiple gift cards (${count}) found with same payment reference!`, {
-                requestId,
-                paymentReference
-              });
-            }
-          }
-          
-          // Sökning i flera steg för att vara extremt robust:
-          let giftCardData = null;
-          let fetchError = null;
-          
-          // Steg 1: Sök på payment_reference (exakt match)
-          if (!giftCardData) {
-            const result = await supabase
-              .from('gift_cards')
-              .select('*')
-              .eq('payment_reference', paymentReference)
-              .maybeSingle();
-              
-            if (result.data) {
-              giftCardData = result.data;
-              logInfo(`Found gift card using exact payment_reference match`, {
-                requestId,
-                giftCardId: giftCardData.id,
-                code: giftCardData.code
-              });
-            } else {
-              fetchError = result.error;
-            }
-          }
-          
-          // Steg 2: Om ingen hittades, sök på code från giftCardDetails
-          if (!giftCardData && giftCardDetails?.code) {
-            const result = await supabase
-              .from('gift_cards')
-              .select('*')
-              .eq('code', giftCardDetails.code)
-              .maybeSingle();
-              
-            if (result.data) {
-              giftCardData = result.data;
-              logInfo(`Found gift card using code match`, {
-                requestId,
-                giftCardId: giftCardData.id,
-                code: giftCardData.code,
-                originalPaymentRef: paymentReference,
-                foundPaymentRef: giftCardData.payment_reference
-              });
-            }
-          }
-          
-          // Steg 3: Sista försök - sök på invoice_number
-          if (!giftCardData && jobData.invoiceNumber) {
-            const result = await supabase
-              .from('gift_cards')
-              .select('*')
-              .eq('invoice_number', jobData.invoiceNumber)
-              .maybeSingle();
-              
-            if (result.data) {
-              giftCardData = result.data;
-              logInfo(`Found gift card using invoice_number match`, {
-                requestId,
-                giftCardId: giftCardData.id,
-                invoiceNumber: jobData.invoiceNumber
-              });
-            }
-          }
-          
-          // Slutlig kontroll - hittades något presentkort?
-          if (!giftCardData) {
-            logError(`No gift card found after multiple search attempts`, {
-              requestId,
-              paymentReference,
-              giftCardCode: giftCardDetails?.code,
-              invoiceNumber: jobData.invoiceNumber
-            });
-            // Fortsätt utan presentkorts-PDF om inget hittas
-          } else {
-            logInfo(`🎁 Retrieved gift card data for PDF generation`, {
-              requestId,
-              giftCardId: giftCardData.id,
-              code: giftCardData.code,
-              amount: giftCardData.amount,
-              paymentReference: giftCardData.payment_reference,
-              recipientName: giftCardData.recipient_name
-            });
-            
-            // Prepare a proper gift card data object
-            const completeGiftCardData = {
-              amount: giftCardData.amount,
-              code: giftCardData.code,
-              payment_reference: giftCardData.payment_reference,
-              recipientName: giftCardData.recipient_name,
-              recipientEmail: giftCardData.recipient_email,
-              senderName: giftCardData.sender_name,
-              message: giftCardData.message,
-              createdAt: new Date(giftCardData.created_at),
-              expiresAt: new Date(giftCardData.expires_at)
-            };
-            
-            // Generate gift card PDF
-            logInfo(`Generating gift card PDF`, {
-              requestId,
-              paymentReference,
-              code: completeGiftCardData.code,
-              usesPaymentReference: !!completeGiftCardData.payment_reference
-            });
-            
-            giftCardPdfResult = await generateAndStoreGiftCardPdf({
-              requestId,
-              giftCardData: completeGiftCardData,
-              paymentReference,
-              storeToBucket: true
-            });
-            
-            if (!giftCardPdfResult.success) {
-              logError(`Failed to generate gift card PDF`, {
-                requestId,
-                error: giftCardPdfResult.error,
-                paymentReference
-              });
-              // Continue without gift card PDF if generation fails
-            } else {
-              logInfo(`Successfully generated gift card PDF`, {
-                requestId,
-                storagePath: giftCardPdfResult.storagePath,
-                publicUrl: giftCardPdfResult.publicUrl
-              });
-              
-              // Update gift card record with PDF URL if it was successfully generated
-              const { error: updateError } = await supabase
-                .from('gift_cards')
-                .update({
-                  pdf_url: giftCardPdfResult.publicUrl,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('payment_reference', paymentReference);
-                
-              if (updateError) {
-                logWarning(`Failed to update gift card with PDF URL`, {
-                  requestId,
-                  paymentReference,
-                  error: updateError.message
-                });
-              } else {
-                logInfo(`Updated gift card record with PDF URL`, {
-                  requestId,
-                  paymentReference
-                });
-              }
-            }
-          }
-        } catch (giftCardError) {
-          logError(`Exception during gift card PDF generation`, {
-            requestId,
-            error: giftCardError instanceof Error ? giftCardError.message : 'Unknown error',
-            stack: giftCardError instanceof Error ? giftCardError.stack : undefined
-          });
-          // Continue without gift card PDF if generation fails
-        }
-      }
+      const giftCardAttachment = await giftCardPromise;
+      const giftCardPdfResult = giftCardAttachment.pdfResult;
+      const giftCardCode = giftCardAttachment.code;
       
       // Nu när vi har en PDF, skicka e-post
       if (!pdfResult.pdfBlob) {
@@ -737,55 +662,28 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
         isGiftCard: productType === PRODUCT_TYPES.GIFT_CARD
       });
       
-      let emailResult;
-      
-      // Retrieve gift card code if this is a gift card purchase (needed for both email and admin notification)
-      let giftCardCode = null;
-      if (productType === PRODUCT_TYPES.GIFT_CARD) {
-        const { data: giftCard } = await supabase
-          .from('gift_cards')
-          .select('code')
-          .eq('payment_reference', paymentReference)
-          .single();
-          
-        if (giftCard) {
-          giftCardCode = giftCard.code;
-          logInfo(`Retrieved gift card code for email: ${giftCardCode}`, { requestId });
-        } else {
-          logWarning(`Could not retrieve gift card code for email`, { 
-            requestId,
-            paymentReference
-          });
+      const bypassEmail = process.env.NODE_ENV === 'development' && process.env.BYPASS_EMAIL_IN_JOBS === 'true';
+
+      const sendCustomerEmail = async () => {
+        if (bypassEmail) {
+          logInfo(`Development mode: Bypassing actual email sending`, { requestId });
+          return { success: true, message: 'Email sending bypassed in development mode' };
         }
-      }
-      
-      // In development, we can bypass email sending to test the job processor
-      if (process.env.NODE_ENV === 'development' && process.env.BYPASS_EMAIL_IN_JOBS === 'true') {
-        logInfo(`Development mode: Bypassing actual email sending`, { requestId });
-        emailResult = { 
-          success: true, 
-          message: 'Email sending bypassed in development mode'
-        };
-      } else {
-        // Real email sending - import module explicitly
-        logDebug(`Importing email module for sending invoice email`, { requestId });
-        const { sendServerInvoiceEmail } = await import('@/utils/serverEmail');
-        
+
         if (!sendServerInvoiceEmail) {
           logError(`Failed to import email module - function is undefined`, { requestId });
           throw new Error('Email module import failed');
         }
-        
-        logDebug(`Calling sendServerInvoiceEmail with parameters`, { 
+
+        logDebug(`Calling sendServerInvoiceEmail with parameters`, {
           requestId,
           productType,
           isGiftCard: productType === PRODUCT_TYPES.GIFT_CARD,
           isProduct: productType === PRODUCT_TYPES.ART_PRODUCT,
           hasGiftCardPdf: !!giftCardPdfBuffer
         });
-        
-        // Real email sending
-        emailResult = await sendServerInvoiceEmail({
+
+        return sendServerInvoiceEmail({
           userInfo: userInfo,
           paymentDetails: {
             amount: amount,
@@ -797,11 +695,69 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
           invoiceNumber: invoiceNumber,
           pdfBuffer: pdfBuffer,
           isGiftCard: productType === PRODUCT_TYPES.GIFT_CARD,
-          giftCardCode: giftCardCode,
+          giftCardCode: giftCardCode ?? undefined,
           giftCardPdfBuffer: giftCardPdfBuffer,
           isProduct: productType === PRODUCT_TYPES.ART_PRODUCT
         });
-      }
+      };
+
+      const sendAdminEmail = async () => {
+        if (bypassEmail) {
+          return { success: true, message: 'Admin email bypassed in development mode' };
+        }
+
+        try {
+          logInfo(`Sending admin notification about purchase`, {
+            requestId,
+            productType,
+            customerEmail: userInfo.email,
+            amount
+          });
+
+          const { sendAdminPurchaseNotification } = await import('@/utils/serverEmail');
+          const adminNotificationResult = await sendAdminPurchaseNotification({
+            productType: productType as 'course' | 'gift_card' | 'art_product',
+            productTitle: productDetails.title || productDetails.name || 'Okänd produkt',
+            customerName: `${userInfo.firstName} ${userInfo.lastName}`,
+            customerEmail: userInfo.email,
+            amount: amount,
+            paymentMethod: 'invoice',
+            paymentReference: paymentReference,
+            invoiceNumber: invoiceNumber,
+            additionalInfo: productType === PRODUCT_TYPES.GIFT_CARD && giftCardCode
+              ? `Presentkortskod: ${giftCardCode}`
+              : undefined
+          });
+
+          if (adminNotificationResult.success) {
+            logInfo(`Successfully sent admin notification`, {
+              requestId,
+              paymentReference
+            });
+          } else {
+            logWarning(`Failed to send admin notification, but continuing`, {
+              requestId,
+              error: adminNotificationResult.message
+            });
+          }
+
+          return adminNotificationResult;
+        } catch (adminNotificationError) {
+          logWarning(`Exception while sending admin notification, but continuing`, {
+            requestId,
+            error: adminNotificationError instanceof Error ? adminNotificationError.message : 'Unknown error'
+          });
+          return {
+            success: false,
+            message: adminNotificationError instanceof Error ? adminNotificationError.message : 'Unknown error'
+          };
+        }
+      };
+
+      const [emailResult] = await Promise.all([
+        sendCustomerEmail(),
+        sendAdminEmail()
+      ]);
       
       if (!emailResult.success) {
         logError(`Failed to send invoice email`, {
@@ -818,50 +774,6 @@ async function processInvoiceEmailJob(jobData: any): Promise<void> {
         invoiceNumber,
         withGiftCardPdf: !!giftCardPdfBuffer
       });
-      
-      // Send admin notification about the purchase
-      try {
-        logInfo(`Sending admin notification about purchase`, {
-          requestId,
-          productType,
-          customerEmail: userInfo.email,
-          amount
-        });
-        
-        const { sendAdminPurchaseNotification } = await import('@/utils/serverEmail');
-        
-        const adminNotificationResult = await sendAdminPurchaseNotification({
-          productType: productType as 'course' | 'gift_card' | 'art_product',
-          productTitle: productDetails.title || productDetails.name || 'Okänd produkt',
-          customerName: `${userInfo.firstName} ${userInfo.lastName}`,
-          customerEmail: userInfo.email,
-          amount: amount,
-          paymentMethod: 'invoice',
-          paymentReference: paymentReference,
-          invoiceNumber: invoiceNumber,
-          additionalInfo: productType === PRODUCT_TYPES.GIFT_CARD && giftCardCode 
-            ? `Presentkortskod: ${giftCardCode}` 
-            : undefined
-        });
-        
-        if (adminNotificationResult.success) {
-          logInfo(`Successfully sent admin notification`, {
-            requestId,
-            paymentReference
-          });
-        } else {
-          logWarning(`Failed to send admin notification, but continuing`, {
-            requestId,
-            error: adminNotificationResult.message
-          });
-        }
-      } catch (adminNotificationError) {
-        logWarning(`Exception while sending admin notification, but continuing`, {
-          requestId,
-          error: adminNotificationError instanceof Error ? adminNotificationError.message : 'Unknown error'
-        });
-        // Don't throw - admin notification failure shouldn't fail the whole job
-      }
       
       // Update payment record to mark email as sent
       logDebug(`Updating payment record to mark email as sent`, {

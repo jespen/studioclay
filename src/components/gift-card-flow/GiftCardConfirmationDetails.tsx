@@ -278,14 +278,14 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
         sx={{ 
           mb: 4, 
           p: 3, 
-          border: '1px solid #e0e0e0', 
-          borderRadius: 2,
-          background: '#f9f9f9'
+          border: '1px solid var(--border)', 
+          borderRadius: 3,
+          background: '#fafafa'
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <CardGiftcardIcon sx={{ mr: 1, color: 'var(--primary)' }} />
-          <Typography variant="h6">Presentkort</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>Presentkort</Typography>
         </Box>
         
         <Grid container spacing={2} sx={{ mb: 2 }}>
@@ -346,7 +346,7 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
         <Box sx={{ mb: 4 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
             <EmailIcon sx={{ mr: 1, color: 'var(--primary)' }} />
-            <Typography variant="h6">Mottagarinformation</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>Mottagarinformation</Typography>
           </Box>
           
           <Grid container spacing={2}>
@@ -374,8 +374,8 @@ const GiftCardConfirmationDetails: React.FC<GiftCardConfirmationDetailsProps> = 
       )}
       
       {/* What's Next */}
-      <Box sx={{ mb: 4, p: 3, bgcolor: 'rgba(84, 114, 100, 0.05)', borderRadius: 2 }}>
-        <Typography variant="h6" gutterBottom>
+      <Box sx={{ mb: 4, p: 3, bgcolor: 'rgba(84, 114, 100, 0.05)', borderRadius: 3 }}>
+        <Typography variant="h6" gutterBottom sx={{ fontWeight: 700 }}>
           Vad händer nu?
         </Typography>
         <Typography variant="body1" paragraph>

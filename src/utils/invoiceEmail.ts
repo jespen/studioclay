@@ -60,7 +60,6 @@ interface InvoiceEmailParams {
     // ...original error handling...
   }
   */
-}
 
 /**
  * DEPRECATED: Helper function to convert a Blob to base64

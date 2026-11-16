@@ -273,7 +273,7 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
             </div>
 
             {/* Published courses */}
-            <SectionContainer title="Publicerade kurser">
+            <SectionContainer title="Publicerade kurser" count={publishedActiveCourses.length}>
               <CourseTable 
                 courses={publishedActiveCourses}
                 onEdit={handleEditCourse}
@@ -283,7 +283,7 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
             </SectionContainer>
 
             {/* Unpublished courses */}
-            <SectionContainer title="Utkast" variant="draft">
+            <SectionContainer title="Utkast" count={unpublishedActiveCourses.length} variant="draft">
               <CourseTable 
                 courses={unpublishedActiveCourses}
                 variant="draft"
@@ -294,10 +294,11 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
             </SectionContainer>
 
             {/* Past courses */}
-            <SectionContainer title="Tidigare kurser" variant="past">
+            <SectionContainer title="Tidigare kurser" count={pastCourses.length} variant="past">
               <CourseTable 
                 courses={pastCourses}
                 variant="past"
+                defaultSortDirection="desc"
                 onEdit={handleEditCourse}
                 onPublish={handlePublishToggle}
                 onDelete={handleDeleteCourse}

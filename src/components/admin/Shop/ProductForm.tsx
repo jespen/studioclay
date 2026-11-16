@@ -224,7 +224,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-gray-500">
-                  Vaser, skålar och konstverk får egna filter. Burkar, ljuslyktor och övrigt visas under Övrigt.
+                  Vaser, skålar, konstverk, burkar och ljuslyktor får egna filter i shopen.
                 </p>
               </div>
 

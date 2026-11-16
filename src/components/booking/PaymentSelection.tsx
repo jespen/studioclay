@@ -10,7 +10,6 @@ import { useRouter } from 'next/navigation';
 import { 
   Box, 
   Typography, 
-  Paper, 
   Grid, 
   Card, 
   CardContent, 
@@ -20,14 +19,11 @@ import {
   FormControl, 
   CircularProgress,
   Alert,
-  Divider,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
   TextField,
-  useTheme,
-  useMediaQuery,
 } from '@mui/material';
 
 import PersonIcon from '@mui/icons-material/Person';
@@ -38,12 +34,15 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
+import EventIcon from '@mui/icons-material/Event';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import { GenericStep, FlowType } from '../common/BookingStepper';
 import GenericFlowContainer from '../common/GenericFlowContainer';
-import StyledButton from '../common/StyledButton';
+import FlowCard from '../common/FlowCard';
+import FlowActions from '../common/FlowActions';
+import ItemSummary, { SummaryDetail } from '../common/ItemSummary';
 import { PaymentMethod, PaymentDetails, BaseFormErrors, InvoiceDetails } from '@/types/payment';
 import { setPaymentInfo } from '@/utils/flowStorage';
 import { FlowStateData } from '../common/FlowStepWrapper';
@@ -90,13 +89,16 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
   flowData
 }) => {
   const router = useRouter();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  
-  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
+
+  const hasInitialFlowData = Boolean(flowData?.itemDetails && flowData?.userInfo);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(
+    hasInitialFlowData ? (flowData!.userInfo as UserInfo) : null
+  );
+  const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(
+    hasInitialFlowData ? (flowData!.itemDetails as CourseDetail) : null
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!hasInitialFlowData);
   const [submitError, setSubmitError] = useState<string | null>(null);
   
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('invoice');
@@ -136,22 +138,23 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
 
   useEffect(() => {
     const loadData = async () => {
-      setIsLoading(true);
       try {
         // Prioritize data from flowData props
         if (flowData?.itemDetails && flowData?.userInfo) {
           setCourseDetail(flowData.itemDetails as CourseDetail);
           setUserInfo(flowData.userInfo as UserInfo);
-        } else {
-          // Fall back to our utilities that check both flowStorage and localStorage
-          const [courseData, userData] = await Promise.all([
-            fetchCourseDetail(courseId),
-            getUserInfo()
-          ]);
-          
-          setCourseDetail(courseData);
-          setUserInfo(userData);
+          setIsLoading(false);
+          return;
         }
+
+        setIsLoading(true);
+        const [courseData, userData] = await Promise.all([
+          fetchCourseDetail(courseId),
+          getUserInfo()
+        ]);
+
+        setCourseDetail(courseData);
+        setUserInfo(userData);
       } catch (error) {
         console.error('Error loading data for payment:', error);
         setSubmitError('Det gick inte att ladda nödvändig information. Försök igen senare.');
@@ -310,11 +313,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     }
     
     console.log('[PaymentSelection] Redirecting to:', redirectPath);
-    
-    // Add delay to let the payment processing complete
-    setTimeout(() => {
-      router.push(redirectPath);
-    }, 500); // Reducerat från 1500ms för snabbare redirect
+    router.push(redirectPath);
     
     // Call onNext if a callback exists
     if (onNext) {
@@ -387,9 +386,8 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
       additionalData: paymentData
     });
 
-    // Nu när API garanterar att ALLT är klart (inkl PDF och e-post), 
-    // redirecta omedelbart utan delay
-    console.log(`🚀 All processing complete (PDF generated, email sent), proceeding immediately`);
+    // Bokningen är sparad. PDF och mejl skickas efter att svaret har gått tillbaka.
+    console.log('Order saved, continuing to confirmation while invoice email is prepared');
     
     if (onNext) {
       onNext({
@@ -779,7 +777,7 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
         <Card 
           sx={{ 
             backgroundColor: 'var(--primary-light)', 
-            color: prefersDarkMode ? 'white' : 'black',
+            color: 'var(--primary-dark)',
             p: 2, 
             borderRadius: 1
           }}
@@ -802,35 +800,83 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
     </Grid>
   );
 
+  const renderPurchaseSummary = () => {
+    if (flowType === FlowType.GIFT_CARD && flowData?.itemDetails) {
+      const item = flowData.itemDetails;
+      const details: SummaryDetail[] = [];
+      if (item.recipientName) {
+        details.push({ icon: <PersonIcon />, label: item.recipientName });
+      }
+      return (
+        <ItemSummary
+          title="Presentkort"
+          price={item.amount || getGiftCardAmount()}
+          details={details}
+        />
+      );
+    }
+
+    if (flowType === FlowType.ART_PURCHASE && flowData?.itemDetails) {
+      const item = flowData.itemDetails;
+      const details: SummaryDetail[] = [];
+      if (item.stockQuantity !== undefined) {
+        details.push({ icon: <InventoryIcon />, label: `${item.stockQuantity} i lager` });
+      }
+      return (
+        <ItemSummary
+          title={item.title}
+          price={item.price}
+          originalPrice={item.originalPrice}
+          details={details}
+        />
+      );
+    }
+
+    if (courseDetail && flowType !== FlowType.GIFT_CARD && flowType !== FlowType.ART_PURCHASE) {
+      const details: SummaryDetail[] = [];
+      if (courseDetail.start_date) {
+        details.push({
+          icon: <EventIcon />,
+          label: new Date(courseDetail.start_date).toLocaleDateString('sv-SE', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          }),
+        });
+      }
+      if (courseDetail.location) {
+        details.push({ icon: <LocationOnIcon />, label: courseDetail.location });
+      }
+      return (
+        <ItemSummary
+          title={courseDetail.title}
+          price={calculatePrice()}
+          details={details}
+        />
+      );
+    }
+
+    return null;
+  };
+
   // Render the buttons
   const renderButtons = () => (
-    <>
-      <Divider sx={{ my: 4 }} />
-      
-      <Typography variant="caption" color="text.secondary" paragraph>
-        Genom att slutföra bokningen godkänner du våra <a href="/villkor" target="_blank" rel="noopener noreferrer">bokningsvillkor</a> och <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">integritetspolicy</a>.
-      </Typography>
-      
-      <Box sx={{ display: 'flex', justifyContent: isMobile ? 'center' : 'space-between', flexDirection: isMobile ? 'column' : 'row', gap: 2, mt: 4 }}>
-        <StyledButton
-          secondary
-          onClick={handleBack}
-          disabled={isSubmitting}
-          fullWidth={isMobile}
-        >
-          Tillbaka
-        </StyledButton>
-        
-        <StyledButton
-          type="submit"
-          onClick={(e) => handleSubmit(e as unknown as React.FormEvent<HTMLFormElement>)}
-          disabled={isSubmitting}
-          endIcon={isSubmitting ? <CircularProgress size={20} /> : null}
-        >
-          {isSubmitting ? 'Bearbetar...' : 'Slutför bokning'}
-        </StyledButton>
-      </Box>
-    </>
+    <FlowActions
+      onBack={handleBack}
+      backDisabled={isSubmitting}
+      onNext={(e) => handleSubmit(e as unknown as React.FormEvent<HTMLFormElement>)}
+      nextDisabled={isSubmitting}
+      nextLabel={isSubmitting ? 'Bearbetar...' : 'Slutför bokning'}
+      nextEndIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : undefined}
+      note={
+        <>
+          Genom att slutföra bokningen godkänner du våra{' '}
+          <a href="/villkor" target="_blank" rel="noopener noreferrer">bokningsvillkor</a>
+          {' '}och{' '}
+          <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">integritetspolicy</a>.
+        </>
+      }
+    />
   );
 
   const handleInvoiceDialogClose = () => {
@@ -852,18 +898,12 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
           alertMessage={submitError || undefined}
           alertSeverity="error"
         >
-          <Paper 
-            elevation={3} 
-            sx={{ 
-              borderRadius: 2, 
-              p: { xs: 2, sm: 4 }, 
-              mt: 4 
-            }}
-          >
+          <FlowCard>
+            {renderPurchaseSummary()}
             {renderPaymentContent()}
             {renderProcessingStatus()}
             {renderButtons()}
-          </Paper>
+          </FlowCard>
           
           <InvoicePaymentDialog
             open={invoiceDialogOpen}
@@ -874,23 +914,16 @@ const PaymentSelection: React.FC<PaymentSelectionProps> = ({
           />
         </GenericFlowContainer>
       ) : (
-        // When wrapped by FlowStepWrapper, render only the Paper content
         <>
           {submitError && (
             <Alert severity="error" sx={{ mb: 3 }}>{submitError}</Alert>
           )}
-          <Paper 
-            elevation={3} 
-            sx={{ 
-              borderRadius: 2, 
-              p: { xs: 2, sm: 4 }, 
-              mt: 4 
-            }}
-          >
+          <FlowCard>
+            {renderPurchaseSummary()}
             {renderPaymentContent()}
             {renderProcessingStatus()}
             {renderButtons()}
-          </Paper>
+          </FlowCard>
           
           <InvoicePaymentDialog
             open={invoiceDialogOpen}

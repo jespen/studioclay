@@ -1,0 +1,123 @@
+.intro {
+  margin: 0 0 1rem;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.fileInput {
+  display: none;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.card {
+  border: 1px solid #e6ece8;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: white;
+}
+
+.thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: #f3f4f6;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.captionInput {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.35rem;
+  font: inherit;
+}
+
+.removeButton,
+.libraryButton {
+  border: 1px solid #e5e7eb;
+  background: white;
+  color: #3d544a;
+  border-radius: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.removeButton:hover,
+.libraryButton:hover {
+  background: #f4f7f5;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 180px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.35rem;
+  font: inherit;
+}
+
+.libraryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  padding: 1rem;
+  max-height: 28rem;
+  overflow: auto;
+}
+
+.libraryCard {
+  padding: 0;
+  background: white;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  border: 1px solid #e6ece8;
+}
+
+.libraryCard:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.libraryName {
+  display: block;
+  padding: 0.4rem 0.5rem 0.55rem;
+  font-size: 0.75rem;
+  color: #4b5563;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status {
+  padding: 1rem;
+  color: #4b5563;
+}
+
+.error {
+  margin-bottom: 1rem;
+  color: #b91c1c;
+}
