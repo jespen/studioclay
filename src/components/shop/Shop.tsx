@@ -65,7 +65,7 @@ const Shop = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-16 px-4 text-center">
+      <div className="container mx-auto py-32 px-4 text-center">
         <p>Laddar produkter...</p>
       </div>
     );
@@ -73,7 +73,7 @@ const Shop = () => {
 
   if (error) {
     return (
-      <div className="container mx-auto py-16 px-4 text-center">
+      <div className="container mx-auto py-32 px-4 text-center">
         <p className="text-red-500">{error}</p>
       </div>
     );
@@ -82,7 +82,7 @@ const Shop = () => {
   const hasMoreProducts = visibleProducts.length > displayedProducts;
 
   return (
-    <div className="container mx-auto py-16 px-4 md:px-6 bg-white">
+    <div className="container mx-auto py-32 px-4 md:px-6 bg-white">
       <div className="mb-8 text-center" data-reveal>
         <h2 className="text-3xl md:text-4xl font-serif mb-2">Shop</h2>
         <p className="text-base md:text-lg text-gray-600 max-w-2xl mx-auto">

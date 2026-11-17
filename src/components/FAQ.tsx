@@ -60,8 +60,8 @@ const FAQ: React.FC = () => {
   ];
 
   return (
-    <div style={{ backgroundColor: '#f9f9f9', padding: '3rem 0' }}>
-      <div id="faq" className={styles.faqSection}>
+    <div style={{ backgroundColor: '#f9f9f9', paddingTop: '8rem', paddingBottom: '8rem' }}>
+      <div id="faq">
         <h2 className={styles.faqTitle} data-reveal>Frågor och svar</h2>
         <div className={styles.faqList} data-reveal-stagger>
           {faqItems.map((item, index) => (

@@ -1,7 +1,8 @@
 .banner {
   background-color: #ffffff;
-  padding: 2rem 0;
-  margin: 2rem 0;
+  padding-top: 8rem;
+  padding-bottom: 8rem;
+  margin: 0;
 }
 
 .dark .banner {

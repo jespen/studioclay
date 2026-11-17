@@ -37,6 +37,7 @@
 .brandDesc {
   font-size: 0.875rem;
   color: #6B7280;
+  max-width: 22rem;
 }
 
 .dark .brandDesc {
@@ -72,6 +73,7 @@
 
 .contactInfo {
   font-size: 0.875rem;
+  font-style: normal;
   color: #6B7280;
   display: flex;
   flex-direction: column;
@@ -89,16 +91,12 @@
 }
 
 .bottomBar {
-  border-top: 1px solid #e5e7eb;
   margin-top: 2rem;
-  padding-top: 1.5rem;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: space-between;
   align-items: center;
-}
-
-.dark .bottomBar {
-  border-color: #2d3748;
+  gap: 1rem;
 }
 
 .copyright {
@@ -112,22 +110,10 @@
 
 .socialLinks {
   display: flex;
-  gap: 1.5rem;
-  margin-top: 1rem;
-  justify-content: center;
-  width: 100%;
-}
-
-@media (min-width: 768px) {
-  .bottomBar {
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-  }
-  
-  .socialLinks {
-    margin-top: 0;
-  }
+  gap: 1rem;
+  margin-top: 0;
+  margin-left: auto;
+  justify-content: flex-end;
 }
 
 .socialLink {
@@ -149,12 +135,7 @@
   height: 24px;
 }
 
-.contactSpacer {
-  height: 1rem;
-}
-
 .footerLink[href*="maps.google.com"],
 .footerLink[href*="maps/place"] {
   text-decoration: underline;
-  font-style: normal;
 } 

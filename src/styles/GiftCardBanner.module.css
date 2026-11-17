@@ -1,5 +1,6 @@
 .section {
-  padding: 3.5rem 0;
+  padding-top: 8rem;
+  padding-bottom: 8rem;
   background-color: #f7f7f7; /* Matching the gray used in the kurser section */
 }
 
