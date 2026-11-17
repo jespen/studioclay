@@ -35,6 +35,7 @@ import {
 import { Check as CheckIcon, Close as CloseIcon, Edit as EditIcon, Delete as DeleteIcon, Receipt as ReceiptIcon } from '@mui/icons-material';
 import { styled } from '@mui/system';
 import type { Booking, PaymentStatus, ExtendedBooking } from '@/types/booking';
+import { isSpotReservation } from '@/utils/booking';
 import PaymentStatusBadge from '../Payments/PaymentStatusBadge';
 import PaymentStatusUpdater from '../Payments/PaymentStatusUpdater';
 import ConfirmDialog from '../common/ConfirmDialog';
@@ -341,7 +342,7 @@ export default function BookingsList({
                 sx={booking.status === 'cancelled' ? { opacity: 0.6 } : {}}
               >
                 <TableCell>
-                  {booking.payment_method === 'reservation' ? (
+                  {isSpotReservation(booking) ? (
                     <Box>
                       <Chip size="small" label="Reservation" color="primary" variant="outlined" />
                       {booking.message ? (
@@ -378,7 +379,8 @@ export default function BookingsList({
                         </Tooltip>
                       )}
                     </Box>
-                  ) : booking.payment_method === 'reservation' ? 'Reservation' :
+                  ) : booking.payment_method === 'giftCard' ? 'Presentkort' :
+                   booking.payment_method === 'reservation' ? 'Reservation' :
                    booking.payment_method === 'swish' ? 'Swish' : 
                    booking.payment_method || '–'}
                 </TableCell>
@@ -390,7 +392,7 @@ export default function BookingsList({
                 <TableCell>{new Date(booking.created_at).toLocaleDateString('sv-SE')}</TableCell>
                 <TableCell>{booking.message ? booking.message.slice(0, 30) + (booking.message.length > 30 ? '...' : '') : '–'}</TableCell>
                 <TableCell>
-                  {booking.payment_method === 'reservation' && onConvertReservation && booking.status !== 'cancelled' && (
+                  {isSpotReservation(booking) && onConvertReservation && booking.status !== 'cancelled' && (
                     <Button size="small" onClick={() => onConvertReservation(booking)} sx={{ mr: 1 }}>
                       Gör om till bokning
                     </Button>
@@ -398,7 +400,7 @@ export default function BookingsList({
                   <IconButton
                     size="small"
                     onClick={() => handleEditClick(booking)}
-                    disabled={booking.status === 'cancelled' || booking.payment_method === 'reservation'}
+                    disabled={booking.status === 'cancelled' || isSpotReservation(booking)}
                     sx={{ color: 'action.active' }}
                   >
                     <EditIcon fontSize="small" />
@@ -536,13 +538,13 @@ export default function BookingsList({
 
       <ConfirmDialog
         open={cancelDialogOpen}
-        title={bookingToCancel?.payment_method === 'reservation' ? 'Ta bort reservation' : 'Avboka'}
+        title={bookingToCancel && isSpotReservation(bookingToCancel) ? 'Ta bort reservation' : 'Avboka'}
         message={
-          bookingToCancel?.payment_method === 'reservation'
+          bookingToCancel && isSpotReservation(bookingToCancel)
             ? 'Vill du ta bort reservationen? Platserna blir lediga igen.'
             : `Vill du avboka bokningen för ${bookingToCancel?.customer_name || 'deltagaren'}?`
         }
-        confirmLabel={bookingToCancel?.payment_method === 'reservation' ? 'Ta bort' : 'Avboka'}
+        confirmLabel={bookingToCancel && isSpotReservation(bookingToCancel) ? 'Ta bort' : 'Avboka'}
         onConfirm={handleCancelConfirm}
         onCancel={() => setCancelDialogOpen(false)}
       />

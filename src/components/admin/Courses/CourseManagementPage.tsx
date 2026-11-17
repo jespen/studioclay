@@ -57,6 +57,7 @@ export default function CourseManagementPage({
   const [reserveOpen, setReserveOpen] = useState(false);
   const [reserveCount, setReserveCount] = useState(1);
   const [reserveNote, setReserveNote] = useState('');
+  const [reservePaymentMethod, setReservePaymentMethod] = useState<'giftCard' | 'invoice'>('invoice');
   const [reserveLoading, setReserveLoading] = useState(false);
 
   useEffect(() => {
@@ -402,7 +403,7 @@ export default function CourseManagementPage({
       customer_email: '',
       customer_phone: '',
       number_of_participants: booking.number_of_participants || 1,
-      payment_method: 'invoice',
+      payment_method: booking.payment_method === 'giftCard' ? 'giftCard' : 'invoice',
       payment_status: 'CREATED',
       status: 'confirmed',
       message: booking.message || '',
@@ -427,10 +428,11 @@ export default function CourseManagementPage({
           customer_name: 'Reservation',
           customer_email: '',
           number_of_participants: count,
-          payment_method: 'reservation',
-          payment_status: 'PAID',
+          payment_method: reservePaymentMethod,
+          payment_status: 'CREATED',
           status: 'confirmed',
           booking_reference: reference,
+          is_reservation: true,
           unit_price: 0,
           total_price: 0,
           currency: 'SEK',
@@ -444,6 +446,7 @@ export default function CourseManagementPage({
       setReserveOpen(false);
       setReserveCount(1);
       setReserveNote('');
+      setReservePaymentMethod('invoice');
       handleDataUpdate();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Kunde inte reservera platser');
@@ -579,7 +582,7 @@ export default function CourseManagementPage({
               <DialogTitle>Reservera platser</DialogTitle>
               <DialogContent>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Platserna räknas mot kursen utan att du behöver fylla i en kund. {availableSpots} lediga.
+                  Platserna räknas mot kursen utan att du behöver fylla i en kund. Ingen betalning registreras. {availableSpots} lediga.
                 </Typography>
                 <TextField
                   fullWidth
@@ -590,6 +593,17 @@ export default function CourseManagementPage({
                   inputProps={{ min: 1, max: Math.max(availableSpots, 1) }}
                   sx={{ mb: 2 }}
                 />
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel>Betalningsmetod</InputLabel>
+                  <Select
+                    value={reservePaymentMethod}
+                    label="Betalningsmetod"
+                    onChange={(e) => setReservePaymentMethod(e.target.value as 'giftCard' | 'invoice')}
+                  >
+                    <MenuItem value="giftCard">Presentkort</MenuItem>
+                    <MenuItem value="invoice">Faktura</MenuItem>
+                  </Select>
+                </FormControl>
                 <TextField
                   fullWidth
                   label="Anteckning (valfritt)"
@@ -675,6 +689,7 @@ export default function CourseManagementPage({
                         onChange={(e) => handleAddUserFormChange('payment_method', e.target.value)}
                       >
                         <MenuItem value="invoice">Faktura</MenuItem>
+                        <MenuItem value="giftCard">Presentkort</MenuItem>
                         <MenuItem value="admin">Admin-skapad</MenuItem>
                       </Select>
                     </FormControl>

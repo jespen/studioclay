@@ -97,17 +97,19 @@ export async function POST(request: NextRequest) {
       console.log(`  ${key}: ${typeof body[key]} = ${body[key]}`);
     });
     
-    const isReservation = body.payment_method === 'reservation';
+    const isReservation = body.is_reservation === true || body.payment_method === 'reservation';
     if (isReservation) {
       body.customer_name = (body.customer_name || 'Reservation').trim() || 'Reservation';
       body.customer_email = (body.customer_email || '').trim();
       body.number_of_participants = Number(body.number_of_participants) || 1;
       body.status = 'confirmed';
-      body.payment_status = 'PAID';
+      // No money has been collected. giftCard and invoice are the stored payment methods.
+      body.payment_method = body.payment_method === 'giftCard' ? 'giftCard' : 'invoice';
+      body.payment_status = 'CREATED';
       body.unit_price = 0;
       body.total_price = 0;
       body.currency = body.currency || 'SEK';
-      if (!body.booking_reference) {
+      if (!body.booking_reference || !String(body.booking_reference).startsWith('RES-')) {
         body.booking_reference = `RES-${Date.now().toString(36).toUpperCase()}`;
       }
     }
@@ -141,7 +143,7 @@ export async function POST(request: NextRequest) {
     console.log('Payment status:', body.payment_status);
     
     // If payment method is invoice, validate invoice fields
-    if (body.payment_method === 'invoice') {
+    if (body.payment_method === 'invoice' && !isReservation) {
       console.log('=== INVOICE VALIDATION ===');
       console.log('Invoice address:', body.invoice_address);
       console.log('Invoice postal code:', body.invoice_postal_code);
