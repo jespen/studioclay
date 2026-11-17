@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 const BUCKET_NAME = 'pictures';
+let bucketReady = false;
+let bucketReadyPromise: Promise<boolean> | null = null;
 
 // Ensure bucket exists with proper permissions
 async function ensureBucketExists() {
@@ -55,11 +57,22 @@ async function ensureBucketExists() {
       console.error('Error checking/setting bucket policy:', policyError);
     }
     
+    bucketReady = true;
     return true;
   } catch (error) {
     console.error('Error ensuring bucket exists:', error);
     return false;
   }
+}
+
+async function ensureBucketReady() {
+  if (bucketReady) return true;
+  if (!bucketReadyPromise) {
+    bucketReadyPromise = ensureBucketExists().finally(() => {
+      if (!bucketReady) bucketReadyPromise = null;
+    });
+  }
+  return bucketReadyPromise;
 }
 
 // Function to serve image directly from Supabase instead of using public URL
@@ -111,7 +124,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Otherwise, list all images
-    const bucketExists = await ensureBucketExists();
+    const bucketExists = await ensureBucketReady();
     if (!bucketExists) {
       return NextResponse.json(
         { error: 'Failed to access storage bucket' },
@@ -160,7 +173,7 @@ export async function GET(request: NextRequest) {
 // Upload an image to the pictures bucket
 export async function POST(request: NextRequest) {
   try {
-    const bucketExists = await ensureBucketExists();
+    const bucketExists = await ensureBucketReady();
     if (!bucketExists) {
       return NextResponse.json(
         { error: 'Failed to access storage bucket' },

@@ -22,27 +22,18 @@ async function getInitialData(courseId: string) {
     throw courseError;
   }
 
-  // Fetch template data if we have a template_id
-  if (courseData.template_id) {
-    const { data: templateData, error: templateError } = await supabaseAdmin
-      .from('course_templates')
-      .select(`
-        *,
-        category:categories(*)
-      `)
-      .eq('id', courseData.template_id)
-      .single();
+  const templateQuery = courseData.template_id
+    ? supabaseAdmin
+        .from('course_templates')
+        .select(`
+          *,
+          category:categories(*)
+        `)
+        .eq('id', courseData.template_id)
+        .single()
+    : Promise.resolve({ data: null, error: null });
 
-    if (templateError) {
-      console.error('Error fetching template:', templateError);
-      throw templateError;
-    }
-
-    courseData.template = templateData;
-  }
-
-  // Fetch bookings data
-  const { data: bookings, error: bookingsError } = await supabaseAdmin
+  const bookingsQuery = supabaseAdmin
     .from('bookings')
     .select(`
       *,
@@ -54,6 +45,20 @@ async function getInitialData(courseId: string) {
       )
     `)
     .eq('course_id', courseId);
+
+  const [{ data: templateData, error: templateError }, { data: bookings, error: bookingsError }] = await Promise.all([
+    templateQuery,
+    bookingsQuery,
+  ]);
+
+  if (templateError) {
+    console.error('Error fetching template:', templateError);
+    throw templateError;
+  }
+
+  if (templateData) {
+    courseData.template = templateData;
+  }
 
   if (bookingsError) {
     console.error('Error fetching bookings:', bookingsError);

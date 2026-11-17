@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Course, CourseInstance, CourseTemplate } from '../../../../types/course';
 import { TextField, Button, Box, Paper, Typography, FormControlLabel, Switch, Grid, MenuItem, IconButton, Select, FormControl, SelectChangeEvent } from '@mui/material';
 import RichTextEditor from '../../../../components/common/RichTextEditor';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import ClearIcon from '@mui/icons-material/Clear';
-import { fetchWithCache, fetchTemplatesWithCache } from '@/utils/apiCache';
+import { fetchWithCache } from '@/utils/apiCache';
 
 type CourseFormProps = {
   course: Course | null;
@@ -28,7 +28,9 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   const [isPublished, setIsPublished] = useState(false);
   const [templateId, setTemplateId] = useState('');
   const [templates, setTemplates] = useState<CourseTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!course);
+  const [formReady, setFormReady] = useState(!course);
+  const imagesRequested = useRef(false);
   const [error, setError] = useState('');
   
   // Image state
@@ -70,36 +72,35 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
   
   const fetchTemplates = useCallback(async () => {
     try {
-      setLoading(true);
-      console.log('CourseForm: Fetching templates...');
-      const data = await fetchTemplatesWithCache({
-        useCache: true,
-        expiry: 5 * 60 * 1000, // Cache templates for 5 minutes
-        forceRefresh: false
-      });
-      
-      console.log('CourseForm: Templates API response:', data);
+      const data = await fetchWithCache<{ templates: CourseTemplate[] }>(
+        '/api/templates?summary=1',
+        {},
+        {
+          useCache: true,
+          expiry: 5 * 60 * 1000,
+          cacheKey: 'course-templates-summary'
+        }
+      );
       
       if (Array.isArray(data.templates)) {
-        console.log(`CourseForm: Found ${data.templates.length} templates`);
         setTemplates(data.templates);
-      } else {
-        console.error('CourseForm: Templates data is not an array:', data.templates);
+      } else if (!course) {
         setError('Invalid templates data format');
       }
     } catch (error) {
       console.error('CourseForm: Error fetching templates:', error);
-      setError('Failed to load templates');
+      if (!course) setError('Failed to load templates');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [course]);
   
-  // Fetch images when the component mounts
-  useEffect(() => {
+  const loadGalleryImages = useCallback(() => {
+    if (imagesRequested.current) return;
+    imagesRequested.current = true;
     fetchImages();
   }, [fetchImages]);
-  
+
   // Fetch templates when the component mounts
   useEffect(() => {
     fetchTemplates();
@@ -139,6 +140,8 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
         setEndDate(formatDateForInput(endDateTime));
         setEndTime(formatTimeForInput(endDateTime));
       }
+
+      setFormReady(true);
     }
   }, [course]);
   
@@ -335,7 +338,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
     onSave(courseData);
   };
   
-  if (loading) {
+  if (!formReady || loading) {
     return <div>Laddar...</div>;
   }
 
@@ -393,11 +396,18 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
               name="template"
               label="Kursmall"
               value={templateId}
-              onChange={(e) => {
+              onChange={async (e) => {
                 const newTemplateId = e.target.value;
                 setTemplateId(newTemplateId);
-                const selectedTemplate = templates.find(temp => temp.id === newTemplateId);
-                if (selectedTemplate?.rich_description && !course) {
+                if (!newTemplateId || course) return;
+
+                try {
+                  const response = await fetch(`/api/templates/${newTemplateId}`);
+                  if (!response.ok) return;
+                  const data = await response.json();
+                  const selectedTemplate = data.template;
+                  if (!selectedTemplate?.rich_description) return;
+
                   setRichDescription(selectedTemplate.rich_description);
                   setTitle(selectedTemplate.title || selectedTemplate.categorie || '');
                   if (selectedTemplate.price) setPrice(selectedTemplate.price.toString());
@@ -406,6 +416,8 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
                     setImagePreview(selectedTemplate.image_url);
                     setSelectedGalleryImage(selectedTemplate.image_url);
                   }
+                } catch (templateError) {
+                  console.error('Failed to load template details:', templateError);
                 }
               }}
               variant="outlined"
@@ -467,6 +479,7 @@ export default function CourseForm({ course, onSave, onCancel }: CourseFormProps
                 id="gallery-image"
                 value={selectedGalleryImage}
                 onChange={handleGalleryImageChange}
+                onOpen={loadGalleryImages}
                 displayEmpty
                 size="small"
                 disabled={loadingImages}

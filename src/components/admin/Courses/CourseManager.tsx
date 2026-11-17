@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Course } from '../../../types/course';
 import AdminHeader from '../Dashboard/AdminHeader';
@@ -27,9 +27,6 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-  const [publishedActiveCourses, setPublishedActiveCourses] = useState<Course[]>([]);
-  const [unpublishedActiveCourses, setUnpublishedActiveCourses] = useState<Course[]>([]);
-  const [pastCourses, setPastCourses] = useState<Course[]>([]);
   const router = useRouter();
 
   // Function to fetch courses from the API
@@ -187,54 +184,25 @@ export const CourseManager: React.FC<CourseManagerProps> = ({
     fetchCourses();
   }, []);
 
-  // Filter courses by published status and date - moved to useEffect to ensure client-side only execution
-  useEffect(() => {
-    if (courses.length > 0) {
-      const now = new Date();
-      const allCourses = maxCourses ? courses.slice(0, maxCourses) : courses;
-      
-      const activeCourses = allCourses.filter(course => {
-        const endDate = course.end_date ? new Date(course.end_date) : null;
-        return endDate && endDate > now;
-      });
-      
-      const pastCourses = allCourses.filter(course => {
-        const endDate = course.end_date ? new Date(course.end_date) : null;
-        return endDate && endDate <= now;
-      });
-      
-      setPublishedActiveCourses(activeCourses.filter(course => course.is_published));
-      setUnpublishedActiveCourses(activeCourses.filter(course => !course.is_published));
-      setPastCourses(pastCourses);
-      
-      // Automatically unpublish past courses that are still marked as published
-      pastCourses.forEach(async (course) => {
-        if (course.is_published) {
-          try {
-            const response = await fetch(`/api/courses/${course.id}`, {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ is_published: false }),
-            });
-            
-            if (!response.ok) {
-              console.error(`Failed to auto-unpublish course ${course.id}: ${response.statusText}`);
-            }
-          } catch (error) {
-            console.error(`Error auto-unpublishing course ${course.id}:`, error);
-          }
-        }
-      });
-      
-      // Refresh courses after unpublishing
-      if (pastCourses.some(course => course.is_published)) {
-        setTimeout(() => {
-          fetchCourses();
-        }, 1000);
-      }
-    }
+  const { publishedActiveCourses, unpublishedActiveCourses, pastCourses } = useMemo(() => {
+    const now = new Date();
+    const allCourses = maxCourses ? courses.slice(0, maxCourses) : courses;
+
+    const activeCourses = allCourses.filter(course => {
+      const endDate = course.end_date ? new Date(course.end_date) : null;
+      return endDate && endDate > now;
+    });
+
+    const finishedCourses = allCourses.filter(course => {
+      const endDate = course.end_date ? new Date(course.end_date) : null;
+      return endDate && endDate <= now;
+    });
+
+    return {
+      publishedActiveCourses: activeCourses.filter(course => course.is_published),
+      unpublishedActiveCourses: activeCourses.filter(course => !course.is_published),
+      pastCourses: finishedCourses,
+    };
   }, [courses, maxCourses]);
 
   if (showForm) {

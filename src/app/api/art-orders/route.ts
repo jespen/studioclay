@@ -11,14 +11,28 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('Fetching all art orders');
-    
-    // Fetch all art orders with product information
     const { data: orders, error: ordersError } = await supabase
       .from('art_orders')
       .select(`
-        *,
-        product:products(*)
+        id,
+        order_reference,
+        status,
+        payment_status,
+        payment_method,
+        created_at,
+        updated_at,
+        total_price,
+        currency,
+        customer_name,
+        customer_email,
+        customer_phone,
+        invoice_number,
+        product:products (
+          id,
+          title,
+          price,
+          image
+        )
       `)
       .order('created_at', { ascending: false });
     
@@ -49,7 +63,6 @@ export async function GET(request: NextRequest) {
         id: order.product.id,
         title: order.product.title,
         price: order.product.price,
-        description: order.product.description || '',
         image: order.product.image
       } : null
     }));

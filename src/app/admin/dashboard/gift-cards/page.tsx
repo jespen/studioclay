@@ -8,7 +8,6 @@ import styles from '../courses/courses.module.css';
 // Simplified placeholder page until we have all components working correctly
 export default function GiftCardsPage() {
   const [userEmail, setUserEmail] = useState<string | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchUserInfo() {
@@ -22,8 +21,6 @@ export default function GiftCardsPage() {
         }
       } catch (error) {
         console.error('Error fetching user info:', error);
-      } finally {
-        setLoading(false);
       }
     }
 
@@ -36,15 +33,10 @@ export default function GiftCardsPage() {
       <AdminHeader 
         title="Presentkort" 
         subtitle={userEmail ? `Välkommen ${userEmail}` : 'Välkommen'} 
-        // userEmail={userEmail}
       />
       
       <main className={styles.mainContent}>
-        {loading ? (
-          <div className={styles.loadingSpinner}>Laddar...</div>
-        ) : (
-          <GiftCardManager />
-        )}
+        <GiftCardManager />
       </main>
     </div>
   );

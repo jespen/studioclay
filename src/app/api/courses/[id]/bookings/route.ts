@@ -27,7 +27,15 @@ export async function GET(
     // Get bookings from Supabase - only using the payment_status field from bookings table
     const { data, error } = await supabaseAdmin
       .from('bookings')
-      .select('*')
+      .select(`
+        *,
+        payments (
+          id,
+          status,
+          payment_reference,
+          payment_method
+        )
+      `)
       .eq('course_id', courseId);
       
     if (error) {

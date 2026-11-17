@@ -49,23 +49,14 @@ const GiftCardManager: React.FC = () => {
 
   useEffect(() => {
     fetchGiftCards();
-  }, [filter]);
+  }, []);
 
   async function fetchGiftCards() {
     setLoading(true);
     setError(null);
 
     try {
-      console.log('Fetching gift cards with filter:', filter);
-      
-      // Build the query parameters based on the filter
-      const queryParams = new URLSearchParams();
-      if (filter !== 'all') {
-        queryParams.append('filter', filter);
-      }
-      
-      // Fetch gift cards from API instead of direct database access
-      const response = await fetch(`/api/gift-cards?${queryParams.toString()}`);
+      const response = await fetch('/api/gift-cards');
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -728,6 +719,20 @@ const GiftCardManager: React.FC = () => {
     }
   };
 
+  function matchesGiftCardFilter(card: GiftCard) {
+    switch (filter) {
+      case 'active': return card.status === 'active';
+      case 'redeemed': return card.status === 'redeemed';
+      case 'expired': return card.status === 'expired';
+      case 'cancelled': return card.status === 'cancelled';
+      case 'digital': return card.type === 'digital';
+      case 'physical': return card.type === 'physical';
+      case 'PAID': return card.is_paid;
+      case 'CREATED': return !card.is_paid;
+      default: return true;
+    }
+  }
+
   // Get filter description for UI feedback
   const getFilterDescription = () => {
     // Return filter description based on selected filters
@@ -912,7 +917,7 @@ const GiftCardManager: React.FC = () => {
               
               {getFilterDescription() && (
                 <span className={styles.filterDescription}>
-                  {getFilterDescription()} ({giftCards.length})
+                  {getFilterDescription()} ({giftCards.filter(matchesGiftCardFilter).length})
                 </span>
               )}
             </div>
@@ -920,6 +925,7 @@ const GiftCardManager: React.FC = () => {
             {(() => {
               const query = search.trim().toLowerCase();
               const visibleCards = giftCards.filter((card) => {
+                if (!matchesGiftCardFilter(card)) return false;
                 if (!query) return true;
                 return [card.code, card.payment_reference, card.recipient_name, card.sender_name, card.recipient_email, card.sender_email]
                   .filter(Boolean)

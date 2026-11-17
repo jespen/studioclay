@@ -5,6 +5,62 @@ import { getConfirmedParticipantCounts, isCourseStillBookable } from '@/lib/cour
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function descriptionExcerpt(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const text = value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return null;
+  return text.length > 180 ? `${text.slice(0, 177)}…` : text;
+}
+
+/** Admin list only needs a short plain-text snippet, not the full editor HTML. */
+function toAdminListCourse(course: any) {
+  const description = descriptionExcerpt(course.rich_description) || descriptionExcerpt(course.template?.rich_description);
+  return {
+    ...course,
+    rich_description: description,
+    template: course.template
+      ? { ...course.template, rich_description: description }
+      : course.template
+  };
+}
+
+/**
+ * One update for every published course that has already ended.
+ * Replaces the previous per-course PATCH from the admin dashboard.
+ */
+async function unpublishFinishedCourses(courses: any[]) {
+  const now = new Date();
+  const finishedIds = courses
+    .filter((course) => {
+      if (!course.is_published || !course.end_date) return false;
+      const endDate = new Date(course.end_date);
+      return !Number.isNaN(endDate.getTime()) && endDate <= now;
+    })
+    .map((course) => course.id);
+
+  if (finishedIds.length === 0) return courses;
+
+  const { error } = await supabaseAdmin
+    .from('course_instances')
+    .update({ is_published: false })
+    .in('id', finishedIds);
+
+  if (error) {
+    console.error('Failed to unpublish finished courses:', error);
+    return courses;
+  }
+
+  const finished = new Set(finishedIds);
+  return courses.map((course) => (
+    finished.has(course.id) ? { ...course, is_published: false } : course
+  ));
+}
+
 // Function to get courses (either all or only published)
 const getCourses = async (published: string | null) => {
   console.log(`supabaseAdmin: Starting getCourses with published: ${published}`);
@@ -109,22 +165,6 @@ const getCourses = async (published: string | null) => {
       };
     });
 
-    console.log(`supabaseAdmin: Processed courses count: ${coursesWithAvailability.length}`);
-    if (coursesWithAvailability.length > 0) {
-      console.log(`supabaseAdmin: First processed course: ${JSON.stringify({
-        id: coursesWithAvailability[0].id,
-        title: coursesWithAvailability[0].title,
-        template_id: coursesWithAvailability[0].template_id,
-        is_published: coursesWithAvailability[0].is_published,
-        start_date: coursesWithAvailability[0].start_date,
-        end_date: coursesWithAvailability[0].end_date,
-        current_participants: coursesWithAvailability[0].current_participants,
-        availableSpots: coursesWithAvailability[0].availableSpots,
-        has_rich_description: Boolean(coursesWithAvailability[0].rich_description || coursesWithAvailability[0].template?.rich_description),
-        image_url: coursesWithAvailability[0].image_url
-      })}`);
-    }
-
     // Publik lista: visa publicerade kurser tills de är slut, samma regel som admin.
     if (published === 'true') {
       const now = new Date();
@@ -143,24 +183,11 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const publishedParam = searchParams.get('published');
     
-    console.log('API Route: Fetching courses with published:', publishedParam);
-    
-    const courses = await getCourses(publishedParam);
-    
-    console.log('API Route: Fetched courses count:', courses.length);
-    if (courses.length > 0) {
-      console.log('API Route: First course sample:', {
-        id: courses[0].id,
-        title: courses[0].title,
-        template_id: courses[0].template_id,
-        category: courses[0].template?.category,
-        start_date: courses[0].start_date,
-        max_participants: courses[0].max_participants,
-        current_participants: courses[0].current_participants,
-        availableSpots: courses[0].max_participants ? courses[0].max_participants - courses[0].current_participants : null,
-        image_url: courses[0].image_url,
-        template_image_url: courses[0].template?.image_url
-      });
+    let courses = await getCourses(publishedParam);
+
+    if (publishedParam === 'all') {
+      courses = await unpublishFinishedCourses(courses);
+      courses = courses.map(toAdminListCourse);
     }
 
     return NextResponse.json({ courses });

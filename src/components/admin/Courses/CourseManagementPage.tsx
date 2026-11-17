@@ -28,7 +28,7 @@ export default function CourseManagementPage({
   const [bookings, setBookings] = useState<ExtendedBooking[]>(initialBookings);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [refreshData, setRefreshData] = useState(1);
+  const [refreshData, setRefreshData] = useState(0);
   
   // Add User Dialog state (adapted from BookingsList edit dialog)
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
@@ -61,62 +61,62 @@ export default function CourseManagementPage({
   const [reserveLoading, setReserveLoading] = useState(false);
 
   useEffect(() => {
+    if (!courseId) {
+      setError('No course ID provided');
+      return;
+    }
+
+    // The server already rendered course and bookings. Refetch only after an edit.
+    if (refreshData === 0) return;
+
+    let cancelled = false;
+
     const fetchData = async () => {
-      if (!refreshData) return; // Skip initial fetch since we have initial data
-      
       try {
         setLoading(true);
-        
-        // Fetch course
-        const courseResponse = await fetch(`/api/courses/${courseId}`);
+
+        const [courseResponse, bookingsResponse] = await Promise.all([
+          fetch(`/api/courses/${courseId}`),
+          fetch(`/api/courses/${courseId}/bookings`),
+        ]);
+
         if (!courseResponse.ok) {
           const errorData = await courseResponse.json().catch(() => ({}));
           throw new Error(errorData.error || 'Failed to fetch course');
         }
-        const courseData = await courseResponse.json();
-        
-        // Check if the course data is properly structured
-        if (courseData.course) {
-          setCourse(courseData.course);
-          console.log('Course data loaded successfully:', courseData.course);
-        } else {
-          console.error('Invalid course data format:', courseData);
-          setError('Course data not in expected format');
-        }
-        
-        // Fetch bookings
-        const bookingsResponse = await fetch(`/api/courses/${courseId}/bookings`);
         if (!bookingsResponse.ok) {
           const errorData = await bookingsResponse.json().catch(() => ({}));
           throw new Error(errorData.error || 'Failed to fetch bookings');
         }
-        const bookingsData = await bookingsResponse.json();
-        console.log('Received bookings data:', bookingsData);
-        
-        // Debug log for payment status
-        bookingsData.bookings?.forEach((booking: any) => {
-          console.log(`Booking ${booking.id} payment status:`, {
-            hasPayments: !!booking.payments?.length,
-            paymentStatus: booking.payments?.[0]?.status
-          });
-        });
-        
+
+        const [courseData, bookingsData] = await Promise.all([
+          courseResponse.json(),
+          bookingsResponse.json(),
+        ]);
+
+        if (cancelled) return;
+
+        if (courseData.course) {
+          setCourse(courseData.course);
+        } else {
+          setError('Course data not in expected format');
+        }
+
         setBookings(bookingsData.bookings || []);
-        
       } catch (err) {
-        console.error('Error fetching data:', err);
-        setError(err instanceof Error ? err.message : 'Could not load data');
+        if (!cancelled) {
+          console.error('Error fetching data:', err);
+          setError(err instanceof Error ? err.message : 'Could not load data');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    if (courseId) {
-      fetchData();
-    } else {
-      setError('No course ID provided');
-      setLoading(false);
-    }
+    fetchData();
+    return () => {
+      cancelled = true;
+    };
   }, [courseId, refreshData]);
 
   const handleSave = async (courseData: Partial<Course>) => {

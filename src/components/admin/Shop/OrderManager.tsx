@@ -36,15 +36,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ showHeader = true }) => {
       });
       
       if (data && Array.isArray(data.orders)) {
-        console.log('Orders from API:', JSON.stringify(data.orders, null, 2));
-        
-        // Process the orders to transform payment status display
-        const processedOrders = data.orders.map((order: ShopOrder) => {
-          console.log('Processing order payment status:', order.id, order.payment_status);
-          return order;
-        });
-        
-        setOrders(processedOrders);
+        setOrders(data.orders);
       } else {
         alert('Unexpected data format received from server');
       }

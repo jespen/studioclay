@@ -43,12 +43,21 @@ export async function GET(
     
     // OPTION 2 IMPLEMENTATION: Fetch from both waitlist table AND pending bookings
     
-    // 1. Fetch traditional waitlist entries
-    const { data: waitlistEntries, error: waitlistError } = await supabaseAdmin
-      .from('waitlist')
-      .select('*')
-      .eq('course_id', courseId)
-      .order('created_at', { ascending: false });
+    const [waitlistResult, pendingResult] = await Promise.all([
+      supabaseAdmin
+        .from('waitlist')
+        .select('*')
+        .eq('course_id', courseId)
+        .order('created_at', { ascending: false }),
+      supabaseAdmin
+        .from('bookings')
+        .select('*')
+        .eq('course_id', courseId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false }),
+    ]);
+
+    const { data: waitlistEntries, error: waitlistError } = waitlistResult;
     
     if (waitlistError) {
       console.error('❌ Error fetching waitlist:', waitlistError);
@@ -58,13 +67,7 @@ export async function GET(
       );
     }
     
-    // 2. Fetch pending bookings (these are people moved to waitlist from bookings)
-    const { data: pendingBookings, error: bookingsError } = await supabaseAdmin
-      .from('bookings')
-      .select('*')
-      .eq('course_id', courseId)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
+    const { data: pendingBookings, error: bookingsError } = pendingResult;
     
     if (bookingsError) {
       console.error('❌ Error fetching pending bookings:', bookingsError);

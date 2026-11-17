@@ -3,6 +3,26 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+
+    // Course form only needs names for the dropdown. Full HTML stays on the template editor.
+    if (searchParams.get('summary') === '1') {
+      const { data, error } = await supabaseAdmin
+        .from('course_templates')
+        .select('id, categorie, published')
+        .order('categorie', { ascending: true });
+
+      if (error) throw error;
+
+      return NextResponse.json({
+        templates: (data || []).map((template) => ({
+          ...template,
+          title: template.categorie || '',
+          is_published: template.published || false,
+        })),
+      });
+    }
+
     // Get templates with count of related instances
     const { data, error } = await supabaseAdmin
       .from('course_templates')
