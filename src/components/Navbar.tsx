@@ -61,7 +61,7 @@ const Navbar = () => {
   const navigationLinks = [
     // { id: 'home', label: 'Hem', isAnchor: true },   
     { id: 'courses', label: 'Kurser', isAnchor: true },
-    { id: 'services', label: 'Övriga kurser', isAnchor: true },
+    { id: 'services', label: 'Anpassade event', isAnchor: true },
     { id: 'presentkort', label: 'Presentkort', isAnchor: true },
     { id: 'shop', label: 'Shop', isAnchor: true },
     { id: 'works', label: 'Portfolio', isAnchor: true },

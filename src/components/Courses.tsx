@@ -111,11 +111,20 @@ export function CourseStatusBadge({
   );
 }
 
+type CourseFilter = 'all' | 'try' | 'longer';
+
+const COURSE_FILTERS: { id: CourseFilter; label: string }[] = [
+  { id: 'all', label: 'Alla' },
+  { id: 'try', label: 'Prova på' },
+  { id: 'longer', label: 'Längre kurser' },
+];
+
 const Courses = () => {
   const [tryCourses, setTryCourses] = useState<DisplayCourse[]>([]);
   const [longerCourses, setLongerCourses] = useState<DisplayCourse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<CourseFilter>('all');
 
   // Helper functions
   const getSessionCount = (title: string, startDate: string | null, endDate: string | null): string => {
@@ -433,13 +442,25 @@ const Courses = () => {
     </div>
   );
 
+  const showTryCourses = activeFilter === 'all' || activeFilter === 'try';
+  const showLongerCourses = activeFilter === 'all' || activeFilter === 'longer';
+  const visibleTryCourses = showTryCourses ? tryCourses : [];
+  const visibleLongerCourses = showLongerCourses ? longerCourses : [];
+  const hasVisibleCourses = visibleTryCourses.length > 0 || visibleLongerCourses.length > 0;
+  const emptyMessage =
+    activeFilter === 'try'
+      ? 'Inga prova på kurser just nu.'
+      : activeFilter === 'longer'
+        ? 'Inga längre kurser just nu.'
+        : 'Inga kurser tillgängliga för tillfället. Kom tillbaka senare!';
+
   return (
     <section id="courses" className={styles.section}>
       <div className={styles.container}>
         <div className={styles.titleSection} data-reveal>
           <h2 className={styles.title}>Kurser</h2>
           <p className={styles.description}>
-            Välj den kurs som passar dig bäst, från provakurser till helgkurser och regelbundna kurstillfällen.
+            Välj den kurs som passar dig bäst, från prova på kurser till helgkurser och regelbundna kurstillfällen.
           </p>
         </div>
 
@@ -453,19 +474,41 @@ const Courses = () => {
           </div>
         ) : (
           <>
-            {(tryCourses.length > 0 || longerCourses.length > 0) && (
+            <div className={styles.filterContainer} role="group" aria-label="Filtrera kurser" data-reveal>
+              {COURSE_FILTERS.map((filter) => {
+                const isActive = activeFilter === filter.id;
+                return (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    className={`${styles.filterButton} ${isActive ? styles.activeFilter : ''}`}
+                    onClick={() => setActiveFilter(filter.id)}
+                    aria-pressed={isActive}
+                  >
+                    {filter.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {hasVisibleCourses && (
               <div className={styles.categorySection}>
                 <div className={styles.courseGrid} data-reveal-stagger="zoom">
-                  {tryCourses.map((course, index) =>
-                    renderCourseCard(course, index === 0 ? { label: 'Prova på', placement: 'lead' } : undefined)
-                  )}
-                  {longerCourses.map((course, index) =>
+                  {visibleTryCourses.map((course, index) =>
                     renderCourseCard(
                       course,
-                      index === 0
+                      activeFilter === 'all' && index === 0
+                        ? { label: 'Prova på', placement: 'lead' }
+                        : undefined
+                    )
+                  )}
+                  {visibleLongerCourses.map((course, index) =>
+                    renderCourseCard(
+                      course,
+                      activeFilter === 'all' && index === 0
                         ? {
                             label: 'Längre kurser',
-                            placement: tryCourses.length > 0 ? 'divider' : 'lead',
+                            placement: visibleTryCourses.length > 0 ? 'divider' : 'lead',
                           }
                         : undefined
                     )
@@ -473,10 +516,10 @@ const Courses = () => {
                 </div>
               </div>
             )}
-            
-            {tryCourses.length === 0 && longerCourses.length === 0 && (
+
+            {!hasVisibleCourses && (
               <div className={styles.noCourses}>
-                <p>Inga kurser tillgängliga för tillfället. Kom tillbaka senare!</p>
+                <p>{emptyMessage}</p>
               </div>
             )}
           </>

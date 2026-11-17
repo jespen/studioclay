@@ -14,7 +14,7 @@ const Footer = () => {
           <div className={styles.brandColumn}>
             <h3>Studio Clay</h3>
             <p className={styles.brandDesc}>
-              En dedikerad keramikstudio som erbjuder krukmakerikurser och kreativa upplevelser för individer och företag.
+              En dedikerad keramikstudio som erbjuder keramikkurser och kreativa upplevelser för individer och företag.
             </p>
           </div>
 

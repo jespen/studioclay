@@ -75,7 +75,7 @@ Oavsett om ni planerar en kick-off, en teambuilding eller bara vill göra något
     <section id="services" className={styles.section}>
       <div className={styles.container}>
         <div className={styles.titleSection} data-reveal>
-          <h2 className={styles.title}>Specialkurser</h2>
+          <h2 className={styles.title}>Anpassade event</h2>
           <p className={styles.description}>
             Jag skräddarsyr keramikupplevelser för företag och grupper.
           </p>

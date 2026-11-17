@@ -54,7 +54,16 @@
 .linksList {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  line-height: 1.2;
+}
+
+.linksList li {
+  margin: 0;
+  padding: 0;
 }
 
 .footerLink {
